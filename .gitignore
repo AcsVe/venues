@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+booking.db
+uploads/
+*.sqlite3
+venv/
+.idea/
