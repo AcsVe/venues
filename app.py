@@ -41,12 +41,8 @@ def create_app():
 
     # ── Init DB ──
     db.init_app(app)
-    with app.app_context():
         init_db(app)
 
-    with app.app_context():
-        engine = db.engine
-        with engine.connect() as conn:
 
     # ── Blueprints ──
     app.register_blueprint(public_bp)
