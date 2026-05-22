@@ -163,12 +163,40 @@
     .period-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 14px; }
     .period-table th { background: #f0f7f8; padding: 8px 10px; font-weight: 700; color: var(--primary); }
     .period-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
-    /* Mobile */
+    /* Mobile Bottom Nav */
+    .mobile-nav {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: linear-gradient(180deg, var(--primary-dark), #143f45);
+      z-index: 200;
+      padding: 6px 0 8px;
+      box-shadow: 0 -3px 16px rgba(0,0,0,.2);
+    }
+    .mobile-nav-items { display: flex; justify-content: space-around; align-items: center; }
+    .mobile-nav-item {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      color: rgba(255,255,255,.65); font-size: .65rem; font-weight: 700;
+      cursor: pointer; background: none; border: none; font-family: inherit;
+      padding: 4px 8px; border-radius: 8px; transition: all .2s; position: relative;
+    }
+    .mobile-nav-item i { font-size: 1.1rem; }
+    .mobile-nav-item.active { color: var(--accent); }
+    .mobile-nav-item .m-badge {
+      position: absolute; top: 0; right: 2px;
+      background: #e74c3c; color: #fff; border-radius: 10px;
+      font-size: .6rem; padding: 1px 5px; font-weight: 800;
+    }
     @media (max-width: 768px) {
       .sidebar { display: none; }
-      .main { margin-right: 0; }
+      .main { margin-right: 0; padding-bottom: 65px; }
       .form-grid { grid-template-columns: 1fr; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .mobile-nav { display: block; }
+      .content { padding: 14px; }
+      .topbar { padding: 12px 16px; }
+      .table-wrap { font-size: .8rem; }
+      table { min-width: 600px; }
     }
     .spinner { display: inline-block; width: 16px; height: 16px; border: 2.5px solid rgba(36,118,128,.3); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -898,5 +926,26 @@ function refreshAll() { loadBookings(); loadStats(); showToast('تم التحد�
 loadBookings();
 loadHalls();
 </script>
+<!-- Mobile Bottom Nav -->
+<nav class="mobile-nav">
+  <div class="mobile-nav-items">
+    <button class="mobile-nav-item active" onclick="showTab('bookings',this)">
+      <i class="fas fa-calendar-check"></i><span>الحجوزات</span>
+      <span class="m-badge" id="mBadge" style="display:none">0</span>
+    </button>
+    <button class="mobile-nav-item" onclick="showTab('halls',this)">
+      <i class="fas fa-door-open"></i><span>القاعات</span>
+    </button>
+    <button class="mobile-nav-item" onclick="showTab('blocked',this)">
+      <i class="fas fa-ban"></i><span>محظور</span>
+    </button>
+    <button class="mobile-nav-item" onclick="showTab('contacts',this)">
+      <i class="fas fa-address-book"></i><span>اتصالات</span>
+    </button>
+    <button class="mobile-nav-item" onclick="showTab('reports',this)">
+      <i class="fas fa-chart-bar"></i><span>تقارير</span>
+    </button>
+  </div>
+</nav>
 </body>
 </html>
