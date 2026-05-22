@@ -151,10 +151,14 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     /* ── Responsive ── */
     @media (max-width: 640px) {
-      .topbar { padding: 10px 14px; }
-      .topbar-titles h1 { font-size: 1rem; }
-      .container { padding: 14px 10px; }
-      .card { padding: 16px; }
+      .topbar { padding: 10px 12px; flex-wrap: wrap; gap: 8px; }
+      .topbar img { height: 36px; }
+      .topbar-titles h1 { font-size: .85rem; }
+      .topbar-titles span { font-size: .72rem; }
+      .topbar-nav { width: 100%; justify-content: space-between; }
+      .topbar-nav a { padding: 5px 8px; font-size: .75rem; }
+      .container { padding: 12px 8px; }
+      .card { padding: 14px; }
     }
   </style>
   {% block extra_head %}{% endblock %}
