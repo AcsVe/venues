@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>لوحة التحكم — {{ config.ORG_AR }}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #247680; --primary-dark: #1a5c64; --accent: #EBB37B;
+      --bg: #f0f4f5; --white: #fff; --text: #1e2a2b; --muted: #6b7c7e;
+      --border: #d4e4e6; --radius: 12px; --sidebar: 240px;
+      --shadow: 0 2px 12px rgba(36,118,128,.10);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar); min-height: 100vh;
+      background: linear-gradient(180deg, var(--primary-dark), var(--primary));
+      color: #fff; display: flex; flex-direction: column;
+      position: fixed; top: 0; right: 0; z-index: 100;
+    }
+    .sidebar-logo {
+      padding: 20px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.15);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .sidebar-logo img { height: 40px; border-radius: 8px; }
+    .sidebar-logo-text { font-size: .9rem; font-weight: 700; line-height: 1.3; }
+    .sidebar-nav { flex: 1; padding: 12px 0; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 18px; cursor: pointer;
+      font-size: .92rem; font-weight: 600; color: rgba(255,255,255,.8);
+      transition: all .2s; border: none; background: none;
+      width: 100%; text-align: right; font-family: inherit;
+    }
+    .nav-item:hover, .nav-item.active {
+      background: rgba(255,255,255,.15); color: #fff;
+    }
+    .nav-item i { width: 20px; text-align: center; }
+    .nav-badge {
+      margin-right: auto; background: var(--accent); color: #1e2a2b;
+      border-radius: 10px; padding: 1px 8px; font-size: .72rem; font-weight: 800;
+    }
+    .sidebar-footer { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.15); }
+    .sidebar-footer a {
+      display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.7);
+      text-decoration: none; font-size: .85rem; font-weight: 600;
+    }
+    .sidebar-footer a:hover { color: #fff; }
+    /* Main */
+    .main { margin-right: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .topbar {
+      background: #fff; padding: 14px 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .topbar h1 { font-size: 1.1rem; font-weight: 800; color: var(--primary); }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .content { flex: 1; padding: 24px; }
+    /* Tabs */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .stat-card {
+      background: #fff; border-radius: var(--radius);
+      padding: 18px; text-align: center;
+      box-shadow: var(--shadow); border-top: 4px solid var(--primary);
+    }
+    .stat-card.accent  { border-top-color: var(--accent); }
+    .stat-card.green   { border-top-color: #27ae60; }
+    .stat-card.red     { border-top-color: #c0392b; }
+    .stat-card.orange  { border-top-color: #e67e22; }
+    .stat-val { font-size: 2rem; font-weight: 800; color: var(--primary); }
+    .stat-card.accent .stat-val  { color: #a06020; }
+    .stat-card.green  .stat-val  { color: #27ae60; }
+    .stat-card.red    .stat-val  { color: #c0392b; }
+    .stat-card.orange .stat-val  { color: #e67e22; }
+    .stat-label { font-size: .8rem; color: var(--muted); font-weight: 600; margin-top: 4px; }
+    /* Cards */
+    .card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 18px; }
+    .card-title { font-size: 1rem; font-weight: 700; color: var(--primary); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    /* Filters */
+    .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+    .filter-btn {
+      padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+      background: #fff; cursor: pointer; font-family: inherit; font-size: .82rem;
+      font-weight: 600; color: var(--muted); transition: all .2s;
+    }
+    .filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .search-input {
+      padding: 7px 12px; border-radius: 8px; border: 1.5px solid var(--border);
+      font-family: inherit; font-size: .88rem; min-width: 200px;
+    }
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th { background: #f0f7f8; color: var(--primary); font-weight: 700; padding: 10px 12px; text-align: right; white-space: nowrap; }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:hover td { background: #fafefe; }
+    .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px; border-radius: 20px; font-size: .75rem; font-weight: 700; }
+    .badge-pending   { background: #fff3cd; color: #856404; }
+    .badge-approved  { background: #d1e7dd; color: #0a6640; }
+    .badge-rejected  { background: #f8d7da; color: #842029; }
+    .badge-cancelled { background: #e2e3e5; color: #41464b; }
+    /* Actions */
+    .action-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 7px; border: none; cursor: pointer; font-family: inherit; font-size: .8rem; font-weight: 600; text-decoration: none; transition: all .2s; white-space: nowrap; }
+    .btn-green   { background: #d1e7dd; color: #0a6640; }
+    .btn-red     { background: #f8d7da; color: #842029; }
+    .btn-orange  { background: #fff3cd; color: #856404; }
+    .btn-blue    { background: #cff4fc; color: #055160; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+    .btn-sm { padding: 5px 10px; font-size: .78rem; }
+    .btn:hover { filter: brightness(.93); }
+    /* Forms */
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-weight: 700; margin-bottom: 5px; font-size: .88rem; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    input[type=text], input[type=email], input[type=tel], input[type=date], input[type=time],
+    select, textarea {
+      width: 100%; padding: 8px 11px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-family: inherit; font-size: .88rem;
+      background: #fff; color: var(--text); transition: border-color .2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(36,118,128,.1);
+    }
+    textarea { resize: vertical; min-height: 70px; }
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 200; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 600px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 12px 50px rgba(0,0,0,.22); }
+    .modal-title { font-size: 1.05rem; font-weight: 800; color: var(--primary); margin-bottom: 18px; }
+    .modal-footer { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+    /* Alert */
+    .alert { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: .88rem; font-weight: 600; }
+    .alert-success { background: #d1e7dd; color: #0a6640; }
+    .alert-error   { background: #f8d7da; color: #842029; }
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; left: 24px; z-index: 9999;
+      background: #1e2a2b; color: #fff; padding: 12px 20px;
+      border-radius: 10px; font-size: .9rem; font-weight: 600;
+      box-shadow: 0 4px 20px rgba(0,0,0,.25);
+      transform: translateY(100px); opacity: 0; transition: all .3s;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    /* Checkbox */
+    input[type=checkbox] { width: auto; accent-color: var(--primary); }
+    /* Reports */
+    .bar-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .bar-label { min-width: 120px; font-size: .82rem; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+    .bar-track { flex: 1; background: #f0f7f8; border-radius: 6px; height: 24px; overflow: hidden; }
+    .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #2a8f9e); border-radius: 6px; display: flex; align-items: center; padding-right: 6px; transition: width .5s; }
+    .bar-fill span { color: #fff; font-size: .75rem; font-weight: 700; }
+    .period-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 14px; }
+    .period-table th { background: #f0f7f8; padding: 8px 10px; font-weight: 700; color: var(--primary); }
+    .period-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+    /* Mobile */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-right: 0; }
+      .form-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2.5px solid rgba(36,118,128,.3); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    {% if config.LOGO_URL %}<img src="{{ config.LOGO_URL }}" alt="logo">{% endif %}
+    <div class="sidebar-logo-text">{{ config.ORG_AR }}<br><small style="font-weight:400;opacity:.75">لوحة التحكم</small></div>
+  </div>
+  <div class="sidebar-nav">
+    <button class="nav-item active" onclick="showTab('bookings')"><i class="fas fa-calendar-check"></i> طلبات الحجز <span class="nav-badge" id="nbPending">0</span></button>
+    <button class="nav-item" onclick="showTab('halls')"><i class="fas fa-door-open"></i> القاعات</button>
+    <button class="nav-item" onclick="showTab('blocked')"><i class="fas fa-ban"></i> غير متاح</button>
+    <button class="nav-item" onclick="showTab('contacts')"><i class="fas fa-address-book"></i> جهات الاتصال</button>
+    <button class="nav-item" onclick="showTab('reports')"><i class="fas fa-chart-bar"></i> التقارير</button>
+  </div>
+  <div class="sidebar-footer">
+    <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
+    <br><br>
+    <a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> خروج</a>
+  </div>
+</nav>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <h1 id="pageTitle">طلبات الحجز</h1>
+    <div class="topbar-right">
+      <button class="btn btn-outline btn-sm" onclick="refreshAll()"><i class="fas fa-sync"></i> تحديث</button>
+      <span style="font-size:.85rem;color:var(--muted)" id="clockEl"></span>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- ── BOOKINGS TAB ── -->
+    <div class="tab-panel active" id="tab-bookings">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val" id="stTotal">-</div><div class="stat-label">إجمالي الطلبات</div></div>
+        <div class="stat-card accent"><div class="stat-val" id="stPending">-</div><div class="stat-label">قيد المراجعة</div></div>
+        <div class="stat-card green"><div class="stat-val" id="stApproved">-</div><div class="stat-label">معتمد</div></div>
+        <div class="stat-card red"><div class="stat-val" id="stRejected">-</div><div class="stat-label">مرفوض</div></div>
+        <div class="stat-card orange"><div class="stat-val" id="stCancelled">-</div><div class="stat-label">ملغي</div></div>
+      </div>
+      <div class="card">
+        <div class="filter-bar">
+          <button class="filter-btn active" onclick="filterBk('all',this)">الكل</button>
+          <button class="filter-btn" onclick="filterBk('pending',this)">قيد المراجعة</button>
+          <button class="filter-btn" onclick="filterBk('approved',this)">معتمد</button>
+          <button class="filter-btn" onclick="filterBk('rejected',this)">مرفوض</button>
+          <button class="filter-btn" onclick="filterBk('cancelled',this)">ملغي</button>
+          <input class="search-input" type="text" placeholder="🔍 بحث..." oninput="searchBk(this.value)">
+          <button class="btn btn-red btn-sm" onclick="bulkDelete()" id="bulkBtn" style="display:none"><i class="fas fa-trash"></i> حذف المحدد</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
+                <th>رقم الطلب</th>
+                <th>الاسم</th>
+                <th>المناسبة</th>
+                <th>القاعة</th>
+                <th>التاريخ</th>
+                <th>الوقت</th>
+                <th>الحالة</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="bkTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── HALLS TAB ── -->
+    <div class="tab-panel" id="tab-halls">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-plus"></i> إضافة قاعة جديدة</div>
+        <div class="form-grid">
+          <div class="form-group"><label>الاسم (عربي) <span style="color:#c0392b">*</span></label><input type="text" id="hNameAr"></div>
+          <div class="form-group"><label>الاسم (إنجليزي)</label><input type="text" id="hNameEn" dir="ltr"></div>
+          <div class="form-group"><label>الموقع</label><input type="text" id="hLocation"></div>
+          <div class="form-group"><label>الرمز</label><input type="text" id="hCode" dir="ltr"></div>
+          <div class="form-group"><label>السعة</label><input type="number" id="hCapacity"></div>
+          <div class="form-group"><label>المعدات والمرافق</label><input type="text" id="hEquipment"></div>
+        </div>
+        <div class="form-group"><label>الوصف</label><textarea id="hDesc"></textarea></div>
+        <div class="form-group"><label>ملاحظات</label><input type="text" id="hNotes"></div>
+        <div style="display:flex;gap:16px;align-items:center;margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" id="hRequiresApproval"> تتطلب موافقة مسبقة</label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" id="hActive" checked> قاعة فعالة</label>
+        </div>
+        <button class="btn btn-primary" onclick="addHall()"><i class="fas fa-plus"></i> إضافة</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-list"></i> القاعات المتاحة</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>الاسم (عربي)</th><th>الاسم (إنجليزي)</th><th>الرمز</th><th>السعة</th><th>الموقع</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+            <tbody id="hallsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BLOCKED TAB ── -->
+    <div class="tab-panel" id="tab-blocked">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-plus"></i> إضافة فترة محظورة</div>
+        <div class="form-grid">
+          <div class="form-group"><label>من تاريخ <span style="color:#c0392b">*</span></label><input type="date" id="blkFrom"></div>
+          <div class="form-group"><label>إلى تاريخ <span style="color:#c0392b">*</span></label><input type="date" id="blkTo"></div>
+          <div class="form-group"><label>القاعة (اتركه فارغاً لحظر الكل)</label>
+            <select id="blkHall"><option value="">-- كل القاعات --</option></select>
+          </div>
+          <div class="form-group"><label>السبب</label><input type="text" id="blkReason"></div>
+          <div class="form-group"><label>من الساعة (اختياري)</label><input type="time" id="blkFromT"></div>
+          <div class="form-group"><label>إلى الساعة (اختياري)</label><input type="time" id="blkToT"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addBlocked()"><i class="fas fa-plus"></i> إضافة</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-list"></i> الفترات المحظورة</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>من تاريخ</th><th>إلى تاريخ</th><th>القاعة</th><th>من الساعة</th><th>إلى الساعة</th><th>السبب</th><th>حذف</th></tr></thead>
+            <tbody id="blockedTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CONTACTS TAB ── -->
+    <div class="tab-panel" id="tab-contacts">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-user-plus"></i> إضافة جهة اتصال</div>
+        <div class="form-grid">
+          <div class="form-group"><label>البريد الإلكتروني <span style="color:#c0392b">*</span></label><input type="email" id="ctEmail" dir="ltr"></div>
+          <div class="form-group"><label>الاسم (اختياري)</label><input type="text" id="ctName"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addContact()"><i class="fas fa-plus"></i> إضافة</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-upload"></i> رفع قائمة (CSV/TXT)</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">ملف CSV أو TXT — كل سطر: <code>email,name</code> أو <code>email</code> فقط</p>
+        <input type="file" id="ctFile" accept=".csv,.txt" onchange="uploadContacts(this)">
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-list"></i> قائمة جهات الاتصال</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>البريد الإلكتروني</th><th>الاسم</th><th>تاريخ الإضافة</th><th>حذف</th></tr></thead>
+            <tbody id="contactsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── REPORTS TAB ── -->
+    <div class="tab-panel" id="tab-reports">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-chart-bar"></i> مستكشف البيانات</div>
+        <div class="form-grid" style="margin-bottom:12px">
+          <div class="form-group">
+            <label>تجميع حسب</label>
+            <select id="anaDim">
+              <option value="hall">القاعات</option>
+              <option value="person">الأشخاص</option>
+              <option value="month">الأشهر</option>
+              <option value="dow">أيام الأسبوع</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>الحالة</label>
+            <select id="anaStatus">
+              <option value="all">الكل</option>
+              <option value="approved">المعتمدة فقط</option>
+              <option value="pending">قيد المراجعة فقط</option>
+            </select>
+          </div>
+          <div class="form-group"><label>من تاريخ</label><input type="date" id="anaFrom"></div>
+          <div class="form-group"><label>إلى تاريخ</label><input type="date" id="anaTo"></div>
+        </div>
+        <button class="btn btn-primary" onclick="runReport()"><i class="fas fa-chart-bar"></i> تحليل</button>
+      </div>
+      <div class="card" id="reportResult" style="display:none">
+        <div class="card-title" id="reportTitle"></div>
+        <div id="anaChart"></div>
+        <div id="anaTable" style="margin-top:14px;overflow-x:auto"></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ── BOOKING DETAIL MODAL ── -->
+<div class="modal-overlay" id="bkModal">
+  <div class="modal">
+    <div class="modal-title" id="bkModalTitle"></div>
+    <div id="bkModalAlert"></div>
+    <div id="bkModalBody"></div>
+    <div class="modal-footer" id="bkModalFooter"></div>
+  </div>
+</div>
+
+<!-- ── EDIT BOOKING MODAL ── -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-title"><i class="fas fa-edit"></i> تعديل الحجز</div>
+    <div id="editAlert"></div>
+    <input type="hidden" id="editReqId">
+    <div class="form-grid">
+      <div class="form-group"><label>الاسم</label><input type="text" id="editName"></div>
+      <div class="form-group"><label>البريد</label><input type="email" id="editEmail" dir="ltr"></div>
+      <div class="form-group"><label>الجوال</label><input type="tel" id="editPhone" dir="ltr"></div>
+      <div class="form-group"><label>نيابة عن</label><input type="text" id="editBehalf"></div>
+      <div class="form-group"><label>عنوان المناسبة</label><input type="text" id="editTitle"></div>
+      <div class="form-group"><label>القاعة</label><select id="editHall"></select></div>
+      <div class="form-group"><label>تاريخ الحجز</label><input type="date" id="editDate"></div>
+      <div class="form-group"><label>تاريخ الانتهاء</label><input type="date" id="editEndDate"></div>
+      <div class="form-group"><label>من الساعة</label><input type="time" id="editStart"></div>
+      <div class="form-group"><label>إلى الساعة</label><input type="time" id="editEnd"></div>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="editFullDay"> يوم كامل</label>
+    </div>
+    <div class="form-group"><label>ملاحظات</label><textarea id="editNotes"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="saveEdit()"><i class="fas fa-save"></i> حفظ</button>
+      <button class="btn btn-outline" onclick="closeModal('editModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── REJECT MODAL ── -->
+<div class="modal-overlay" id="rejectModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title"><i class="fas fa-times-circle"></i> سبب الرفض</div>
+    <input type="hidden" id="rejectReqId">
+    <div class="form-group"><label>سبب الرفض</label><textarea id="rejectReason" placeholder="أدخل سبب الرفض..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-red" onclick="confirmReject()"><i class="fas fa-times"></i> رفض الحجز</button>
+      <button class="btn btn-outline" onclick="closeModal('rejectModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Global state ──
+let allBookings = [], hallsList = [], curFilter = 'all', curSearch = '';
+let selectedIds = new Set();
+
+// ── Tab navigation ──
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  const titles = {bookings:'طلبات الحجز',halls:'القاعات',blocked:'الفترات غير المتاحة',contacts:'جهات الاتصال',reports:'التقارير'};
+  document.getElementById('pageTitle').textContent = titles[name] || name;
+  if (name === 'halls')    loadHalls();
+  if (name === 'blocked')  loadBlocked();
+  if (name === 'contacts') loadContacts();
+  if (name === 'reports')  loadReportData();
+}
+
+// ── Clock ──
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clockEl').textContent =
+    now.toLocaleDateString('ar-SA') + ' ' + now.toLocaleTimeString('ar-SA');
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── Toast ──
+function showToast(msg, color = '#247680') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = color;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── API helpers ──
+async function api(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+// ── Bookings ──────────────────────────────────────────────────
+async function loadBookings() {
+  try {
+    const res = await fetch('/admin/api/bookings?filter=' + curFilter);
+    allBookings = await res.json();
+    renderTable();
+    loadStats();
+  } catch(e) { console.error(e); }
+}
+
+async function loadStats() {
+  try {
+    const data = await fetch('/admin/api/stats').then(r => r.json());
+    document.getElementById('stTotal').textContent    = data.total;
+    document.getElementById('stPending').textContent  = data.pending;
+    document.getElementById('stApproved').textContent = data.approved;
+    document.getElementById('stRejected').textContent = data.rejected;
+    document.getElementById('stCancelled').textContent= data.cancelled;
+    document.getElementById('nbPending').textContent  = data.pending;
+  } catch(e) {}
+}
+
+function filterBk(f, btn) {
+  curFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedIds.clear();
+  loadBookings();
+}
+
+function searchBk(q) { curSearch = q.toLowerCase(); renderTable(); }
+
+function renderTable() {
+  const tbody = document.getElementById('bkTable');
+  let rows = allBookings;
+  if (curSearch) rows = rows.filter(b =>
+    (b.reqId + b.name + b.title + b.hall + b.email).toLowerCase().includes(curSearch)
+  );
+  const sLabels = {approved:'معتمد',pending:'قيد المراجعة',rejected:'مرفوض',cancelled:'ملغي'};
+  tbody.innerHTML = rows.map(b => `
+    <tr>
+      <td><input type="checkbox" ${selectedIds.has(b.reqId)?'checked':''} onchange="toggleSel('${b.reqId}',this)"></td>
+      <td><strong style="color:var(--primary)">${esc(b.reqId)}</strong></td>
+      <td>${esc(b.name)}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(b.title)}">${esc(b.title)}</td>
+      <td>${esc(b.hall)}</td>
+      <td>${b.date}${b.multiDay?'<br><small style="color:var(--muted)">→ '+b.endDate+'</small>':''}</td>
+      <td>${b.fullDay ? '<span style="font-size:.78rem">يوم كامل</span>' : (b.startTime+' - '+b.endTime)}</td>
+      <td><span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span></td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-blue btn-sm" onclick="openDetail('${b.reqId}')"><i class="fas fa-eye"></i></button>
+          ${b.status==='pending'?`<button class="btn btn-green btn-sm" onclick="quickApprove('${b.reqId}')"><i class="fas fa-check"></i></button>`:''}
+          ${b.status==='pending'?`<button class="btn btn-red btn-sm" onclick="openReject('${b.reqId}')"><i class="fas fa-times"></i></button>`:''}
+          ${b.status!=='cancelled'&&b.status!=='rejected'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')"><i class="fas fa-ban"></i></button>`:''}
+        </div>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">لا توجد نتائج</td></tr>';
+  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
+}
+
+function toggleSel(id, cb) {
+  if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
+}
+function toggleAll(cb) {
+  document.querySelectorAll('#bkTable input[type=checkbox]').forEach(c => {
+    c.checked = cb.checked;
+    const id = c.closest('tr').querySelector('strong')?.textContent;
+    if (id) { if (cb.checked) selectedIds.add(id); else selectedIds.delete(id); }
+  });
+  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
+}
+
+async function bulkDelete() {
+  if (!selectedIds.size || !confirm(`حذف ${selectedIds.size} حجز نهائياً؟`)) return;
+  const data = await api('/admin/api/bulk-delete', {ids: [...selectedIds]});
+  if (data.success) { showToast('تم الحذف'); selectedIds.clear(); loadBookings(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function quickApprove(reqId) {
+  const data = await api('/admin/api/approve', {reqId});
+  if (data.success) { showToast('✅ تمت الموافقة'); loadBookings(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+async function quickCancel(reqId) {
+  if (!confirm('إلغاء هذا الحجز؟')) return;
+  const data = await api('/admin/api/cancel', {reqId});
+  if (data.success) { showToast('تم الإلغاء'); loadBookings(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+function openReject(reqId) {
+  document.getElementById('rejectReqId').value = reqId;
+  document.getElementById('rejectReason').value = '';
+  openModal('rejectModal');
+}
+async function confirmReject() {
+  const reqId  = document.getElementById('rejectReqId').value;
+  const reason = document.getElementById('rejectReason').value.trim();
+  if (!reason) { alert('أدخل سبب الرفض'); return; }
+  const data = await api('/admin/api/reject', {reqId, reason});
+  if (data.success) { showToast('تم الرفض', '#c0392b'); closeModal('rejectModal'); loadBookings(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+function openDetail(reqId) {
+  const b = allBookings.find(x => x.reqId === reqId);
+  if (!b) return;
+  document.getElementById('bkModalAlert').innerHTML = '';
+  document.getElementById('bkModalTitle').innerHTML = `<i class="fas fa-calendar-check"></i> ${b.reqId}`;
+  const sLabels = {approved:'معتمد',pending:'قيد المراجعة',rejected:'مرفوض',cancelled:'ملغي'};
+  const timeStr = b.fullDay ? 'يوم كامل' : `${b.startTime} - ${b.endTime}`;
+  const dateStr = b.multiDay ? `${b.date} → ${b.endDate}` : b.date;
+  document.getElementById('bkModalBody').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      ${drow('رقم الطلب', `<strong style="color:var(--primary)">${b.reqId}</strong>`)}
+      ${drow('الحالة', `<span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span>`)}
+      ${drow('الاسم', b.name)} ${drow('البريد', b.email)}
+      ${drow('الجوال', b.phone||'-')} ${drow('نيابة عن', b.behalf||'-')}
+      ${drow('المناسبة', b.title)} ${drow('القاعة', b.hall)}
+      ${drow('التاريخ', dateStr)} ${drow('الوقت', timeStr)}
+      ${drow('ملاحظات', b.notes||'-')}
+      ${b.rejectReason ? drow('سبب الرفض', `<span style="color:#c0392b">${esc(b.rejectReason)}</span>`) : ''}
+      ${b.att&&b.att.length ? drow('المرفقات', b.att.map(u=>`<a href="${u}" target="_blank" style="color:var(--primary)"><i class="fas fa-paperclip"></i> ملف</a>`).join(' ')) : ''}
+    </table>`;
+
+  let footer = '';
+  if (b.status === 'pending') {
+    footer += `<button class="btn btn-green" onclick="quickApprove('${b.reqId}');closeModal('bkModal')"><i class="fas fa-check"></i> موافقة</button>`;
+    footer += `<button class="btn btn-red" onclick="closeModal('bkModal');openReject('${b.reqId}')"><i class="fas fa-times"></i> رفض</button>`;
+  }
+  if (b.status !== 'cancelled' && b.status !== 'rejected') {
+    footer += `<button class="btn btn-orange" onclick="quickCancel('${b.reqId}');closeModal('bkModal')"><i class="fas fa-ban"></i> إلغاء</button>`;
+  }
+  if (b.status !== 'pending') {
+    footer += `<button class="btn btn-blue" onclick="quickSetPending('${b.reqId}')"><i class="fas fa-undo"></i> إعادة لقيد المراجعة</button>`;
+  }
+  footer += `<button class="btn btn-outline" onclick="openEdit('${b.reqId}');closeModal('bkModal')"><i class="fas fa-edit"></i> تعديل</button>`;
+  footer += `<button class="btn btn-outline" onclick="closeModal('bkModal')">إغلاق</button>`;
+  document.getElementById('bkModalFooter').innerHTML = footer;
+  openModal('bkModal');
+}
+
+async function quickSetPending(reqId) {
+  const data = await api('/admin/api/set-pending', {reqId});
+  if (data.success) { showToast('أُعيد لقيد المراجعة'); closeModal('bkModal'); loadBookings(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+function drow(label, val) {
+  return `<tr><td style="padding:7px 10px;font-weight:700;background:#f0f7f8;width:36%">${label}</td><td style="padding:7px 10px;border-bottom:1px solid var(--border)">${val}</td></tr>`;
+}
+
+function openEdit(reqId) {
+  const b = allBookings.find(x => x.reqId === reqId);
+  if (!b) return;
+  document.getElementById('editReqId').value = reqId;
+  document.getElementById('editName').value  = b.name;
+  document.getElementById('editEmail').value = b.email;
+  document.getElementById('editPhone').value = b.phone;
+  document.getElementById('editBehalf').value= b.behalf;
+  document.getElementById('editTitle').value = b.title;
+  document.getElementById('editDate').value  = b.date;
+  document.getElementById('editEndDate').value = b.endDate || b.date;
+  document.getElementById('editStart').value = b.startTime;
+  document.getElementById('editEnd').value   = b.endTime;
+  document.getElementById('editFullDay').checked = b.fullDay;
+  document.getElementById('editNotes').value = b.notes;
+  // populate halls
+  const sel = document.getElementById('editHall');
+  sel.innerHTML = hallsList.map(h => `<option value="${h.nameAr}" ${h.nameAr===b.hall?'selected':''}>${h.nameAr}</option>`).join('');
+  document.getElementById('editAlert').innerHTML = '';
+  openModal('editModal');
+}
+
+async function saveEdit() {
+  const data = await api('/admin/api/update-booking', {
+    reqId:    document.getElementById('editReqId').value,
+    name:     document.getElementById('editName').value.trim(),
+    email:    document.getElementById('editEmail').value.trim(),
+    phone:    document.getElementById('editPhone').value.trim(),
+    behalf:   document.getElementById('editBehalf').value.trim(),
+    title:    document.getElementById('editTitle').value.trim(),
+    hall:     document.getElementById('editHall').value,
+    bookingDate: document.getElementById('editDate').value,
+    endDate:  document.getElementById('editEndDate').value,
+    startTime:document.getElementById('editStart').value,
+    endTime:  document.getElementById('editEnd').value,
+    fullDay:  document.getElementById('editFullDay').checked,
+    notes:    document.getElementById('editNotes').value.trim(),
+  });
+  if (data.success) {
+    showToast('تم الحفظ'); closeModal('editModal'); loadBookings();
+  } else {
+    document.getElementById('editAlert').innerHTML =
+      `<div class="alert alert-error">${data.error || 'خطأ'}</div>`;
+  }
+}
+
+// ── Halls ──────────────────────────────────────────────────────
+async function loadHalls() {
+  const data = await fetch('/admin/api/halls').then(r => r.json());
+  hallsList = data;
+  // Update blocked hall select too
+  const blkSel = document.getElementById('blkHall');
+  blkSel.innerHTML = '<option value="">-- كل القاعات --</option>' +
+    data.map(h => `<option value="${h.nameAr}">${h.nameAr}</option>`).join('');
+
+  document.getElementById('hallsTable').innerHTML = data.map(h => `
+    <tr>
+      <td>${esc(h.nameAr)}</td>
+      <td dir="ltr">${esc(h.nameEn)}</td>
+      <td dir="ltr">${esc(h.code)}</td>
+      <td>${esc(h.capacity)}</td>
+      <td>${esc(h.location)}</td>
+      <td><span class="badge ${h.active?'badge-approved':'badge-cancelled'}">${h.active?'فعالة':'معطلة'}</span></td>
+      <td>
+        <button class="btn btn-red btn-sm" onclick="deleteHall(${h.id})"><i class="fas fa-trash"></i></button>
+        <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${h.id},${h.active?'false':'true'})">
+          ${h.active?'<i class="fas fa-toggle-off"></i> تعطيل':'<i class="fas fa-toggle-on"></i> تفعيل'}
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+async function addHall() {
+  const nameAr = document.getElementById('hNameAr').value.trim();
+  if (!nameAr) { showToast('الاسم مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-hall', {
+    nameAr, nameEn: document.getElementById('hNameEn').value.trim(),
+    location: document.getElementById('hLocation').value.trim(),
+    code:     document.getElementById('hCode').value.trim(),
+    capacity: document.getElementById('hCapacity').value,
+    equipment:document.getElementById('hEquipment').value.trim(),
+    description: document.getElementById('hDesc').value.trim(),
+    notes:    document.getElementById('hNotes').value.trim(),
+    requiresApproval: document.getElementById('hRequiresApproval').checked,
+    active:   document.getElementById('hActive').checked,
+  });
+  if (data.success) { showToast('تمت الإضافة'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function deleteHall(id) {
+  if (!confirm('حذف هذه القاعة؟')) return;
+  const data = await api('/admin/api/delete-hall', {id});
+  if (data.success) { showToast('تم الحذف'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function toggleHallActive(id, active) {
+  const h = hallsList.find(x => x.id === id);
+  if (!h) return;
+  const data = await api('/admin/api/update-hall', {...h, id, active});
+  if (data.success) { showToast('تم التحديث'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+// ── Blocked ────────────────────────────────────────────────────
+async function loadBlocked() {
+  const data = await fetch('/admin/api/blocked').then(r => r.json());
+  document.getElementById('blockedTable').innerHTML = data.map(b => `
+    <tr>
+      <td>${b.s}</td><td>${b.e}</td>
+      <td>${esc(b.hall||'كل القاعات')}</td>
+      <td dir="ltr">${b.fromT||'-'}</td><td dir="ltr">${b.toT||'-'}</td>
+      <td>${esc(b.r)}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteBlocked(${b.id})"><i class="fas fa-trash"></i></button></td>
+    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">لا توجد فترات محظورة</td></tr>';
+}
+
+async function addBlocked() {
+  const from = document.getElementById('blkFrom').value;
+  const to   = document.getElementById('blkTo').value;
+  if (!from || !to) { showToast('التاريخ مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-blocked', {
+    fromDate: from, toDate: to,
+    hall:    document.getElementById('blkHall').value,
+    reason:  document.getElementById('blkReason').value.trim(),
+    fromTime:document.getElementById('blkFromT').value,
+    toTime:  document.getElementById('blkToT').value,
+  });
+  if (data.success) { showToast('تمت الإضافة'); loadBlocked(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function deleteBlocked(id) {
+  if (!confirm('حذف هذه الفترة؟')) return;
+  const data = await api('/admin/api/delete-blocked', {id});
+  if (data.success) { showToast('تم الحذف'); loadBlocked(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+// ── Contacts ───────────────────────────────────────────────────
+async function loadContacts() {
+  const data = await fetch('/admin/api/contacts').then(r => r.json());
+  document.getElementById('contactsTable').innerHTML = data.map(c => `
+    <tr>
+      <td dir="ltr">${esc(c.email)}</td>
+      <td>${esc(c.name||'-')}</td>
+      <td>${c.date}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteContact(${c.id})"><i class="fas fa-trash"></i></button></td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted)">لا توجد جهات اتصال</td></tr>';
+}
+
+async function addContact() {
+  const email = document.getElementById('ctEmail').value.trim();
+  const name  = document.getElementById('ctName').value.trim();
+  if (!email) { showToast('البريد مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-contacts', {list: [{email, name}]});
+  if (data.success) { showToast(`تمت الإضافة (${data.count})`); document.getElementById('ctEmail').value = ''; document.getElementById('ctName').value = ''; loadContacts(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function deleteContact(id) {
+  if (!confirm('حذف جهة الاتصال هذه؟')) return;
+  const data = await api('/admin/api/delete-contact', {id});
+  if (data.success) { showToast('تم الحذف'); loadContacts(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function uploadContacts(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const list = lines.map(l => {
+    const parts = l.split(',');
+    return {email: (parts[0]||'').trim(), name: (parts[1]||'').trim()};
+  }).filter(x => x.email && x.email.includes('@'));
+  const data = await api('/admin/api/add-contacts', {list});
+  showToast(data.success ? `تمت الإضافة: ${data.count}` : (data.error||'خطأ'), data.success ? '#247680' : '#c0392b');
+  if (data.success) loadContacts();
+  input.value = '';
+}
+
+// ── Reports ────────────────────────────────────────────────────
+let reportData = [];
+async function loadReportData() {
+  reportData = await fetch('/admin/api/report-data').then(r => r.json());
+}
+
+function runReport() {
+  const dim    = document.getElementById('anaDim').value;
+  const status = document.getElementById('anaStatus').value;
+  const fromD  = document.getElementById('anaFrom').value;
+  const toD    = document.getElementById('anaTo').value;
+
+  let rows = reportData;
+  if (status !== 'all') rows = rows.filter(r => r.status === status);
+  if (fromD) rows = rows.filter(r => r.date >= fromD);
+  if (toD)   rows = rows.filter(r => r.date <= toD);
+
+  const groups = {};
+  const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  for (const r of rows) {
+    let key = '';
+    if (dim === 'hall')   key = r.hall || 'غير محدد';
+    else if (dim === 'person') key = r.name || 'غير محدد';
+    else if (dim === 'month')  key = (r.date||'').substring(0, 7);
+    else if (dim === 'dow') {
+      const d = new Date((r.date||'') + 'T00:00:00');
+      key = DAYS_AR[d.getDay()] || '';
+    }
+    if (!key) continue;
+    if (!groups[key]) groups[key] = {count:0, approved:0, pending:0, hours:0};
+    groups[key].count++;
+    if (r.status === 'approved') groups[key].approved++;
+    if (r.status === 'pending')  groups[key].pending++;
+    if (r.fullDay) {
+      groups[key].hours += 8;
+    } else if (r.startTime && r.endTime) {
+      const [sh, sm] = r.startTime.split(':').map(Number);
+      const [eh, em] = r.endTime.split(':').map(Number);
+      groups[key].hours += Math.max(0, (eh*60+em - sh*60-sm) / 60);
+    }
+  }
+
+  let arr = Object.entries(groups).map(([key, data]) => ({key, data}));
+  if (dim === 'month') arr.sort((a,b) => a.key > b.key ? 1 : -1);
+  else arr.sort((a,b) => b.data.count - a.data.count);
+
+  const chart = document.getElementById('anaChart');
+  if (!arr.length) { chart.innerHTML = '<p style="color:var(--muted);text-align:center">لا توجد بيانات</p>'; document.getElementById('anaTable').innerHTML = ''; document.getElementById('reportResult').style.display='block'; return; }
+
+  const mx = arr[0].data.count;
+  chart.innerHTML = arr.slice(0,12).map(({key, data}) => {
+    const pct = mx > 0 ? Math.round(data.count/mx*100) : 0;
+    return `<div class="bar-item">
+      <div class="bar-label" title="${esc(key)}">${esc(key)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%"><span>${data.count}</span></div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('anaTable').innerHTML = `
+    <table class="period-table">
+      <thead><tr><th>العنصر</th><th>الحجوزات</th><th>معتمدة</th><th>قيد المراجعة</th><th>الساعات (تقريباً)</th></tr></thead>
+      <tbody>${arr.map(({key,data}) => `
+        <tr>
+          <td style="font-weight:700">${esc(key)}</td>
+          <td>${data.count}</td>
+          <td style="color:#27ae60">${data.approved}</td>
+          <td style="color:var(--accent)">${data.pending}</td>
+          <td>${data.hours.toFixed(1)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  const dimLabels = {hall:'القاعات',person:'الأشخاص',month:'الأشهر',dow:'أيام الأسبوع'};
+  document.getElementById('reportTitle').innerHTML = `<i class="fas fa-chart-bar"></i> نتائج: ${dimLabels[dim]||dim}`;
+  document.getElementById('reportResult').style.display = 'block';
+}
+
+// ── Modals ────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ── Helpers ───────────────────────────────────────────────────
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function refreshAll() { loadBookings(); loadStats(); showToast('تم التحديث'); }
+
+// ── Init ──────────────────────────────────────────────────────
+loadBookings();
+loadHalls();
+</script>
+</body>
+</html>

@@ -1,0 +1,245 @@
+{% extends 'base_public.html' %}
+{% block title %}{{ 'استعلام عن الحجز' if lang == 'ar' else 'Booking Lookup' }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:560px;margin:0 auto">
+  <div class="card-title">
+    <i class="fas fa-search"></i>
+    {{ 'استعلام عن حجز' if lang == 'ar' else 'Booking Lookup' }}
+  </div>
+  <p style="color:var(--muted);margin-bottom:16px;font-size:.9rem">
+    {{ 'أدخل رقم الطلب والبريد الإلكتروني للاستعلام أو التعديل أو الإلغاء' if lang == 'ar' else 'Enter your request number and email to look up, edit, or cancel your booking' }}
+  </p>
+  <div id="alertBox"></div>
+  <div class="form-group">
+    <label>{{ 'رقم الطلب' if lang == 'ar' else 'Request Number' }} <span class="req">*</span></label>
+    <input type="text" id="reqId" placeholder="PUB-250101-0001" dir="ltr">
+  </div>
+  <div class="form-group">
+    <label>{{ 'البريد الإلكتروني' if lang == 'ar' else 'Email' }} <span class="req">*</span></label>
+    <input type="email" id="email" placeholder="example@email.com" dir="ltr">
+  </div>
+  <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLookup()" id="lookupBtn">
+    <i class="fas fa-search"></i> {{ 'بحث' if lang == 'ar' else 'Search' }}
+  </button>
+</div>
+
+<!-- Result -->
+<div id="resultWrap" style="display:none;max-width:560px;margin:20px auto 0">
+  <div class="card">
+    <div class="card-title" id="resTitle"></div>
+    <div id="resDetails"></div>
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap" id="resActions"></div>
+  </div>
+</div>
+
+<!-- Edit form -->
+<div id="editWrap" style="display:none;max-width:560px;margin:20px auto 0">
+  <div class="card">
+    <div class="card-title"><i class="fas fa-edit"></i> {{ 'تعديل الحجز' if lang == 'ar' else 'Edit Booking' }}</div>
+    <div id="editAlert"></div>
+    <div class="form-group">
+      <label>{{ 'الاسم' if lang == 'ar' else 'Name' }}</label>
+      <input type="text" id="eName">
+    </div>
+    <div class="form-group">
+      <label>{{ 'الجوال' if lang == 'ar' else 'Phone' }}</label>
+      <input type="tel" id="ePhone" dir="ltr">
+    </div>
+    <div class="form-group">
+      <label>{{ 'عنوان المناسبة' if lang == 'ar' else 'Event Title' }}</label>
+      <input type="text" id="eTitle">
+    </div>
+    <div class="form-group">
+      <label>{{ 'القاعة' if lang == 'ar' else 'Venue' }}</label>
+      <select id="eHall">
+        {% for h in halls %}
+        <option value="{{ h.name_ar }}">{{ h.name_ar }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>{{ 'تاريخ الحجز' if lang == 'ar' else 'Date' }}</label>
+      <input type="date" id="eDate">
+    </div>
+    <div class="form-group" style="display:flex;gap:12px">
+      <div style="flex:1">
+        <label>{{ 'من' if lang == 'ar' else 'From' }}</label>
+        <input type="time" id="eStart">
+      </div>
+      <div style="flex:1">
+        <label>{{ 'إلى' if lang == 'ar' else 'To' }}</label>
+        <input type="time" id="eEnd">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>{{ 'ملاحظات' if lang == 'ar' else 'Notes' }}</label>
+      <textarea id="eNotes"></textarea>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="doAmend()" id="amendBtn">
+        <i class="fas fa-save"></i> {{ 'حفظ التعديلات' if lang == 'ar' else 'Save Changes' }}
+      </button>
+      <button class="btn btn-outline" onclick="hideEdit()">{{ 'إلغاء' if lang == 'ar' else 'Cancel' }}</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const LANG = '{{ lang }}';
+const AR = LANG === 'ar';
+let currentBooking = null;
+
+function showAlert(id, msg, type) {
+  document.getElementById(id).innerHTML =
+    `<div class="alert alert-${type}"><i class="fas fa-${type==='error'?'exclamation-circle':'check-circle'}"></i> ${msg}</div>`;
+}
+
+async function doLookup() {
+  const reqId = document.getElementById('reqId').value.trim();
+  const email = document.getElementById('email').value.trim();
+  if (!reqId || !email) {
+    showAlert('alertBox', AR ? 'يرجى إدخال رقم الطلب والبريد' : 'Please enter request number and email', 'error');
+    return;
+  }
+  const btn = document.getElementById('lookupBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner" style="border-color:rgba(255,255,255,.3);border-top-color:#fff"></span>`;
+  document.getElementById('alertBox').innerHTML = '';
+  document.getElementById('resultWrap').style.display = 'none';
+  document.getElementById('editWrap').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/lookup-booking', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({reqId, email})
+    });
+    const data = await res.json();
+    if (data.success) {
+      currentBooking = data.booking;
+      renderResult(data.booking);
+    } else {
+      showAlert('alertBox', data.error || (AR ? 'لم يتم العثور على الحجز' : 'Booking not found'), 'error');
+    }
+  } catch(e) {
+    showAlert('alertBox', AR ? 'خطأ في الاتصال' : 'Connection error', 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = `<i class="fas fa-search"></i> ${AR ? 'بحث' : 'Search'}`;
+}
+
+function renderResult(b) {
+  const timeStr = b.fullDay ? (AR ? 'يوم كامل' : 'Full Day') : `${b.startTime} - ${b.endTime}`;
+  const dateStr = b.endDate && b.endDate !== b.date ? `${b.date} — ${b.endDate}` : b.date;
+  const statusLabels = {
+    approved: AR ? 'معتمد' : 'Approved',
+    pending:  AR ? 'قيد المراجعة' : 'Pending',
+    rejected: AR ? 'مرفوض' : 'Rejected',
+    cancelled:AR ? 'ملغي' : 'Cancelled',
+  };
+  document.getElementById('resTitle').innerHTML =
+    `<i class="fas fa-calendar-check"></i> ${b.reqId} — <span class="badge badge-${b.status}">${statusLabels[b.status]||b.status}</span>`;
+
+  document.getElementById('resDetails').innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      ${row(AR?'الاسم':'Name', b.name)}
+      ${row(AR?'البريد':'Email', b.email)}
+      ${row(AR?'المناسبة':'Event', b.title)}
+      ${row(AR?'القاعة':'Venue', b.hall)}
+      ${row(AR?'التاريخ':'Date', dateStr)}
+      ${row(AR?'الوقت':'Time', timeStr)}
+      ${b.rejectReason ? row(AR?'سبب الرفض':'Reject Reason', `<span style="color:#c0392b">${esc(b.rejectReason)}</span>`) : ''}
+    </table>`;
+
+  const today = new Date().toISOString().split('T')[0];
+  const canModify = b.status !== 'cancelled' && b.status !== 'rejected' && b.date >= today;
+  let actions = '';
+  if (canModify) {
+    actions += `<button class="btn btn-outline" onclick="showEdit()"><i class="fas fa-edit"></i> ${AR?'تعديل':'Edit'}</button>`;
+    actions += `<button class="btn" style="background:#f8d7da;color:#842029" onclick="doCancel()"><i class="fas fa-times"></i> ${AR?'إلغاء الحجز':'Cancel Booking'}</button>`;
+  }
+  document.getElementById('resActions').innerHTML = actions;
+  document.getElementById('resultWrap').style.display = 'block';
+}
+
+function row(label, val) {
+  return `<tr>
+    <td style="padding:7px 10px;font-weight:600;background:#f0f7f8;width:38%">${label}</td>
+    <td style="padding:7px 10px;border-bottom:1px solid var(--border)">${val}</td>
+  </tr>`;
+}
+
+function showEdit() {
+  const b = currentBooking;
+  document.getElementById('eName').value  = b.name;
+  document.getElementById('ePhone').value = b.phone;
+  document.getElementById('eTitle').value = b.title;
+  document.getElementById('eHall').value  = b.hall;
+  document.getElementById('eDate').value  = b.date;
+  document.getElementById('eStart').value = b.startTime;
+  document.getElementById('eEnd').value   = b.endTime;
+  document.getElementById('eNotes').value = b.notes;
+  document.getElementById('editWrap').style.display = 'block';
+  document.getElementById('editWrap').scrollIntoView({behavior:'smooth'});
+}
+function hideEdit() { document.getElementById('editWrap').style.display = 'none'; }
+
+async function doAmend() {
+  const btn = document.getElementById('amendBtn');
+  btn.disabled = true;
+  document.getElementById('editAlert').innerHTML = '';
+
+  const fd = new FormData();
+  fd.append('reqId', currentBooking.reqId);
+  fd.append('email', document.getElementById('email').value.trim());
+  fd.append('fullName', document.getElementById('eName').value.trim());
+  fd.append('phone',    document.getElementById('ePhone').value.trim());
+  fd.append('eventTitle', document.getElementById('eTitle').value.trim());
+  fd.append('hall',     document.getElementById('eHall').value);
+  fd.append('bookingDate', document.getElementById('eDate').value);
+  fd.append('startTime',   document.getElementById('eStart').value);
+  fd.append('endTime',     document.getElementById('eEnd').value);
+  fd.append('notes',    document.getElementById('eNotes').value.trim());
+
+  try {
+    const res = await fetch('/api/amend-booking', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.success) {
+      showAlert('editAlert', AR ? 'تم حفظ التعديلات بنجاح' : 'Changes saved', 'success');
+      setTimeout(() => { hideEdit(); doLookup(); }, 1500);
+    } else {
+      showAlert('editAlert', data.error || (AR ? 'حدث خطأ' : 'Error'), 'error');
+    }
+  } catch(e) {
+    showAlert('editAlert', AR ? 'خطأ في الاتصال' : 'Connection error', 'error');
+  }
+  btn.disabled = false;
+}
+
+async function doCancel() {
+  if (!confirm(AR ? 'هل تريد إلغاء هذا الحجز نهائياً؟' : 'Are you sure you want to cancel this booking?')) return;
+  try {
+    const res = await fetch('/api/cancel-booking', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({reqId: currentBooking.reqId, email: document.getElementById('email').value.trim()})
+    });
+    const data = await res.json();
+    if (data.success) {
+      showAlert('alertBox', AR ? 'تم إلغاء الحجز بنجاح' : 'Booking cancelled', 'success');
+      document.getElementById('resultWrap').style.display = 'none';
+      document.getElementById('editWrap').style.display = 'none';
+    } else {
+      showAlert('alertBox', data.error || (AR ? 'حدث خطأ' : 'Error'), 'error');
+    }
+  } catch(e) {
+    showAlert('alertBox', AR ? 'خطأ في الاتصال' : 'Error', 'error');
+  }
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+{% endblock %}

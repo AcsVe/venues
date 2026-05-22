@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ 'rtl' if lang == 'ar' else 'ltr' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ 'تنبيه' if lang == 'ar' else 'Notice' }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Tajawal, sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .box {
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px 32px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,.1);
+    }
+    .icon { font-size: 56px; margin-bottom: 16px; }
+    .msg {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a5c64;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .back {
+      display: inline-block;
+      background: linear-gradient(135deg, #247680, #1a5c64);
+      color: #fff;
+      padding: 12px 28px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">🚫</div>
+    <div class="msg">{{ msg }}</div>
+    <a class="back" href="/calendar?lang={{ lang }}">
+      ← {{ 'العودة للروزنامة' if lang == 'ar' else 'Back to Calendar' }}
+    </a>
+  </div>
+</body>
+</html>

@@ -1,0 +1,358 @@
+{% extends 'base_public.html' %}
+{% block title %}{{ 'الروزنامة' if lang == 'ar' else 'Calendar' }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .cal-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .cal-nav h2 { font-size: 1.3rem; font-weight: 800; color: var(--primary); }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .cal-day-name {
+    text-align: center;
+    font-weight: 700;
+    font-size: .78rem;
+    color: var(--muted);
+    padding: 6px 0;
+  }
+  .cal-cell {
+    min-height: 80px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #fff;
+    padding: 4px;
+    position: relative;
+    cursor: default;
+    transition: border-color .2s;
+  }
+  .cal-cell.other-month { background: #f7f9f9; opacity: .55; }
+  .cal-cell.today { border-color: var(--primary); border-width: 2px; }
+  .cal-cell.past  { background: #f9f9f9; opacity: .65; }
+  .cal-cell.bookable { cursor: pointer; }
+  .cal-cell.bookable:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(235,179,123,.3); }
+  .cal-date {
+    font-size: .78rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+  .cal-cell.today .cal-date { color: var(--primary); }
+  .cal-event {
+    font-size: .68rem;
+    font-weight: 600;
+    padding: 2px 5px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .cal-event.approved { background: #d1e7dd; color: #0a6640; }
+  .cal-event.pending  { background: #fff3cd; color: #856404; }
+  .cal-event.blocked  { background: #f8d7da; color: #842029; }
+  .cal-blocked-dot {
+    width: 100%;
+    font-size: .65rem;
+    background: #f8d7da;
+    color: #842029;
+    border-radius: 4px;
+    padding: 1px 4px;
+    margin-bottom: 2px;
+    font-weight: 700;
+  }
+  .book-btn {
+    position: absolute;
+    bottom: 3px; left: 3px; right: 3px;
+    font-size: .65rem;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 2px 4px;
+    cursor: pointer;
+    display: none;
+    font-family: inherit;
+    font-weight: 600;
+  }
+  .cal-cell.bookable:hover .book-btn { display: block; }
+  /* Legend */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: .82rem; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.45); z-index: 1000;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 14px;
+    padding: 28px; max-width: 520px; width: 95%;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 8px 40px rgba(0,0,0,.2);
+  }
+  .modal h3 { font-size: 1.1rem; font-weight: 800; color: var(--primary); margin-bottom: 16px; }
+  .modal-close {
+    float: left; background: none; border: none;
+    font-size: 1.3rem; cursor: pointer; color: var(--muted);
+    margin-bottom: 8px;
+  }
+  html[dir=rtl] .modal-close { float: right; }
+  .bk-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .bk-card .bk-title { font-weight: 700; font-size: .95rem; margin-bottom: 6px; }
+  .bk-card .bk-meta  { font-size: .8rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; }
+  @media (max-width: 640px) {
+    .cal-cell { min-height: 54px; }
+    .cal-event { display: none; }
+    .cal-cell.has-event::after {
+      content: '●'; color: var(--primary); font-size: .7rem; display: block;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="cal-nav">
+    <button class="btn btn-outline btn-sm" onclick="changeMonth(-1)">
+      <i class="fas fa-chevron-{{ 'right' if lang == 'ar' else 'left' }}"></i>
+    </button>
+    <h2 id="calTitle"></h2>
+    <button class="btn btn-outline btn-sm" onclick="changeMonth(1)">
+      <i class="fas fa-chevron-{{ 'left' if lang == 'ar' else 'right' }}"></i>
+    </button>
+  </div>
+  <div id="calGrid" class="cal-grid"></div>
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#d1e7dd;border:1px solid #a3cfbb"></div>
+      <span>{{ 'معتمد' if lang == 'ar' else 'Approved' }}</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#fff3cd;border:1px solid #ffe69c"></div>
+      <span>{{ 'قيد المراجعة' if lang == 'ar' else 'Pending' }}</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#f8d7da;border:1px solid #f1aeb5"></div>
+      <span>{{ 'غير متاح' if lang == 'ar' else 'Unavailable' }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Day modal -->
+<div class="modal-overlay" id="dayModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <h3 id="modalDate"></h3>
+    <div id="modalContent"></div>
+    <div style="margin-top:14px;text-align:center">
+      <a id="modalBookBtn" href="#" class="btn btn-primary">
+        <i class="fas fa-plus"></i>
+        {{ 'احجز هذا اليوم' if lang == 'ar' else 'Book This Day' }}
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const LANG = '{{ lang }}';
+const AR = LANG === 'ar';
+const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS_AR   = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const DAYS_EN   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+let curYear  = new Date().getFullYear();
+let curMonth = new Date().getMonth() + 1;
+let monthCache = {};
+
+async function loadMonth(y, m) {
+  const key = `${y}_${m}`;
+  if (monthCache[key]) return monthCache[key];
+  const res = await fetch(`/api/month-data?y=${y}&m=${m}`);
+  const data = await res.json();
+  monthCache[key] = data;
+  return data;
+}
+
+async function renderCalendar() {
+  document.getElementById('calTitle').textContent =
+    AR ? `${MONTHS_AR[curMonth-1]} ${curYear}` : `${MONTHS_EN[curMonth-1]} ${curYear}`;
+
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '<div class="cal-day-name" style="display:contents"></div>';
+
+  // Day names row
+  const dayNames = AR ? DAYS_AR : DAYS_EN;
+  for (const d of dayNames) {
+    const el = document.createElement('div');
+    el.className = 'cal-day-name';
+    el.textContent = d;
+    grid.appendChild(el);
+  }
+
+  const data = await loadMonth(curYear, curMonth);
+  const bookings = data.bookings || [];
+  const blocked  = data.blocked  || {};
+
+  const today     = new Date().toISOString().split('T')[0];
+  const firstDay  = new Date(curYear, curMonth - 1, 1);
+  const lastDay   = new Date(curYear, curMonth, 0);
+  const startDow  = firstDay.getDay(); // 0=Sun
+
+  // Empty cells before first day
+  for (let i = 0; i < startDow; i++) {
+    const el = document.createElement('div');
+    el.className = 'cal-cell other-month';
+    grid.appendChild(el);
+  }
+
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const dateStr = `${curYear}-${String(curMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const cell = document.createElement('div');
+    const isPast = dateStr < today;
+    const isToday = dateStr === today;
+
+    cell.className = 'cal-cell' + (isToday ? ' today' : '') + (isPast ? ' past' : '');
+
+    const dateEl = document.createElement('div');
+    dateEl.className = 'cal-date';
+    dateEl.textContent = day;
+    cell.appendChild(dateEl);
+
+    // Blocked
+    const blkList = blocked[dateStr] || [];
+    for (const blk of blkList) {
+      const el = document.createElement('div');
+      el.className = 'cal-blocked-dot';
+      el.textContent = blk.reason || (AR ? 'غير متاح' : 'Unavailable');
+      cell.appendChild(el);
+    }
+
+    // Bookings for this date
+    const dayBks = bookings.filter(b => b.date <= dateStr && (b.endDate || b.date) >= dateStr);
+    if (dayBks.length) cell.classList.add('has-event');
+    for (const bk of dayBks.slice(0, 3)) {
+      const el = document.createElement('div');
+      el.className = `cal-event ${bk.status}`;
+      el.textContent = bk.title || bk.hall;
+      el.title = bk.title;
+      el.onclick = (e) => { e.stopPropagation(); openDayModal(dateStr, dayBks, blkList); };
+      cell.appendChild(el);
+    }
+    if (dayBks.length > 3) {
+      const more = document.createElement('div');
+      more.className = 'cal-event approved';
+      more.textContent = AR ? `+${dayBks.length - 3} أخرى` : `+${dayBks.length - 3} more`;
+      cell.appendChild(more);
+    }
+
+    // Book button
+    if (!isPast && blkList.every(b => b.fromTime)) {
+      cell.classList.add('bookable');
+      const btn = document.createElement('button');
+      btn.className = 'book-btn';
+      btn.textContent = AR ? '+ احجز' : '+ Book';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        window.location.href = `/book?date=${dateStr}&lang=${LANG}`;
+      };
+      cell.appendChild(btn);
+      cell.onclick = () => openDayModal(dateStr, dayBks, blkList);
+    } else {
+      cell.onclick = () => openDayModal(dateStr, dayBks, blkList);
+    }
+
+    grid.appendChild(cell);
+  }
+}
+
+function openDayModal(dateStr, bookings, blocked) {
+  document.getElementById('modalDate').textContent = dateStr;
+  const content = document.getElementById('modalContent');
+  let html = '';
+
+  if (blocked.length) {
+    html += `<div class="alert alert-error" style="margin-bottom:10px">
+      <i class="fas fa-ban"></i> ${AR ? 'الفترات المحظورة:' : 'Blocked periods:'}
+      <ul style="margin-top:4px;padding-right:16px">
+        ${blocked.map(b => `<li>${b.reason}${b.fromTime ? ` (${b.fromTime} - ${b.toTime})` : ''}</li>`).join('')}
+      </ul>
+    </div>`;
+  }
+
+  if (bookings.length) {
+    for (const bk of bookings) {
+      const timeStr = bk.fullDay ? (AR ? 'يوم كامل' : 'Full Day') :
+                      `${bk.startTime} - ${bk.endTime}`;
+      html += `<div class="bk-card">
+        <div class="bk-title">${esc(bk.title)}</div>
+        <div class="bk-meta">
+          <span><i class="fas fa-door-open"></i> ${esc(bk.hall)}</span>
+          <span><i class="fas fa-clock"></i> ${timeStr}</span>
+          <span class="badge badge-${bk.status}">${statusLabel(bk.status)}</span>
+        </div>
+      </div>`;
+    }
+  } else if (!blocked.length) {
+    html = `<p style="color:var(--muted);text-align:center">${AR ? 'لا توجد حجوزات في هذا اليوم' : 'No bookings for this day'}</p>`;
+  }
+
+  content.innerHTML = html;
+  const today = new Date().toISOString().split('T')[0];
+  const bookBtn = document.getElementById('modalBookBtn');
+  const fullyBlocked = blocked.some(b => !b.fromTime);
+  if (dateStr >= today && !fullyBlocked) {
+    bookBtn.href = `/book?date=${dateStr}&lang=${LANG}`;
+    bookBtn.style.display = 'inline-flex';
+  } else {
+    bookBtn.style.display = 'none';
+  }
+  document.getElementById('dayModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('dayModal').classList.remove('open');
+}
+document.getElementById('dayModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+function changeMonth(dir) {
+  curMonth += dir;
+  if (curMonth > 12) { curMonth = 1; curYear++; }
+  if (curMonth < 1)  { curMonth = 12; curYear--; }
+  renderCalendar();
+}
+
+function statusLabel(s) {
+  const map = {
+    approved: AR ? 'معتمد' : 'Approved',
+    pending:  AR ? 'قيد المراجعة' : 'Pending',
+    rejected: AR ? 'مرفوض' : 'Rejected',
+    cancelled:AR ? 'ملغي' : 'Cancelled',
+  };
+  return map[s] || s;
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+renderCalendar();
+</script>
+{% endblock %}

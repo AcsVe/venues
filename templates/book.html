@@ -1,0 +1,281 @@
+{% extends 'base_public.html' %}
+{% block title %}{{ 'نموذج الحجز' if lang == 'ar' else 'New Booking' }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-row.single { grid-template-columns: 1fr; }
+  @media (max-width:640px) { .form-row { grid-template-columns: 1fr; } }
+  .toggle-group {
+    display: flex; gap: 8px; align-items: center;
+    background: #f0f7f8; padding: 10px 14px; border-radius: 8px;
+    margin-bottom: 4px;
+  }
+  .toggle-group label { margin: 0; font-weight: 600; flex: 1; cursor: pointer; }
+  .toggle-group input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
+  .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .upload-area {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s;
+  }
+  .upload-area:hover { border-color: var(--primary); }
+  .upload-area i { font-size: 2rem; color: var(--muted); margin-bottom: 8px; display: block; }
+  .file-list { margin-top: 10px; }
+  .file-item {
+    display: flex; align-items: center; gap: 8px;
+    background: #f0f7f8; border-radius: 6px;
+    padding: 6px 10px; margin-bottom: 6px; font-size: .85rem;
+  }
+  .file-item button { background: none; border: none; cursor: pointer; color: #c0392b; font-size: 1rem; }
+  .req-id-box {
+    background: linear-gradient(135deg, #d1e7dd, #a3cfbb);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    margin-top: 20px;
+  }
+  .req-id-box .req-id { font-size: 2rem; font-weight: 800; color: #0a6640; letter-spacing: 2px; }
+  .req-id-box p { color: #0a6640; margin-top: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="successBox" style="display:none" class="req-id-box">
+  <i class="fas fa-check-circle" style="font-size:3rem;color:#0a6640;margin-bottom:12px"></i>
+  <div>{{ 'تم إرسال طلب الحجز بنجاح!' if lang == 'ar' else 'Booking request submitted!' }}</div>
+  <div class="req-id" id="reqIdDisplay"></div>
+  <p>{{ 'احتفظ بهذا الرقم للاستعلام أو التعديل' if lang == 'ar' else 'Keep this number for tracking' }}</p>
+  <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+    <a href="/calendar?lang={{ lang }}" class="btn btn-primary">
+      <i class="fas fa-calendar-alt"></i> {{ 'الروزنامة' if lang == 'ar' else 'Calendar' }}
+    </a>
+    <a href="/lookup?lang={{ lang }}" class="btn btn-outline">
+      <i class="fas fa-search"></i> {{ 'تتبع الحجز' if lang == 'ar' else 'Track Booking' }}
+    </a>
+  </div>
+</div>
+
+<div id="formWrap">
+  <div class="card">
+    <div class="card-title">
+      <i class="fas fa-calendar-plus"></i>
+      {{ 'نموذج حجز قاعة' if lang == 'ar' else 'Venue Booking Form' }}
+    </div>
+
+    <div id="alertBox"></div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>{{ 'الاسم الكامل' if lang == 'ar' else 'Full Name' }} <span class="req">*</span></label>
+        <input type="text" id="fullName" placeholder="{{ 'الاسم الرباعي' if lang == 'ar' else 'Enter full name' }}">
+      </div>
+      <div class="form-group">
+        <label>{{ 'البريد الإلكتروني' if lang == 'ar' else 'Email' }} <span class="req">*</span></label>
+        <input type="email" id="email" placeholder="example@email.com" dir="ltr">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>{{ 'الجوال' if lang == 'ar' else 'Phone' }}</label>
+        <input type="tel" id="phone" placeholder="+966 5x xxx xxxx" dir="ltr">
+      </div>
+      <div class="form-group">
+        <label>{{ 'نيابة عن جهة' if lang == 'ar' else 'On Behalf Of' }}</label>
+        <input type="text" id="onBehalf" placeholder="{{ 'اسم الجهة أو القسم' if lang == 'ar' else 'Organization / Department' }}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>{{ 'عنوان المناسبة' if lang == 'ar' else 'Event Title' }} <span class="req">*</span></label>
+      <input type="text" id="eventTitle" placeholder="{{ 'عنوان الفعالية أو الاجتماع' if lang == 'ar' else 'Event or meeting title' }}">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>{{ 'القاعة' if lang == 'ar' else 'Venue' }} <span class="req">*</span></label>
+        <select id="hall">
+          <option value="">{{ '-- اختر القاعة --' if lang == 'ar' else '-- Select Venue --' }}</option>
+          {% for h in halls %}
+          <option value="{{ h.name_ar }}">
+            {{ h.name_ar }}{% if h.name_en %} / {{ h.name_en }}{% endif %}
+            {% if h.capacity %} ({{ h.capacity }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>{{ 'تاريخ الحجز' if lang == 'ar' else 'Booking Date' }} <span class="req">*</span></label>
+        <input type="date" id="bookingDate" min="{{ today }}" value="{{ pre_date }}">
+      </div>
+    </div>
+
+    <div class="toggle-group">
+      <input type="checkbox" id="multiDay" onchange="toggleMultiDay()">
+      <label for="multiDay">
+        <i class="fas fa-calendar-week"></i>
+        {{ 'حجز متعدد الأيام' if lang == 'ar' else 'Multi-day booking' }}
+      </label>
+    </div>
+    <div id="endDateWrap" style="display:none" class="form-group" style="margin-top:10px">
+      <label>{{ 'تاريخ الانتهاء' if lang == 'ar' else 'End Date' }}</label>
+      <input type="date" id="endDate" min="{{ today }}">
+    </div>
+
+    <div class="toggle-group" style="margin-top:10px">
+      <input type="checkbox" id="fullDay" onchange="toggleFullDay()">
+      <label for="fullDay">
+        <i class="fas fa-sun"></i>
+        {{ 'يوم كامل' if lang == 'ar' else 'Full Day' }}
+      </label>
+    </div>
+
+    <div id="timeWrap" class="form-group" style="margin-top:10px">
+      <label>{{ 'الوقت' if lang == 'ar' else 'Time' }}</label>
+      <div class="time-row">
+        <div>
+          <small style="color:var(--muted)">{{ 'من' if lang == 'ar' else 'From' }}</small>
+          <input type="time" id="startTime" value="09:00">
+        </div>
+        <div>
+          <small style="color:var(--muted)">{{ 'إلى' if lang == 'ar' else 'To' }}</small>
+          <input type="time" id="endTime" value="12:00">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>{{ 'ملاحظات' if lang == 'ar' else 'Notes' }}</label>
+      <textarea id="notes" placeholder="{{ 'أي تفاصيل أو متطلبات إضافية...' if lang == 'ar' else 'Additional details or requirements...' }}"></textarea>
+    </div>
+
+    <!-- File upload -->
+    <div class="form-group">
+      <label>{{ 'المرفقات' if lang == 'ar' else 'Attachments' }}</label>
+      <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <i class="fas fa-cloud-upload-alt"></i>
+        <div>{{ 'اضغط لاختيار ملفات' if lang == 'ar' else 'Click to select files' }}</div>
+        <small style="color:var(--muted)">PDF, Word, Images — {{ 'أقصى حجم 10MB لكل ملف' if lang == 'ar' else 'Max 10MB per file' }}</small>
+      </div>
+      <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.txt,.csv,.zip" style="display:none" onchange="addFiles(this.files)">
+      <div id="fileList" class="file-list"></div>
+    </div>
+
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="submitBooking()" id="submitBtn">
+      <i class="fas fa-paper-plane"></i>
+      {{ 'إرسال طلب الحجز' if lang == 'ar' else 'Submit Booking Request' }}
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const LANG = '{{ lang }}';
+const AR = LANG === 'ar';
+let selectedFiles = [];
+
+function toggleFullDay() {
+  const fd = document.getElementById('fullDay').checked;
+  document.getElementById('timeWrap').style.display = fd ? 'none' : 'block';
+}
+function toggleMultiDay() {
+  const md = document.getElementById('multiDay').checked;
+  document.getElementById('endDateWrap').style.display = md ? 'block' : 'none';
+}
+
+function addFiles(files) {
+  for (const f of files) selectedFiles.push(f);
+  renderFiles();
+}
+function removeFile(i) {
+  selectedFiles.splice(i, 1);
+  renderFiles();
+}
+function renderFiles() {
+  const list = document.getElementById('fileList');
+  list.innerHTML = selectedFiles.map((f, i) =>
+    `<div class="file-item">
+       <i class="fas fa-paperclip"></i>
+       <span style="flex:1">${esc(f.name)}</span>
+       <small>${(f.size/1024).toFixed(1)} KB</small>
+       <button onclick="removeFile(${i})">✕</button>
+     </div>`
+  ).join('');
+}
+
+function showAlert(msg, type) {
+  document.getElementById('alertBox').innerHTML =
+    `<div class="alert alert-${type}"><i class="fas fa-${type==='error'?'exclamation-circle':'check-circle'}"></i> ${msg}</div>`;
+}
+function clearAlert() { document.getElementById('alertBox').innerHTML = ''; }
+
+async function submitBooking() {
+  clearAlert();
+  const btn = document.getElementById('submitBtn');
+  const name  = document.getElementById('fullName').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const title = document.getElementById('eventTitle').value.trim();
+  const hall  = document.getElementById('hall').value;
+  const bdate = document.getElementById('bookingDate').value;
+
+  if (!name || !email || !title || !hall || !bdate) {
+    showAlert(AR ? 'يرجى ملء جميع الحقول الإلزامية' : 'Please fill all required fields', 'error');
+    return;
+  }
+
+  const fullDay  = document.getElementById('fullDay').checked;
+  const multiDay = document.getElementById('multiDay').checked;
+  const endDate  = multiDay ? document.getElementById('endDate').value || bdate : bdate;
+  const startTime= fullDay ? '' : document.getElementById('startTime').value;
+  const endTime  = fullDay ? '' : document.getElementById('endTime').value;
+
+  if (!fullDay && startTime >= endTime) {
+    showAlert(AR ? 'وقت النهاية يجب أن يكون بعد وقت البداية' : 'End time must be after start time', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span> ${AR ? 'جاري الإرسال...' : 'Submitting...'}`;
+
+  try {
+    const fd = new FormData();
+    fd.append('fullName', name);
+    fd.append('email', email);
+    fd.append('phone', document.getElementById('phone').value.trim());
+    fd.append('onBehalf', document.getElementById('onBehalf').value.trim());
+    fd.append('eventTitle', title);
+    fd.append('hall', hall);
+    fd.append('bookingDate', bdate);
+    fd.append('endDate', endDate);
+    fd.append('startTime', startTime);
+    fd.append('endTime', endTime);
+    fd.append('fullDay', fullDay ? 'true' : 'false');
+    fd.append('notes', document.getElementById('notes').value.trim());
+    for (const f of selectedFiles) fd.append('attachments', f);
+
+    const res  = await fetch('/api/submit-booking', { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (data.success) {
+      document.getElementById('formWrap').style.display = 'none';
+      document.getElementById('successBox').style.display = 'block';
+      document.getElementById('reqIdDisplay').textContent = data.reqId;
+    } else {
+      showAlert(data.error || (AR ? 'حدث خطأ' : 'An error occurred'), 'error');
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fas fa-paper-plane"></i> ${AR ? 'إرسال طلب الحجز' : 'Submit Booking Request'}`;
+    }
+  } catch (e) {
+    showAlert(AR ? 'خطأ في الاتصال' : 'Connection error', 'error');
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fas fa-paper-plane"></i> ${AR ? 'إرسال طلب الحجز' : 'Submit Booking Request'}`;
+  }
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+{% endblock %}

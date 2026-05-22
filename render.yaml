@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: acs-booking
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers=1 --bind=0.0.0.0:$PORT --timeout=120
+    disk:
+      name: acs-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASS
+        value: acs2024
+      - key: ORG_AR
+        value: الجمعية الثقافية العربية
+      - key: ORG_EN
+        value: Arab Cultural Society
+      - key: LOGO_URL
+        value: https://i.postimg.cc/S2W2hXZ6/acs.png
+      - key: BREVO_API_KEY
+        value: ""
+      - key: SENDER_EMAIL
+        value: acsvenues@gmail.com
+      - key: SENDER_NAME
+        value: ACS Booking
