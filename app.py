@@ -8,10 +8,8 @@ from blueprints.admin import admin_bp
 def create_app():
     app = Flask(__name__)
 
-    # ── Secret key ──
     app.secret_key = os.environ.get('SECRET_KEY', 'acs-dev-secret-change-in-prod')
 
-    # ── SQLite path: /data/ on Render, local otherwise ──
     if os.path.isdir('/data'):
         db_path = '/data/acs_booking.db'
         upload_dir = '/data/uploads'
@@ -20,15 +18,15 @@ def create_app():
         upload_dir = os.path.join(os.path.dirname(__file__), 'uploads')
 
     os.makedirs(upload_dir, exist_ok=True)
-    database_url = os.environ.get("DATABASE_URL", f"sqlite:///{db_path}")
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
-    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+
+    database_url = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = upload_dir
-    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
+    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
-    # ── App settings (from env) ──
     app.config['ADMIN_USER']    = os.environ.get('ADMIN_USER', 'admin')
     app.config['ADMIN_PASS']    = os.environ.get('ADMIN_PASS', 'acs2024')
     app.config['ORG_AR']        = os.environ.get('ORG_AR', 'الجمعية الثقافية العربية')
@@ -39,17 +37,14 @@ def create_app():
     app.config['SENDER_EMAIL']  = os.environ.get('SENDER_EMAIL', 'acsvenues@gmail.com')
     app.config['SENDER_NAME']   = os.environ.get('SENDER_NAME', 'ACS Booking')
 
-    # ── Init DB ──
     db.init_app(app)
+    with app.app_context():
         init_db(app)
 
-
-    # ── Blueprints ──
     app.register_blueprint(public_bp)
     app.register_blueprint(admin_bp, url_prefix='/admin')
 
     return app
-
 
 app = create_app()
 
