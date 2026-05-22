@@ -189,13 +189,16 @@
     }
     @media (max-width: 768px) {
       .sidebar {
-        width: 75vw;
-        max-width: 280px;
-        transform: translateX(100%);
-        transition: transform .3s;
-        box-shadow: -4px 0 20px rgba(0,0,0,.3);
+        position: fixed !important;
+        top: 0; right: 0; bottom: 0;
+        width: 78vw !important;
+        max-width: 300px;
+        transform: translateX(110%);
+        transition: transform .3s ease;
+        box-shadow: -6px 0 24px rgba(0,0,0,.35);
+        z-index: 150;
       }
-      .sidebar.open { transform: translateX(0); }
+      .sidebar.open { transform: translateX(0) !important; }
       .main { margin-right: 0 !important; }
       .mobile-nav { display: none; }
       .main { margin-right: 0; }
