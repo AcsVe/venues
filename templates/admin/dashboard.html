@@ -229,7 +229,10 @@
 <!-- Main -->
 <div class="main">
   <div class="topbar">
-    <h1 id="pageTitle">طلبات الحجز</h1>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <h1 id="pageTitle">طلبات الحجز</h1>
+    </div>
     <div class="topbar-right">
       <button class="btn btn-outline btn-sm" onclick="refreshAll()"><i class="fas fa-sync"></i> تحديث</button>
       <span style="font-size:.85rem;color:var(--muted)" id="clockEl"></span>
@@ -928,10 +931,17 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function refreshAll() { loadBookings(); loadStats(); showToast('تم التحديث'); }
 
+// ── Sidebar toggle ──
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+
 // ── Init ──────────────────────────────────────────────────────
 loadBookings();
 loadHalls();
 </script>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 <!-- Mobile Bottom Nav -->
 <nav class="mobile-nav">
   <div class="mobile-nav-items">
