@@ -456,7 +456,10 @@ let allBookings = [], hallsList = [], curFilter = 'all', curSearch = '';
 let selectedIds = new Set();
 
 // ── Tab navigation ──
-function showTab(name) {
+function showTab(name, mobileBtn) {
+  // Update mobile nav active state
+  document.querySelectorAll('.mobile-nav-item').forEach(b => b.classList.remove('active'));
+  if (mobileBtn) mobileBtn.classList.add('active');
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
