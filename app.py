@@ -20,7 +20,10 @@ def create_app():
         upload_dir = os.path.join(os.path.dirname(__file__), 'uploads')
 
     os.makedirs(upload_dir, exist_ok=True)
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    database_url = os.environ.get("DATABASE_URL", f"sqlite:///{db_path}")
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = upload_dir
     app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
@@ -41,12 +44,9 @@ def create_app():
     with app.app_context():
         init_db(app)
 
-    # ── Enable WAL mode for SQLite ──
     with app.app_context():
         engine = db.engine
         with engine.connect() as conn:
-            conn.exec_driver_sql("PRAGMA journal_mode=WAL")
-            conn.exec_driver_sql("PRAGMA foreign_keys=ON")
 
     # ── Blueprints ──
     app.register_blueprint(public_bp)
