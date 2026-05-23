@@ -234,11 +234,11 @@
     <div class="sidebar-logo-text">{{ config.ORG_AR }}<br><small style="font-weight:400;opacity:.75">لوحة التحكم</small></div>
   </div>
   <div class="sidebar-nav">
-    <button class="nav-item active" onclick="showTab('bookings')"><i class="fas fa-calendar-check"></i> طلبات الحجز <span class="nav-badge" id="nbPending">0</span></button>
-    <button class="nav-item" onclick="showTab('halls')"><i class="fas fa-door-open"></i> القاعات</button>
-    <button class="nav-item" onclick="showTab('blocked')"><i class="fas fa-ban"></i> غير متاح</button>
-    <button class="nav-item" onclick="showTab('contacts')"><i class="fas fa-address-book"></i> جهات الاتصال</button>
-    <button class="nav-item" onclick="showTab('reports')"><i class="fas fa-chart-bar"></i> التقارير</button>
+    <button class="nav-item active" onclick=\"showTab('bookings'); closeSidebar()\"><i class="fas fa-calendar-check"></i> طلبات الحجز <span class="nav-badge" id="nbPending">0</span></button>
+    <button class="nav-item" onclick=\"showTab('halls'); closeSidebar()\"><i class="fas fa-door-open"></i> القاعات</button>
+    <button class="nav-item" onclick=\"showTab('blocked'); closeSidebar()\"><i class="fas fa-ban"></i> غير متاح</button>
+    <button class="nav-item" onclick=\"showTab('contacts'); closeSidebar()\"><i class="fas fa-address-book"></i> جهات الاتصال</button>
+    <button class="nav-item" onclick=\"showTab('reports'); closeSidebar()\"><i class="fas fa-chart-bar"></i> التقارير</button>
   </div>
   <div class="sidebar-footer">
     <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
@@ -956,6 +956,10 @@ function refreshAll() { loadBookings(); loadStats(); showToast('تم التحد�
 function toggleSidebar() {
   document.querySelector('.sidebar').classList.toggle('open');
   document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
 }
 
 // ── Init ──────────────────────────────────────────────────────
