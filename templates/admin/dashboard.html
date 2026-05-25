@@ -1072,10 +1072,10 @@ function renderCal() {
     headerToolbar: {
       right: 'prev,next today',
       center: 'title',
-      left: 'dayGridMonth,timeGridWeek,listWeek'
+      left: window.innerWidth < 768 ? 'dayGridMonth,timeGridThreeDay,listWeek' : 'dayGridMonth,timeGridWeek,listWeek'
     },
     views: {
-      timeGridWeek: { dayCount: window.innerWidth < 768 ? 3 : 7 }
+      timeGridThreeDay: { type: 'timeGrid', duration: { days: 3 }, buttonText: 'week' }
     },
     events: events,
     eventClick: function(info) {
