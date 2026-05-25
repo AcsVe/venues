@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>لوحة التحكم — {{ config.ORG_AR }}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -252,6 +253,7 @@
     <button class="nav-item" onclick="showTab('blocked'); closeSidebar()"><i class="fas fa-ban"></i> غير متاح</button>
     <button class="nav-item" onclick="showTab('contacts'); closeSidebar()"><i class="fas fa-address-book"></i> جهات الاتصال</button>
     <button class="nav-item" onclick="showTab('reports'); closeSidebar()"><i class="fas fa-chart-bar"></i> التقارير</button>
+    <button class="nav-item" onclick="showTab('calview'); closeSidebar()"><i class="fas fa-calendar-alt"></i> التقويم</button>
   </div>
   <div class="sidebar-footer">
     <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
@@ -399,7 +401,23 @@
     </div>
 
     <!-- ── REPORTS TAB ── -->
-    <div class="tab-panel" id="tab-reports">
+    <div class="tab-panel" id="tab-calview">
+  <div class="card">
+    <div class="card-title"><i class="fas fa-calendar-alt"></i> التقويم المرئي</div>
+    <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="calHallFilter" class="form-select" style="max-width:200px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.88rem" onchange="renderCal()">
+        <option value="">كل القاعات</option>
+      </select>
+      <span style="font-size:.82rem;color:var(--muted)">
+        <span style="background:#d1e7dd;padding:2px 10px;border-radius:10px;margin-left:6px">معتمد</span>
+        <span style="background:#fff3cd;padding:2px 10px;border-radius:10px;margin-left:6px">قيد المراجعة</span>
+        <span style="background:#f8d7da;padding:2px 10px;border-radius:10px">مرفوض/ملغي</span>
+      </span>
+    </div>
+    <div id="adminCal"></div>
+  </div>
+</div>
+<div class="tab-panel" id="tab-reports">
       <div class="card">
         <div class="card-title"><i class="fas fa-chart-bar"></i> مستكشف البيانات</div>
         <div class="form-grid" style="margin-bottom:12px">
@@ -507,6 +525,7 @@ function showTab(name, mobileBtn) {
   const titles = {bookings:'طلبات الحجز',halls:'القاعات',blocked:'الفترات غير المتاحة',contacts:'جهات الاتصال',reports:'التقارير'};
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'halls')    loadHalls();
+  if (name === 'calview')  initAdminCal();
   if (name === 'blocked')  loadBlocked();
   if (name === 'contacts') loadContacts();
   if (name === 'reports')  loadReportData();
@@ -975,6 +994,66 @@ function closeSidebar() {
   document.getElementById('sidebarOverlay').classList.remove('open');
 }
 
+// ── Admin Calendar ────────────────────────────────────────────
+let adminCalInstance = null;
+let allBookingsForCal = [];
+
+async function initAdminCal() {
+  const res = await fetch('/admin/api/bookings?filter=all');
+  allBookingsForCal = await res.json();
+
+  // Populate hall filter
+  const halls = [...new Set(allBookingsForCal.map(b => b.hall).filter(Boolean))];
+  const sel = document.getElementById('calHallFilter');
+  halls.forEach(h => {
+    const o = document.createElement('option');
+    o.value = h; o.textContent = h;
+    sel.appendChild(o);
+  });
+
+  renderCal();
+}
+
+function renderCal() {
+  const filter = document.getElementById('calHallFilter').value;
+  const events = allBookingsForCal
+    .filter(b => !filter || b.hall === filter)
+    .map(b => ({
+      id: b.id,
+      title: `${b.hall} — ${b.name}`,
+      start: b.date,
+      end: b.endDate || b.date,
+      allDay: b.fullDay,
+      startTime: b.fullDay ? undefined : b.startTime,
+      endTime: b.fullDay ? undefined : b.endTime,
+      color: b.status === 'approved' ? '#27ae60'
+           : b.status === 'pending'  ? '#e67e22'
+           : '#c0392b',
+      extendedProps: b
+    }));
+
+  const el = document.getElementById('adminCal');
+  if (adminCalInstance) { adminCalInstance.destroy(); }
+
+  adminCalInstance = new FullCalendar.Calendar(el, {
+    locale: 'ar',
+    direction: 'rtl',
+    initialView: window.innerWidth < 600 ? 'listWeek' : 'dayGridMonth',
+    headerToolbar: {
+      right: 'prev,next today',
+      center: 'title',
+      left: 'dayGridMonth,timeGridWeek,listWeek'
+    },
+    events: events,
+    eventClick: function(info) {
+      const b = info.event.extendedProps;
+      openEditModal(b.id);
+    },
+    height: 'auto'
+  });
+  adminCalInstance.render();
+}
+
 // ── Init ──────────────────────────────────────────────────────
 loadBookings();
 loadHalls();
@@ -1001,5 +1080,6 @@ loadHalls();
     </button>
   </div>
 </nav>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
 </body>
 </html>
