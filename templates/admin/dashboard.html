@@ -15,13 +15,14 @@
       --shadow: 0 2px 12px rgba(36,118,128,.10);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; position: relative; }
+    body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
     /* Sidebar */
     .sidebar {
       width: var(--sidebar); min-height: 100vh;
       background: linear-gradient(180deg, var(--primary-dark), var(--primary));
       color: #fff; display: flex; flex-direction: column;
-      position: fixed; top: 0; right: 0; z-index: 150;
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 150;
+      overflow-y: auto;
     }
     .sidebar-logo {
       padding: 20px 16px;
@@ -53,7 +54,7 @@
     }
     .sidebar-footer a:hover { color: #fff; }
     /* Main */
-    .main { margin-right: var(--sidebar); display: flex; flex-direction: column; min-height: 100vh; }
+    .main { margin-right: var(--sidebar); display: flex; flex-direction: column; min-height: 100vh; width: calc(100% - var(--sidebar)); }
     .topbar {
       background: #fff; padding: 14px 24px;
       box-shadow: 0 1px 4px rgba(0,0,0,.08);
@@ -61,6 +62,9 @@
     }
     .topbar h1 { font-size: 1.1rem; font-weight: 800; color: var(--primary); }
     .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .hamburger { display: none; background: none; border: none; cursor: pointer; color: var(--primary); font-size: 1.4rem; padding: 4px 8px; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 140; }
+    .sidebar-overlay.open { display: block; }
     .content { flex: 1; padding: 24px; }
     /* Tabs */
     .tab-panel { display: none; }
@@ -241,12 +245,28 @@
       .stat-val { font-size: 1.6rem; }
     }
     .spinner { display: inline-block; width: 16px; height: 16px; border: 2.5px solid rgba(36,118,128,.3); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(110%); transition: transform .28s ease; width: 82vw !important; max-width: 290px; }
+      .sidebar.open { transform: translateX(0); }
+      .main { margin-right: 0 !important; width: 100% !important; }
+      .hamburger { display: inline-flex !important; }
+      .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+      .form-grid { grid-template-columns: 1fr !important; }
+      .content { padding: 12px !important; }
+      .topbar { padding: 10px 14px !important; }
+      .table-wrap { -webkit-overflow-scrolling: touch; }
+      .stat-card { padding: 12px 8px; }
+      .stat-val { font-size: 1.5rem; }
+      .search-input { min-width: unset; width: 100%; }
+      .mobile-nav { display: none !important; }
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 <!-- Sidebar -->
-<nav class="sidebar">
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<nav class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     {% if config.LOGO_URL %}<img src="{{ config.LOGO_URL }}" alt="logo">{% endif %}
     <div class="sidebar-logo-text">{{ config.ORG_AR }}<br><small style="font-weight:400;opacity:.75">لوحة التحكم</small></div>
@@ -274,6 +294,7 @@
       <h1 id="pageTitle">طلبات الحجز</h1>
     </div>
     <div class="topbar-right">
+      <button class="hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <button class="btn btn-outline btn-sm" onclick="refreshAll()"><i class="fas fa-sync"></i> تحديث</button>
       <span style="font-size:.85rem;color:var(--muted)" id="clockEl"></span>
     </div>
@@ -1062,8 +1083,7 @@ function renderCal() {
 loadBookings();
 loadHalls();
 </script>
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-<!-- Mobile Bottom Nav -->
+
 <nav class="mobile-nav">
   <div class="mobile-nav-items">
     <button class="mobile-nav-item active" onclick="showTab('bookings',this)">
