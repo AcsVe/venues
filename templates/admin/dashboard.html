@@ -450,6 +450,14 @@
   </div>
 </div>
 <div class="tab-panel" id="tab-reports">
+      <div class="stats-grid" id="reportStatsGrid">
+        <div class="stat-card green"><div class="stat-val" id="rs-approved">-</div><div class="stat-label">معتمدة</div></div>
+        <div class="stat-card accent"><div class="stat-val" id="rs-pending">-</div><div class="stat-label">قيد المراجعة</div></div>
+        <div class="stat-card red"><div class="stat-val" id="rs-rejected">-</div><div class="stat-label">مرفوضة/ملغية</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-halls">-</div><div class="stat-label">أكثر قاعة مطلوبة</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-month">-</div><div class="stat-label">أكثر شهر نشاطاً</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-hours">-</div><div class="stat-label">إجمالي الساعات</div></div>
+      </div>
       <div class="card">
         <div class="card-title"><i class="fas fa-chart-bar"></i> مستكشف البيانات</div>
         <div class="form-grid" style="margin-bottom:12px">
@@ -1087,6 +1095,46 @@ function renderCal() {
     height: 'auto'
   });
   adminCalInstance.render();
+}
+
+// ── Report Stats ──
+async function loadReportStats() {
+  const res = await fetch('/admin/api/bookings?filter=all');
+  const data = await res.json();
+  if (!data.length) return;
+
+  // counts
+  const approved  = data.filter(b => b.status === 'approved').length;
+  const pending   = data.filter(b => b.status === 'pending').length;
+  const rejected  = data.filter(b => ['rejected','cancelled'].includes(b.status)).length;
+
+  // top hall
+  const hallCount = {};
+  data.forEach(b => { if (b.hall) hallCount[b.hall] = (hallCount[b.hall]||0) + 1; });
+  const topHall = Object.entries(hallCount).sort((a,b)=>b[1]-a[1])[0];
+
+  // top month
+  const monthCount = {};
+  data.forEach(b => { if (b.date) { const m = b.date.substring(0,7); monthCount[m] = (monthCount[m]||0)+1; } });
+  const topMonth = Object.entries(monthCount).sort((a,b)=>b[1]-a[1])[0];
+
+  // total hours
+  let hours = 0;
+  data.forEach(b => {
+    if (b.fullDay) hours += 8;
+    else if (b.startTime && b.endTime) {
+      const [sh,sm] = b.startTime.split(':').map(Number);
+      const [eh,em] = b.endTime.split(':').map(Number);
+      hours += Math.max(0,(eh*60+em - sh*60-sm)/60);
+    }
+  });
+
+  document.getElementById('rs-approved').textContent = approved;
+  document.getElementById('rs-pending').textContent  = pending;
+  document.getElementById('rs-rejected').textContent = rejected;
+  document.getElementById('rs-halls').textContent    = topHall ? topHall[0] : '-';
+  document.getElementById('rs-month').textContent    = topMonth ? topMonth[0] : '-';
+  document.getElementById('rs-hours').textContent    = hours.toFixed(0) + 'س';
 }
 
 // ── Export CSV ──
