@@ -1058,7 +1058,11 @@ function renderCal() {
     locale: 'ar',
     direction: 'rtl',
     initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
-    headerToolbar: {
+    headerToolbar: window.innerWidth < 768 ? {
+      right: 'prev,next today',
+      center: 'title',
+      left: 'listWeek'
+    } : {
       right: 'prev,next today',
       center: 'title',
       left: 'dayGridMonth,timeGridWeek,listWeek'
