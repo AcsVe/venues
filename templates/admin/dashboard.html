@@ -256,6 +256,17 @@
       .mobile-nav { display: none !important; }
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    /* FullCalendar mobile fix */
+    @media (max-width: 768px) {
+      #adminCal .fc-toolbar { flex-wrap: wrap; gap: 6px; }
+      #adminCal .fc-toolbar-chunk { display: flex; gap: 4px; flex-wrap: wrap; }
+      #adminCal .fc-button { padding: 4px 8px !important; font-size: .75rem !important; }
+      #adminCal .fc-col-header-cell-cushion { font-size: .7rem; padding: 4px 2px; }
+      #adminCal .fc-daygrid-day-number { font-size: .75rem; }
+      #adminCal .fc-scrollgrid { font-size: .75rem; }
+      #adminCal .fc-event-title { font-size: .7rem; overflow: hidden; }
+      #adminCal { overflow-x: auto; }
+    }
   </style>
 </head>
 <body>
@@ -1058,11 +1069,7 @@ function renderCal() {
     locale: 'ar',
     direction: 'rtl',
     initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
-    headerToolbar: window.innerWidth < 768 ? {
-      right: 'prev,next today',
-      center: 'title',
-      left: 'listWeek'
-    } : {
+    headerToolbar: {
       right: 'prev,next today',
       center: 'title',
       left: 'dayGridMonth,timeGridWeek,listWeek'
