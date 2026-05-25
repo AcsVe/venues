@@ -324,6 +324,8 @@
           <button class="filter-btn" onclick="filterBk('cancelled',this)">ملغي</button>
           <input class="search-input" type="text" placeholder="🔍 بحث..." oninput="searchBk(this.value)">
           <button class="btn btn-red btn-sm" onclick="bulkDelete()" id="bulkBtn" style="display:none"><i class="fas fa-trash"></i> حذف المحدد</button>
+          <button class="btn btn-outline btn-sm" onclick="exportCSV()"><i class="fas fa-file-excel"></i> Excel</button>
+          <button class="btn btn-outline btn-sm" onclick="exportPrint()"><i class="fas fa-print"></i> طباعة</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -1085,6 +1087,68 @@ function renderCal() {
     height: 'auto'
   });
   adminCalInstance.render();
+}
+
+// ── Export CSV ──
+function exportCSV() {
+  const rows = [['رقم الطلب','الاسم','البريد','الجوال','المناسبة','القاعة','التاريخ','وقت البداية','وقت النهاية','الحالة','ملاحظات','تاريخ الطلب']];
+  const statusLbl = {pending:'قيد المراجعة', approved:'معتمد', rejected:'مرفوض', cancelled:'ملغي'};
+  const filtered = allBookings;
+  filtered.forEach(b => {
+    rows.push([b.reqId, b.name, b.email, b.phone||'', b.title||'', b.hall||'',
+      b.date||'', b.fullDay?'يوم كامل':b.startTime||'', b.fullDay?'':b.endTime||'',
+      statusLbl[b.status]||b.status, b.notes||'', b.createdAt||'']);
+  });
+  const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('
+');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `حجوزات_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast('تم تصدير الملف ✓');
+}
+
+// ── Export Print ──
+function exportPrint() {
+  const statusLbl = {pending:'قيد المراجعة', approved:'معتمد', rejected:'مرفوض', cancelled:'ملغي'};
+  const rows = allBookings.map(b => `
+    <tr>
+      <td>${esc(b.reqId)}</td>
+      <td>${esc(b.name)}</td>
+      <td>${esc(b.hall||'')}</td>
+      <td>${esc(b.date||'')}${b.endDate&&b.endDate!==b.date?' → '+esc(b.endDate):''}</td>
+      <td>${b.fullDay?'يوم كامل':esc(b.startTime||'')+' - '+esc(b.endTime||'')}</td>
+      <td>${statusLbl[b.status]||b.status}</td>
+      <td>${esc(b.notes||'')}</td>
+    </tr>`).join('');
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير الحجوزات</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; }
+    h2 { color: #247680; margin-bottom: 6px; }
+    p { color: #666; margin-bottom: 16px; font-size: 11px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #247680; color: #fff; padding: 8px; text-align: right; font-size: 11px; }
+    td { padding: 7px 8px; border-bottom: 1px solid #ddd; font-size: 11px; }
+    tr:nth-child(even) td { background: #f9f9f9; }
+    @media print { button { display: none; } }
+  </style>
+</head>
+<body>
+  <h2>تقرير الحجوزات</h2>
+  <p>تاريخ التصدير: ${new Date().toLocaleDateString('ar-SA')} | إجمالي: ${allBookings.length} حجز</p>
+  <button onclick="window.print()" style="background:#247680;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px;font-size:12px">🖨️ طباعة</button>
+  <table>
+    <thead><tr><th>رقم الطلب</th><th>الاسم</th><th>القاعة</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>ملاحظات</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+</body></html>`);
+  win.document.close();
 }
 
 // ── Init ──────────────────────────────────────────────────────
