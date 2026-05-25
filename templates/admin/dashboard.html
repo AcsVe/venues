@@ -223,11 +223,6 @@
     }
     .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 140; }
     .sidebar-overlay.open { display: block; }
-      .mobile-nav { display: none; }
-      .main { margin-right: 0 !important; width: 100% !important; }
-      .form-grid { grid-template-columns: 1fr; }
-      .stats-grid { grid-template-columns: repeat(2, 1fr); }
-      .content { padding: 12px; }
       .topbar { padding: 10px 14px; }
       .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .table-wrap table { min-width: 500px; font-size: .8rem; }
@@ -294,7 +289,6 @@
       <h1 id="pageTitle">طلبات الحجز</h1>
     </div>
     <div class="topbar-right">
-      <button class="hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
       <button class="btn btn-outline btn-sm" onclick="refreshAll()"><i class="fas fa-sync"></i> تحديث</button>
       <span style="font-size:.85rem;color:var(--muted)" id="clockEl"></span>
     </div>
