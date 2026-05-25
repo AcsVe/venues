@@ -15,7 +15,7 @@
       --shadow: 0 2px 12px rgba(36,118,128,.10);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; overflow-x: hidden; }
+    body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
     /* Sidebar */
     .sidebar {
       width: var(--sidebar); min-height: 100vh;
@@ -53,7 +53,7 @@
     }
     .sidebar-footer a:hover { color: #fff; }
     /* Main */
-    .main { margin-right: var(--sidebar); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .main { margin-right: var(--sidebar); display: flex; flex-direction: column; min-height: 100vh; width: calc(100% - var(--sidebar)); }
     .topbar {
       background: #fff; padding: 14px 24px;
       box-shadow: 0 1px 4px rgba(0,0,0,.08);
