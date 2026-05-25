@@ -1063,7 +1063,7 @@ function renderCal() {
   adminCalInstance = new FullCalendar.Calendar(el, {
     locale: 'ar',
     direction: 'rtl',
-    initialView: window.innerWidth < 600 ? 'listWeek' : 'dayGridMonth',
+    initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
     headerToolbar: {
       right: 'prev,next today',
       center: 'title',
