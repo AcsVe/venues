@@ -1074,6 +1074,9 @@ function renderCal() {
       center: 'title',
       left: 'dayGridMonth,timeGridWeek,listWeek'
     },
+    views: {
+      timeGridWeek: { dayCount: window.innerWidth < 768 ? 3 : 7 }
+    },
     events: events,
     eventClick: function(info) {
       const b = info.event.extendedProps;
