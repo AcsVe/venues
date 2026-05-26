@@ -238,6 +238,7 @@ def api_update_booking():
     db.session.commit()
 
     try:
+        send_staff_notification('update', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date}, _get_contacts())
         send_update({'reqId': req_id, 'name': b.name, 'email': b.email,
                      'title': b.event_title, 'hall': b.hall,
                      'date': booking_date, 'endDate': end_date,
