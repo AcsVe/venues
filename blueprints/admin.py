@@ -100,12 +100,10 @@ def api_approve():
     b.action_date = datetime.utcnow()
     db.session.commit()
 
-    bcc = get_all_contact_emails()
     if extra:
         for e in extra.split(';'):
             e = sanitize_email(e)
             if is_valid_email(e):
-                bcc.append(e)
     end = b.end_date or b.booking_date
     try:
         send_staff_notification('approve', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date, 'endDate': b.end_date, 'startTime': b.start_time, 'endTime': b.end_time, 'fullDay': b.full_day}, _get_contacts())
@@ -113,7 +111,7 @@ def api_approve():
                       'title': b.event_title, 'hall': b.hall,
                       'date': b.booking_date, 'endDate': end,
                       'startTime': b.start_time, 'endTime': b.end_time,
-                      'fullDay': b.full_day, 'bcc': bcc})
+                      'fullDay': b.full_day})
     except Exception:
         pass
 
@@ -187,12 +185,10 @@ def api_set_pending():
     b.action_date   = datetime.utcnow()
     db.session.commit()
 
-    bcc = get_all_contact_emails()
     try:
         send_pending({'reqId': req_id, 'name': b.name, 'email': b.email,
                       'title': b.event_title, 'hall': b.hall,
-                      'date': b.booking_date, 'endDate': b.end_date or b.booking_date,
-                      'bcc': bcc})
+                      'date': b.booking_date, 'endDate': b.end_date or b.booking_date})
     except Exception:
         pass
 
@@ -244,13 +240,12 @@ def api_update_booking():
 
     db.session.commit()
 
-    bcc = get_all_contact_emails()
     try:
         send_update({'reqId': req_id, 'name': b.name, 'email': b.email,
                      'title': b.event_title, 'hall': b.hall,
                      'date': booking_date, 'endDate': end_date,
                      'startTime': start_time, 'endTime': end_time,
-                     'fullDay': full_day, 'bcc': bcc})
+                     'fullDay': full_day})
     except Exception:
         pass
 
