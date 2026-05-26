@@ -169,3 +169,60 @@ def send_pending(data):
                  f"[ACS] إعادة مراجعة طلب الحجز #{data['reqId']}",
                  _base_html(content, '#e67e22'),
                  bcc_list=data.get('bcc', []))
+
+
+def send_staff_notification(event_type, data, contacts):
+    """Send internal notification to all staff contacts."""
+    if not contacts:
+        return
+
+    icons = {
+        'new':     ('📋', '#247680', 'حجز جديد بانتظار المراجعة'),
+        'approve': ('✅', '#27ae60', 'تم اعتماد حجز'),
+        'reject':  ('❌', '#c0392b', 'تم رفض حجز'),
+        'cancel':  ('🚫', '#e67e22', 'تم إلغاء حجز'),
+        'update':  ('✏️', '#247680', 'تم تعديل حجز'),
+    }
+    icon, color, title = icons.get(event_type, ('📌', '#247680', 'إشعار حجز'))
+
+    date_label = _date_label(
+        data.get('date'), data.get('endDate'),
+        data.get('fullDay'), data.get('startTime'), data.get('endTime')
+    )
+
+    content = f"""
+    <h2 style="color:{color};margin-top:0">{icon} {title}</h2>
+    <p style="color:#555;font-size:13px">هذا إشعار داخلي — لا تقم بالرد على هذا البريد</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">
+      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data.get('reqId','')}</strong></td></tr>
+      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">مقدم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('name','')}</td></tr>
+      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">البريد</td><td style="padding:8px;border-bottom:1px solid #eee" dir="ltr">{data.get('email','')}</td></tr>
+      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">المناسبة</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title','')}</td></tr>
+      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">القاعة</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('hall','')}</td></tr>
+      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">التاريخ والوقت</td><td style="padding:8px;border-bottom:1px solid #eee">{date_label}</td></tr>
+      {f'<tr><td style="padding:8px;background:#fdf0f0;font-weight:600">سبب الرفض</td><td style="padding:8px;color:#c0392b;font-weight:600">{data.get("reason","")}</td></tr>' if data.get("reason") else ""}
+    </table>
+    <p style="text-align:center;margin-top:16px">
+      <a href="https://acsv.onrender.com/admin" style="background:{color};color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:700">
+        فتح لوحة التحكم
+      </a>
+    </p>
+    """
+
+    subject_map = {
+        'new':     f"[إشعار] حجز جديد بانتظار المراجعة #{data.get('reqId','')}",
+        'approve': f"[إشعار] تم اعتماد الحجز #{data.get('reqId','')}",
+        'reject':  f"[إشعار] تم رفض الحجز #{data.get('reqId','')}",
+        'cancel':  f"[إشعار] تم إلغاء الحجز #{data.get('reqId','')}",
+        'update':  f"[إشعار] تم تعديل الحجز #{data.get('reqId','')}",
+    }
+    subject = subject_map.get(event_type, f"[إشعار] حجز #{data.get('reqId','')}")
+    html = _base_html(content, color)
+
+    for contact in contacts:
+        email = contact.get('email') if isinstance(contact, dict) else contact
+        if email and '@' in email:
+            try:
+                _send(email, '', subject, html)
+            except Exception:
+                pass

@@ -6,9 +6,13 @@ from models import db, Booking, Hall, BlockedPeriod, Contact
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
                             get_all_contact_emails, check_conflict, check_blocked)
 from utils.email_utils import (send_approve, send_reject, send_cancel,
-                                send_pending, send_update)
+                                send_pending, send_update, send_staff_notification)
 
 admin_bp = Blueprint('admin', __name__)
+
+def _get_contacts():
+    from models import Contact
+    return [{'email': c.email} for c in Contact.query.all()]
 
 
 # ── Auth decorator ────────────────────────────────────────────────────────
@@ -104,6 +108,7 @@ def api_approve():
                 bcc.append(e)
     end = b.end_date or b.booking_date
     try:
+        send_staff_notification('approve', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date, 'endDate': b.end_date, 'startTime': b.start_time, 'endTime': b.end_time, 'fullDay': b.full_day}, _get_contacts())
         send_approve({'reqId': req_id, 'name': b.name, 'email': b.email,
                       'title': b.event_title, 'hall': b.hall,
                       'date': b.booking_date, 'endDate': end,
@@ -132,6 +137,7 @@ def api_reject():
     db.session.commit()
 
     try:
+        send_staff_notification('reject', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date, 'reason': data.get('reason','')}, _get_contacts())
         send_reject({'reqId': req_id, 'name': b.name, 'email': b.email,
                      'title': b.event_title, 'reason': reason})
     except Exception:
@@ -157,6 +163,7 @@ def api_cancel():
     db.session.commit()
 
     try:
+        send_staff_notification('cancel', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date}, _get_contacts())
         send_cancel({'reqId': req_id, 'name': b.name, 'email': b.email,
                      'title': b.event_title, 'hall': b.hall})
     except Exception:

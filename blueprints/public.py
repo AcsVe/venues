@@ -6,7 +6,7 @@ from models import db, Booking, Hall, BlockedPeriod
 from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
                             get_blocked_for_date, is_valid_email, sanitize_email)
-from utils.email_utils import send_confirm, send_cancel, send_update
+from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification
 
 public_bp = Blueprint('public', __name__)
 
@@ -215,6 +215,17 @@ def submit_booking():
     db.session.add(booking)
     db.session.commit()
 
+    try:
+        from models import Contact
+        contacts = [{'email': c.email} for c in Contact.query.all()]
+        send_staff_notification('new', {
+            'reqId': req_id, 'name': booking.name, 'email': booking.email,
+            'title': booking.event_title, 'hall': booking.hall,
+            'date': booking_date, 'endDate': end_date,
+            'startTime': start_time, 'endTime': end_time, 'fullDay': full_day,
+        }, contacts)
+    except Exception:
+        pass
     try:
         send_confirm({
             'reqId': req_id, 'name': booking.name, 'email': booking.email,
