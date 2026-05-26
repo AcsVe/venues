@@ -100,10 +100,6 @@ def api_approve():
     b.action_date = datetime.utcnow()
     db.session.commit()
 
-    if extra:
-        for e in extra.split(';'):
-            e = sanitize_email(e)
-            if is_valid_email(e):
     end = b.end_date or b.booking_date
     try:
         send_staff_notification('approve', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date, 'endDate': b.end_date, 'startTime': b.start_time, 'endTime': b.end_time, 'fullDay': b.full_day}, _get_contacts())
