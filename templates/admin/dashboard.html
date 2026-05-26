@@ -278,12 +278,12 @@
     <div class="sidebar-logo-text">{{ config.ORG_AR }}<br><small style="font-weight:400;opacity:.75">لوحة التحكم</small></div>
   </div>
   <div class="sidebar-nav">
-    <button class="nav-item active" onclick="showTab('bookings'); closeSidebar()"><i class="fas fa-calendar-check"></i> طلبات الحجز <span class="nav-badge" id="nbPending">0</span></button>
-    <button class="nav-item" onclick="showTab('halls'); closeSidebar()"><i class="fas fa-door-open"></i> القاعات</button>
-    <button class="nav-item" onclick="showTab('blocked'); closeSidebar()"><i class="fas fa-ban"></i> غير متاح</button>
-    <button class="nav-item" onclick="showTab('contacts'); closeSidebar()"><i class="fas fa-address-book"></i> جهات الاتصال</button>
-    <button class="nav-item" onclick="showTab('reports'); closeSidebar()"><i class="fas fa-chart-bar"></i> التقارير</button>
-    <button class="nav-item" onclick="showTab('calview'); closeSidebar()"><i class="fas fa-calendar-alt"></i> التقويم</button>
+    <button class="nav-item active" onclick="showTab('bookings')"><i class="fas fa-calendar-check"></i> طلبات الحجز <span class="nav-badge" id="nbPending">0</span></button>
+    <button class="nav-item" onclick="showTab('halls')"><i class="fas fa-door-open"></i> القاعات</button>
+    <button class="nav-item" onclick="showTab('blocked')"><i class="fas fa-ban"></i> غير متاح</button>
+    <button class="nav-item" onclick="showTab('contacts')"><i class="fas fa-address-book"></i> جهات الاتصال</button>
+    <button class="nav-item" onclick="showTab('reports')"><i class="fas fa-chart-bar"></i> التقارير</button>
+    <button class="nav-item" onclick="showTab('calview')"><i class="fas fa-calendar-alt"></i> التقويم</button>
   </div>
   <div class="sidebar-footer">
     <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
@@ -554,15 +554,18 @@ let allBookings = [], hallsList = [], curFilter = 'all', curSearch = '';
 let selectedIds = new Set();
 
 // ── Tab navigation ──
-function showTab(name, mobileBtn) {
-  // Update mobile nav active state
-  document.querySelectorAll('.mobile-nav-item').forEach(b => b.classList.remove('active'));
-  if (mobileBtn) mobileBtn.classList.add('active');
+function showTab(name) {
+  closeSidebar();
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  event.currentTarget.classList.add('active');
-  const titles = {bookings:'طلبات الحجز',halls:'القاعات',blocked:'الفترات غير المتاحة',contacts:'جهات الاتصال',reports:'التقارير'};
+  const panel = document.getElementById('tab-' + name);
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'" + name + "'")) {
+      n.classList.add('active');
+    }
+  });
+  const titles = {bookings:'طلبات الحجز', halls:'القاعات', blocked:'الفترات غير المتاحة', contacts:'جهات الاتصال', reports:'التقارير', calview:'التقويم المرئي'};
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'halls')    loadHalls();
   if (name === 'calview')  initAdminCal();
