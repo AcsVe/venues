@@ -162,6 +162,43 @@
       <div id="fileList" class="file-list"></div>
     </div>
 
+    <!-- Policy Agreement -->
+    <div style="background:#f0f7f8;border-radius:10px;padding:16px;margin-bottom:16px;border:1.5px solid var(--border)">
+      <div style="font-weight:700;color:var(--primary);margin-bottom:10px;font-size:.95rem">
+        <i class="fas fa-file-contract"></i>
+        {{ 'سياسة الحجز' if lang == 'ar' else 'Booking Policy' }}
+      </div>
+      <div style="font-size:.88rem;color:var(--text);line-height:1.8;margin-bottom:12px">
+        {% if lang == 'ar' %}
+        <ul style="padding-right:18px;margin:0">
+          <li>الالتزام بالمحافظة على نظافة القاعة وترتيبها.</li>
+          <li>تحمّل المسؤولية الكاملة عن أي أضرار أو تخريب يحدث خلال فترة الحجز.</li>
+          <li>الالتزام بتسديد تكاليف أي أضرار تلحق بالمرافق أو التجهيزات.</li>
+          <li>الالتزام بأوقات الحجز المحددة وإخلاء القاعة في الموعد المقرر.</li>
+          <li>احترام أنظمة وتعليمات الجمعية الثقافية العربية.</li>
+        </ul>
+        {% else %}
+        <ul style="padding-left:18px;margin:0">
+          <li>Maintain cleanliness and order of the venue.</li>
+          <li>Bear full responsibility for any damage or vandalism during the booking period.</li>
+          <li>Cover the costs of any damage to facilities or equipment.</li>
+          <li>Adhere to the specified booking times and vacate the venue on time.</li>
+          <li>Respect the regulations and instructions of the Arab Cultural Society.</li>
+        </ul>
+        {% endif %}
+      </div>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-weight:600;font-size:.88rem">
+        <input type="checkbox" id="policyAgree" style="width:18px;height:18px;margin-top:2px;flex-shrink:0;accent-color:var(--primary)">
+        <span>
+          {% if lang == 'ar' %}
+          أوافق على سياسة وأنظمة حجز القاعات في الجمعية الثقافية العربية، وأتحمل المسؤولية الكاملة عن الالتزام بها.
+          {% else %}
+          I agree to the venue booking policy of the Arab Cultural Society and take full responsibility for compliance.
+          {% endif %}
+        </span>
+      </label>
+    </div>
+
     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="submitBooking()" id="submitBtn">
       <i class="fas fa-paper-plane"></i>
       {{ 'إرسال طلب الحجز' if lang == 'ar' else 'Submit Booking Request' }}
@@ -213,6 +250,10 @@ function clearAlert() { document.getElementById('alertBox').innerHTML = ''; }
 
 async function submitBooking() {
   clearAlert();
+  if (!document.getElementById('policyAgree').checked) {
+    showAlert(AR ? 'يجب الموافقة على سياسة الحجز أولاً' : 'You must agree to the booking policy first');
+    return;
+  }
   const btn = document.getElementById('submitBtn');
   const name  = document.getElementById('fullName').value.trim();
   const email = document.getElementById('email').value.trim();
