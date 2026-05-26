@@ -192,6 +192,10 @@
       background: #e74c3c; color: #fff; border-radius: 10px;
       font-size: .6rem; padding: 1px 5px; font-weight: 800;
     }
+    #chartsRow { grid-template-columns: 1fr !important; }
+    @media (max-width: 600px) {
+      #chartsRow { grid-template-columns: 1fr !important; }
+    }
     @media (max-width: 768px) {
       :root { --sidebar: 0px; }
       .sidebar {
@@ -450,14 +454,36 @@
   </div>
 </div>
 <div class="tab-panel" id="tab-reports">
-      <div class="stats-grid" id="reportStatsGrid">
+      <!-- Stats Row -->
+      <div class="stats-grid">
         <div class="stat-card green"><div class="stat-val" id="rs-approved">-</div><div class="stat-label">معتمدة</div></div>
         <div class="stat-card accent"><div class="stat-val" id="rs-pending">-</div><div class="stat-label">قيد المراجعة</div></div>
         <div class="stat-card red"><div class="stat-val" id="rs-rejected">-</div><div class="stat-label">مرفوضة/ملغية</div></div>
-        <div class="stat-card"><div class="stat-val" id="rs-halls">-</div><div class="stat-label">أكثر قاعة مطلوبة</div></div>
-        <div class="stat-card"><div class="stat-val" id="rs-month">-</div><div class="stat-label">أكثر شهر نشاطاً</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-halls" style="font-size:1rem">-</div><div class="stat-label">أكثر قاعة</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-month" style="font-size:1rem">-</div><div class="stat-label">أكثر شهر</div></div>
         <div class="stat-card"><div class="stat-val" id="rs-hours">-</div><div class="stat-label">إجمالي الساعات</div></div>
       </div>
+
+      <!-- Charts Row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px" id="chartsRow">
+        <div class="card" style="margin-bottom:0">
+          <div class="card-title"><i class="fas fa-chart-pie"></i> توزيع الحالات</div>
+          <canvas id="donutChart" width="200" height="200" style="display:block;margin:0 auto"></canvas>
+          <div id="donutLegend" style="margin-top:10px;font-size:.8rem"></div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div class="card-title"><i class="fas fa-chart-line"></i> الحجوزات الشهرية</div>
+          <canvas id="monthChart" width="300" height="200" style="width:100%;height:200px"></canvas>
+        </div>
+      </div>
+
+      <!-- Hall Comparison -->
+      <div class="card">
+        <div class="card-title"><i class="fas fa-door-open"></i> مقارنة القاعات</div>
+        <div id="hallBars"></div>
+      </div>
+
+      <!-- Explorer -->
       <div class="card">
         <div class="card-title"><i class="fas fa-chart-bar"></i> مستكشف البيانات</div>
         <div class="form-grid" style="margin-bottom:12px">
@@ -1100,28 +1126,24 @@ function renderCal() {
   adminCalInstance.render();
 }
 
-// ── Report Stats ──
+// ── Report Stats + Charts ──
 async function loadReportStats() {
   const res = await fetch('/admin/api/bookings?filter=all');
   const data = await res.json();
-  if (!data.length) return;
 
-  // counts
   const approved  = data.filter(b => b.status === 'approved').length;
   const pending   = data.filter(b => b.status === 'pending').length;
-  const rejected  = data.filter(b => ['rejected','cancelled'].includes(b.status)).length;
+  const rejected  = data.filter(b => b.status === 'rejected').length;
+  const cancelled = data.filter(b => b.status === 'cancelled').length;
 
-  // top hall
   const hallCount = {};
   data.forEach(b => { if (b.hall) hallCount[b.hall] = (hallCount[b.hall]||0) + 1; });
   const topHall = Object.entries(hallCount).sort((a,b)=>b[1]-a[1])[0];
 
-  // top month
   const monthCount = {};
   data.forEach(b => { if (b.date) { const m = b.date.substring(0,7); monthCount[m] = (monthCount[m]||0)+1; } });
   const topMonth = Object.entries(monthCount).sort((a,b)=>b[1]-a[1])[0];
 
-  // total hours
   let hours = 0;
   data.forEach(b => {
     if (b.fullDay) hours += 8;
@@ -1134,10 +1156,154 @@ async function loadReportStats() {
 
   document.getElementById('rs-approved').textContent = approved;
   document.getElementById('rs-pending').textContent  = pending;
-  document.getElementById('rs-rejected').textContent = rejected;
+  document.getElementById('rs-rejected').textContent = rejected + cancelled;
   document.getElementById('rs-halls').textContent    = topHall ? topHall[0] : '-';
-  document.getElementById('rs-month').textContent    = topMonth ? topMonth[0] : '-';
+  document.getElementById('rs-month').textContent    = topMonth ? topMonth[0].replace('-',' / ') : '-';
   document.getElementById('rs-hours').textContent    = hours.toFixed(0) + 'س';
+
+  if (!data.length) return;
+
+  // ── Donut Chart ──
+  drawDonut(approved, pending, rejected + cancelled, data.length);
+
+  // ── Monthly Line Chart ──
+  const months = {};
+  data.forEach(b => {
+    if (!b.date) return;
+    const m = b.date.substring(0,7);
+    months[m] = (months[m]||0) + 1;
+  });
+  const sortedMonths = Object.entries(months).sort((a,b)=>a[0]>b[0]?1:-1).slice(-6);
+  drawMonthChart(sortedMonths);
+
+  // ── Hall Bars ──
+  drawHallBars(hallCount);
+}
+
+function drawDonut(approved, pending, rejected, total) {
+  const canvas = document.getElementById('donutChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cx = 100, cy = 100, r = 75, ri = 45;
+  ctx.clearRect(0,0,200,200);
+
+  const slices = [
+    {val: approved, color: '#27ae60', label: 'معتمد'},
+    {val: pending,  color: '#e67e22', label: 'قيد المراجعة'},
+    {val: rejected, color: '#c0392b', label: 'مرفوض/ملغي'},
+  ].filter(s => s.val > 0);
+
+  if (!slices.length) return;
+  let start = -Math.PI/2;
+  slices.forEach(s => {
+    const angle = (s.val / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, start + angle);
+    ctx.closePath();
+    ctx.fillStyle = s.color;
+    ctx.fill();
+    start += angle;
+  });
+  // inner circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, ri, 0, Math.PI*2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  // center text
+  ctx.fillStyle = '#1e2a2b';
+  ctx.font = 'bold 22px Tajawal';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(total, cx, cy-8);
+  ctx.font = '12px Tajawal';
+  ctx.fillStyle = '#6b7c7e';
+  ctx.fillText('إجمالي', cx, cy+12);
+
+  // legend
+  document.getElementById('donutLegend').innerHTML = slices.map(s =>
+    '<span style="display:inline-flex;align-items:center;gap:4px;margin-left:10px">' +
+    '<span style="width:10px;height:10px;border-radius:50%;background:'+s.color+';display:inline-block"></span>' +
+    s.label+' ('+s.val+')</span>'
+  ).join('');
+}
+
+function drawMonthChart(sortedMonths) {
+  const canvas = document.getElementById('monthChart');
+  if (!canvas || !sortedMonths.length) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.offsetWidth || 300;
+  const h = 200;
+  canvas.width = w; canvas.height = h;
+  ctx.clearRect(0,0,w,h);
+
+  const pad = {top:20, right:20, bottom:40, left:30};
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+  const vals = sortedMonths.map(m=>m[1]);
+  const mx = Math.max(...vals, 1);
+  const step = cw / (sortedMonths.length - 1 || 1);
+
+  // Grid lines
+  ctx.strokeStyle = '#e0eeef'; ctx.lineWidth = 1;
+  for (let i=0;i<=4;i++) {
+    const y = pad.top + (ch/4)*i;
+    ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(pad.left+cw,y); ctx.stroke();
+  }
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = '#247680'; ctx.lineWidth = 2.5;
+  sortedMonths.forEach(([m,v],i) => {
+    const x = pad.left + i*step;
+    const y = pad.top + ch - (v/mx)*ch;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // Fill area
+  ctx.beginPath();
+  sortedMonths.forEach(([m,v],i) => {
+    const x = pad.left + i*step;
+    const y = pad.top + ch - (v/mx)*ch;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.lineTo(pad.left + (sortedMonths.length-1)*step, pad.top+ch);
+  ctx.lineTo(pad.left, pad.top+ch);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(36,118,128,.1)';
+  ctx.fill();
+
+  // Dots + labels
+  sortedMonths.forEach(([m,v],i) => {
+    const x = pad.left + i*step;
+    const y = pad.top + ch - (v/mx)*ch;
+    ctx.beginPath();
+    ctx.arc(x,y,4,0,Math.PI*2);
+    ctx.fillStyle = '#247680'; ctx.fill();
+    ctx.fillStyle = '#1e2a2b'; ctx.font = '10px Tajawal';
+    ctx.textAlign = 'center';
+    ctx.fillText(v, x, y-10);
+    ctx.fillStyle = '#6b7c7e';
+    ctx.fillText(m.substring(5), x, h-10);
+  });
+}
+
+function drawHallBars(hallCount) {
+  const el = document.getElementById('hallBars');
+  if (!el) return;
+  const sorted = Object.entries(hallCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  if (!sorted.length) { el.innerHTML='<p style="color:var(--muted);text-align:center">لا توجد بيانات</p>'; return; }
+  const mx = sorted[0][1];
+  const colors = ['#247680','#2d9aa8','#27ae60','#e67e22','#c0392b','#8e44ad'];
+  el.innerHTML = sorted.map(([hall,count],i) => {
+    const pct = Math.round(count/mx*100);
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+      '<div style="width:120px;font-size:.82rem;font-weight:700;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+hall+'">'+hall+'</div>' +
+      '<div style="flex:1;background:#e8f0f2;border-radius:6px;height:30px;overflow:hidden">' +
+      '<div style="width:'+pct+'%;background:'+colors[i%colors.length]+';height:100%;border-radius:6px;display:flex;align-items:center;padding:0 8px;transition:width .5s">' +
+      '<span style="color:#fff;font-size:.78rem;font-weight:700">'+count+'</span></div></div></div>';
+  }).join('');
 }
 
 // ── Export CSV ──
