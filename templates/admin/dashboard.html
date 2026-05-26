@@ -942,7 +942,7 @@ async function uploadContacts(input) {
 // ── Reports ────────────────────────────────────────────────────
 let reportData = [];
 async function loadReportData() {
-  reportData = await fetch('/admin/api/report-data').then(r => r.json());
+  reportData = await fetch('/admin/api/bookings?filter=all').then(r => r.json());
 }
 
 function runReport() {
