@@ -70,8 +70,22 @@ def month_data():
             if cur > blk.to_date:
                 break
 
+    # Public view: hide sensitive details for privacy
+    public_bookings = []
+    for b in bookings:
+        end = b.end_date or b.booking_date
+        public_bookings.append({
+            'date': b.booking_date,
+            'endDate': end,
+            'hall': b.hall,
+            'startTime': b.start_time or '',
+            'endTime': b.end_time or '',
+            'fullDay': b.full_day,
+            'status': b.status,
+            'multiDay': end != b.booking_date,
+        })
     return jsonify({
-        'bookings': [b.to_dict() for b in bookings],
+        'bookings': public_bookings,
         'blocked': blocked_map,
     })
 

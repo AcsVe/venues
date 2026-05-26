@@ -23,10 +23,8 @@ def sanitize_email(email):
 
 
 def gen_req_id():
-    from models import Booking
-    today = date.today().strftime('%y%m%d')
-    count = Booking.query.count() + 1
-    return f'PUB-{today}-{count:04d}'
+    import uuid
+    return 'BK-' + uuid.uuid4().hex[:10].upper()
 
 
 def check_conflict(hall, booking_date, end_date, start_time, end_time, full_day, exclude_req_id=None):
