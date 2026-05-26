@@ -1150,8 +1150,7 @@ function exportCSV() {
       b.date||'', b.fullDay?'يوم كامل':b.startTime||'', b.fullDay?'':b.endTime||'',
       statusLbl[b.status]||b.status, b.notes||'', b.createdAt||'']);
   });
-  const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('
-');
+  const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
