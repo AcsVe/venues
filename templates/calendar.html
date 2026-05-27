@@ -215,7 +215,8 @@ async function renderCalendar() {
       cell.style.borderColor = '#f1aeb5';
     }
 
-    if (!isPast && blkList.every(b => b.fromTime)) {
+    const hasApprovedFullDay = filteredBks.some(b => b.status === 'approved' && b.fullDay);
+    if (!isPast && blkList.every(b => b.fromTime) && !hasApprovedFullDay) {
       cell.classList.add('bookable');
       const btn = document.createElement('button');
       btn.className = 'book-btn';
