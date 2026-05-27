@@ -124,6 +124,18 @@
 {% endblock %}
 
 {% block content %}
+<!-- Hall filter + tip -->
+<div class="card" style="margin-bottom:12px;padding:14px 20px">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <i class="fas fa-info-circle" style="color:var(--primary);font-size:1.2rem;flex-shrink:0"></i>
+    <span style="font-size:.9rem;color:var(--text);font-weight:600">
+      {{ 'اختر القاعة أولاً لمعرفة التواريخ والأوقات المتاحة' if lang == 'ar' else 'Select a hall first to see available dates and times' }}
+    </span>
+    <select id="hallFilter" onchange="filterHall(this.value)" style="margin-right:auto;padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.88rem;min-width:160px">
+      <option value="">{{ 'كل القاعات' if lang == 'ar' else 'All Halls' }}</option>
+    </select>
+  </div>
+</div>
 <div class="card">
   <div class="cal-nav">
     <button class="btn btn-outline btn-sm" onclick="changeMonth(-1)">
@@ -245,21 +257,27 @@ async function renderCalendar() {
 
     // Bookings for this date
     const dayBks = bookings.filter(b => b.date <= dateStr && (b.endDate || b.date) >= dateStr);
-    if (dayBks.length) cell.classList.add('has-event');
-    for (const bk of dayBks.slice(0, 3)) {
-      const el = document.createElement('div');
-      el.className = `cal-event ${bk.status}`;
-      el.textContent = bk.title || bk.hall;
-      el.title = bk.title;
-      el.onclick = (e) => { e.stopPropagation(); openDayModal(dateStr, dayBks, blkList); };
-      cell.appendChild(el);
+    const filteredBks = curHall ? dayBks.filter(b => b.hall === curHall) : dayBks;
+    if (filteredBks.length) {
+      cell.classList.add('has-event');
+      const hasApproved = filteredBks.some(b => b.status === 'approved');
+      const hasPending  = filteredBks.some(b => b.status === 'pending');
+      if (hasApproved) { cell.style.background='rgba(209,231,221,.4)'; cell.style.borderColor='#a3cfbb'; }
+      else if (hasPending) { cell.style.background='rgba(255,243,205,.5)'; cell.style.borderColor='#ffe69c'; }
+      const dot = document.createElement('div');
+      dot.style.cssText = 'display:flex;gap:3px;flex-wrap:wrap;margin-top:3px';
+      filteredBks.slice(0,4).forEach(bk => {
+        const d = document.createElement('span');
+        d.style.cssText = 'width:8px;height:8px;border-radius:50%;display:inline-block;background:' + (bk.status==='approved'?'#27ae60':bk.status==='pending'?'#e67e22':'#c0392b');
+        dot.appendChild(d);
+      });
+      cell.appendChild(dot);
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'font-size:.65rem;color:var(--muted);font-weight:700;margin-top:2px';
+      lbl.textContent = AR ? filteredBks.length+' حجز' : filteredBks.length+' booking'+(filteredBks.length>1?'s':'');
+      cell.appendChild(lbl);
     }
-    if (dayBks.length > 3) {
-      const more = document.createElement('div');
-      more.className = 'cal-event approved';
-      more.textContent = AR ? `+${dayBks.length - 3} أخرى` : `+${dayBks.length - 3} more`;
-      cell.appendChild(more);
-    }
+    if (blkList.some(b => !b.fromTime)) { cell.style.background='rgba(248,215,218,.4)'; cell.style.borderColor='#f1aeb5'; }
 
     // Book button
     if (!isPast && blkList.every(b => b.fromTime)) {
@@ -295,12 +313,12 @@ function openDayModal(dateStr, bookings, blocked) {
     </div>`;
   }
 
-  if (bookings.length) {
-    for (const bk of bookings) {
+  const visibleBks = curHall ? bookings.filter(b => b.hall === curHall) : bookings;
+  if (visibleBks.length) {
+    for (const bk of visibleBks) {
       const timeStr = bk.fullDay ? (AR ? 'يوم كامل' : 'Full Day') :
                       `${bk.startTime} - ${bk.endTime}`;
       html += `<div class="bk-card">
-        <div class="bk-title">${esc(bk.title)}</div>
         <div class="bk-meta">
           <span><i class="fas fa-door-open"></i> ${esc(bk.hall)}</span>
           <span><i class="fas fa-clock"></i> ${timeStr}</span>
@@ -308,7 +326,7 @@ function openDayModal(dateStr, bookings, blocked) {
         </div>
       </div>`;
     }
-  } else if (!blocked.length) {
+  } else if (!blocked.length && !visibleBks.length) {
     html = `<p style="color:var(--muted);text-align:center">${AR ? 'لا توجد حجوزات في هذا اليوم' : 'No bookings for this day'}</p>`;
   }
 
@@ -336,7 +354,22 @@ function changeMonth(dir) {
   curMonth += dir;
   if (curMonth > 12) { curMonth = 1; curYear++; }
   if (curMonth < 1)  { curMonth = 12; curYear--; }
-  renderCalendar();
+  let curHall = '';
+async function loadHalls() {
+  try {
+    const res = await fetch('/api/halls-list');
+    const halls = await res.json();
+    const sel = document.getElementById('hallFilter');
+    halls.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h.nameAr; opt.textContent = h.nameAr;
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+function filterHall(val) { curHall = val; monthCache = {}; renderCalendar(); }
+loadHalls();
+renderCalendar();
 }
 
 function statusLabel(s) {
