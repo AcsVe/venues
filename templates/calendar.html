@@ -3,141 +3,74 @@
 
 {% block extra_head %}
 <style>
-  .cal-nav {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 18px;
-  }
-  .cal-nav h2 { font-size: 1.3rem; font-weight: 800; color: var(--primary); }
-  .cal-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-  }
-  .cal-day-name {
-    text-align: center;
-    font-weight: 700;
-    font-size: .78rem;
-    color: var(--muted);
-    padding: 6px 0;
-  }
+  .cal-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .cal-nav h2 { font-size:1.3rem; font-weight:800; color:var(--primary); }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-day-name { text-align:center; font-weight:700; font-size:.78rem; color:var(--muted); padding:6px 0; }
   .cal-cell {
-    min-height: 80px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: #fff;
-    padding: 4px;
-    position: relative;
-    cursor: default;
-    transition: border-color .2s;
+    min-height:80px; border-radius:8px; border:1px solid var(--border);
+    background:#fff; padding:4px; position:relative; cursor:default; transition:all .2s;
   }
-  .cal-cell.other-month { background: #f7f9f9; opacity: .55; }
-  .cal-cell.today { border-color: var(--primary); border-width: 2px; }
-  .cal-cell.past  { background: #f9f9f9; opacity: .65; }
-  .cal-cell.bookable { cursor: pointer; }
-  .cal-cell.bookable:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(235,179,123,.3); }
-  .cal-date {
-    font-size: .78rem;
-    font-weight: 700;
-    color: var(--text);
-    margin-bottom: 2px;
-  }
-  .cal-cell.today .cal-date { color: var(--primary); }
-  .cal-event {
-    font-size: .68rem;
-    font-weight: 600;
-    padding: 2px 5px;
-    border-radius: 4px;
-    margin-bottom: 2px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .cal-event.approved { background: #d1e7dd; color: #0a6640; }
-  .cal-event.pending  { background: #fff3cd; color: #856404; }
-  .cal-event.blocked  { background: #f8d7da; color: #842029; }
+  .cal-cell.other-month { background:#f7f9f9; opacity:.55; }
+  .cal-cell.today { border-color:var(--primary); border-width:2px; }
+  .cal-cell.past  { background:#f9f9f9; opacity:.65; }
+  .cal-cell.bookable { cursor:pointer; }
+  .cal-cell.bookable:hover { border-color:var(--accent); box-shadow:0 2px 8px rgba(235,179,123,.3); }
+  .cal-date { font-size:.78rem; font-weight:700; color:var(--text); margin-bottom:2px; }
+  .cal-cell.today .cal-date { color:var(--primary); }
   .cal-blocked-dot {
-    width: 100%;
-    font-size: .65rem;
-    background: #f8d7da;
-    color: #842029;
-    border-radius: 4px;
-    padding: 1px 4px;
-    margin-bottom: 2px;
-    font-weight: 700;
+    width:100%; font-size:.65rem; background:#f8d7da; color:#842029;
+    border-radius:4px; padding:1px 4px; margin-bottom:2px; font-weight:700;
   }
   .book-btn {
-    position: absolute;
-    bottom: 3px; left: 3px; right: 3px;
-    font-size: .65rem;
-    background: var(--primary);
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    padding: 2px 4px;
-    cursor: pointer;
-    display: none;
-    font-family: inherit;
-    font-weight: 600;
+    position:absolute; bottom:3px; left:3px; right:3px;
+    font-size:.65rem; background:var(--primary); color:#fff;
+    border:none; border-radius:5px; padding:2px 4px;
+    cursor:pointer; display:none; font-family:inherit; font-weight:600;
   }
-  .cal-cell.bookable:hover .book-btn { display: block; }
-  /* Legend */
-  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
-  .legend-item { display: flex; align-items: center; gap: 6px; font-size: .82rem; }
-  .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
-  /* Modal */
+  .cal-cell.bookable:hover .book-btn { display:block; }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:.82rem; }
+  .legend-dot { width:12px; height:12px; border-radius:3px; }
   .modal-overlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,.45); z-index: 1000;
-    align-items: center; justify-content: center;
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.45); z-index:1000;
+    align-items:center; justify-content:center;
   }
-  .modal-overlay.open { display: flex; }
+  .modal-overlay.open { display:flex; }
   .modal {
-    background: #fff; border-radius: 14px;
-    padding: 28px; max-width: 520px; width: 95%;
-    max-height: 90vh; overflow-y: auto;
-    box-shadow: 0 8px 40px rgba(0,0,0,.2);
+    background:#fff; border-radius:14px; padding:28px;
+    max-width:520px; width:95%; max-height:90vh; overflow-y:auto;
+    box-shadow:0 8px 40px rgba(0,0,0,.2);
   }
-  .modal h3 { font-size: 1.1rem; font-weight: 800; color: var(--primary); margin-bottom: 16px; }
-  .modal-close {
-    float: left; background: none; border: none;
-    font-size: 1.3rem; cursor: pointer; color: var(--muted);
-    margin-bottom: 8px;
-  }
-  html[dir=rtl] .modal-close { float: right; }
-  .bk-card {
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px;
-    margin-bottom: 10px;
-  }
-  .bk-card .bk-title { font-weight: 700; font-size: .95rem; margin-bottom: 6px; }
-  .bk-card .bk-meta  { font-size: .8rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; }
-  @media (max-width: 640px) {
-    .cal-cell { min-height: 54px; }
-    .cal-event { display: none; }
-    .cal-cell.has-event::after {
-      content: '●'; color: var(--primary); font-size: .7rem; display: block;
-    }
+  .modal h3 { font-size:1.1rem; font-weight:800; color:var(--primary); margin-bottom:16px; }
+  .modal-close { float:left; background:none; border:none; font-size:1.3rem; cursor:pointer; color:var(--muted); margin-bottom:8px; }
+  html[dir=rtl] .modal-close { float:right; }
+  .bk-card { border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; }
+  .bk-card .bk-meta { font-size:.8rem; color:var(--muted); display:flex; flex-wrap:wrap; gap:8px; }
+  .hall-btn { padding:6px 14px; border-radius:20px; border:1.5px solid var(--border); background:#fff; color:var(--text); font-family:inherit; font-size:.82rem; font-weight:600; cursor:pointer; transition:all .2s; }
+  .hall-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  @media (max-width:640px) {
+    .cal-cell { min-height:54px; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Hall filter + tip -->
 <div class="card" style="margin-bottom:12px;padding:14px 20px">
-  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <i class="fas fa-info-circle" style="color:var(--primary);font-size:1.2rem;flex-shrink:0"></i>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <i class="fas fa-info-circle" style="color:var(--primary);font-size:1.1rem"></i>
     <span style="font-size:.9rem;color:var(--text);font-weight:600">
-      {{ 'اختر القاعة أولاً لمعرفة التواريخ والأوقات المتاحة' if lang == 'ar' else 'Select a hall first to see available dates and times' }}
+      {{ 'اختر القاعة لمعرفة التواريخ والأوقات المتاحة' if lang == 'ar' else 'Select a hall to see available dates' }}
     </span>
-    <div id="hallBtns" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;width:100%">
-      <button onclick="filterHall('')" class="hall-btn active" style="padding:6px 14px;border-radius:20px;border:1.5px solid var(--primary);background:var(--primary);color:#fff;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer">
-        {{ 'كل القاعات' if lang == 'ar' else 'All' }}
-      </button>
-    </div>
+  </div>
+  <div id="hallBtns" style="display:flex;gap:6px;flex-wrap:wrap">
+    <button class="hall-btn active" onclick="filterHall('', this)">
+      {{ 'كل القاعات' if lang == 'ar' else 'All' }}
+    </button>
   </div>
 </div>
+
 <div class="card">
   <div class="cal-nav">
     <button class="btn btn-outline btn-sm" onclick="changeMonth(-1)">
@@ -150,22 +83,12 @@
   </div>
   <div id="calGrid" class="cal-grid"></div>
   <div class="legend">
-    <div class="legend-item">
-      <div class="legend-dot" style="background:#d1e7dd;border:1px solid #a3cfbb"></div>
-      <span>{{ 'معتمد' if lang == 'ar' else 'Approved' }}</span>
-    </div>
-    <div class="legend-item">
-      <div class="legend-dot" style="background:#fff3cd;border:1px solid #ffe69c"></div>
-      <span>{{ 'قيد المراجعة' if lang == 'ar' else 'Pending' }}</span>
-    </div>
-    <div class="legend-item">
-      <div class="legend-dot" style="background:#f8d7da;border:1px solid #f1aeb5"></div>
-      <span>{{ 'غير متاح' if lang == 'ar' else 'Unavailable' }}</span>
-    </div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d1e7dd;border:1px solid #a3cfbb"></div><span>{{ 'معتمد' if lang == 'ar' else 'Approved' }}</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#fff3cd;border:1px solid #ffe69c"></div><span>{{ 'قيد المراجعة' if lang == 'ar' else 'Pending' }}</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f8d7da;border:1px solid #f1aeb5"></div><span>{{ 'غير متاح' if lang == 'ar' else 'Unavailable' }}</span></div>
   </div>
 </div>
 
-<!-- Day modal -->
 <div class="modal-overlay" id="dayModal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal()">✕</button>
@@ -187,17 +110,19 @@ const LANG = '{{ lang }}';
 const AR = LANG === 'ar';
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAYS_AR   = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
-const DAYS_EN   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const DAYS_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 let curYear  = new Date().getFullYear();
 let curMonth = new Date().getMonth() + 1;
+let curHall  = '';
 let monthCache = {};
+let hallsLoaded = false;
 
 async function loadMonth(y, m) {
-  const key = `${y}_${m}`;
+  const key = y + '_' + m;
   if (monthCache[key]) return monthCache[key];
-  const res = await fetch(`/api/month-data?y=${y}&m=${m}`);
+  const res = await fetch('/api/month-data?y=' + y + '&m=' + m);
   const data = await res.json();
   monthCache[key] = data;
   return data;
@@ -205,12 +130,11 @@ async function loadMonth(y, m) {
 
 async function renderCalendar() {
   document.getElementById('calTitle').textContent =
-    AR ? `${MONTHS_AR[curMonth-1]} ${curYear}` : `${MONTHS_EN[curMonth-1]} ${curYear}`;
+    AR ? (MONTHS_AR[curMonth-1] + ' ' + curYear) : (MONTHS_EN[curMonth-1] + ' ' + curYear);
 
   const grid = document.getElementById('calGrid');
-  grid.innerHTML = '<div class="cal-day-name" style="display:contents"></div>';
+  grid.innerHTML = '';
 
-  // Day names row
   const dayNames = AR ? DAYS_AR : DAYS_EN;
   for (const d of dayNames) {
     const el = document.createElement('div');
@@ -223,12 +147,11 @@ async function renderCalendar() {
   const bookings = data.bookings || [];
   const blocked  = data.blocked  || {};
 
-  const today     = new Date().toISOString().split('T')[0];
-  const firstDay  = new Date(curYear, curMonth - 1, 1);
-  const lastDay   = new Date(curYear, curMonth, 0);
-  const startDow  = firstDay.getDay(); // 0=Sun
+  const today    = new Date().toISOString().split('T')[0];
+  const firstDay = new Date(curYear, curMonth - 1, 1);
+  const lastDay  = new Date(curYear, curMonth, 0);
+  const startDow = firstDay.getDay();
 
-  // Empty cells before first day
   for (let i = 0; i < startDow; i++) {
     const el = document.createElement('div');
     el.className = 'cal-cell other-month';
@@ -236,9 +159,11 @@ async function renderCalendar() {
   }
 
   for (let day = 1; day <= lastDay.getDate(); day++) {
-    const dateStr = `${curYear}-${String(curMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const mm = String(curMonth).padStart(2,'0');
+    const dd = String(day).padStart(2,'0');
+    const dateStr = curYear + '-' + mm + '-' + dd;
     const cell = document.createElement('div');
-    const isPast = dateStr < today;
+    const isPast  = dateStr < today;
     const isToday = dateStr === today;
 
     cell.className = 'cal-cell' + (isToday ? ' today' : '') + (isPast ? ' past' : '');
@@ -248,7 +173,6 @@ async function renderCalendar() {
     dateEl.textContent = day;
     cell.appendChild(dateEl);
 
-    // Blocked
     const blkList = blocked[dateStr] || [];
     for (const blk of blkList) {
       const el = document.createElement('div');
@@ -257,44 +181,53 @@ async function renderCalendar() {
       cell.appendChild(el);
     }
 
-    // Bookings for this date
     const dayBks = bookings.filter(b => b.date <= dateStr && (b.endDate || b.date) >= dateStr);
     const filteredBks = curHall ? dayBks.filter(b => b.hall === curHall) : dayBks;
+
     if (filteredBks.length) {
       cell.classList.add('has-event');
       const hasApproved = filteredBks.some(b => b.status === 'approved');
       const hasPending  = filteredBks.some(b => b.status === 'pending');
-      if (hasApproved) { cell.style.background='rgba(209,231,221,.4)'; cell.style.borderColor='#a3cfbb'; }
-      else if (hasPending) { cell.style.background='rgba(255,243,205,.5)'; cell.style.borderColor='#ffe69c'; }
+      if (hasApproved) {
+        cell.style.background = 'rgba(209,231,221,.4)';
+        cell.style.borderColor = '#a3cfbb';
+      } else if (hasPending) {
+        cell.style.background = 'rgba(255,243,205,.5)';
+        cell.style.borderColor = '#ffe69c';
+      }
       const dot = document.createElement('div');
       dot.style.cssText = 'display:flex;gap:3px;flex-wrap:wrap;margin-top:3px';
-      filteredBks.slice(0,4).forEach(bk => {
+      filteredBks.slice(0,4).forEach(function(bk) {
         const d = document.createElement('span');
-        d.style.cssText = 'width:8px;height:8px;border-radius:50%;display:inline-block;background:' + (bk.status==='approved'?'#27ae60':bk.status==='pending'?'#e67e22':'#c0392b');
+        const color = bk.status==='approved' ? '#27ae60' : bk.status==='pending' ? '#e67e22' : '#c0392b';
+        d.style.cssText = 'width:8px;height:8px;border-radius:50%;display:inline-block;background:' + color;
         dot.appendChild(d);
       });
       cell.appendChild(dot);
       const lbl = document.createElement('div');
       lbl.style.cssText = 'font-size:.65rem;color:var(--muted);font-weight:700;margin-top:2px';
-      lbl.textContent = AR ? filteredBks.length+' حجز' : filteredBks.length+' booking'+(filteredBks.length>1?'s':'');
+      lbl.textContent = AR ? (filteredBks.length + ' حجز') : (filteredBks.length + ' booking' + (filteredBks.length>1?'s':''));
       cell.appendChild(lbl);
     }
-    if (blkList.some(b => !b.fromTime)) { cell.style.background='rgba(248,215,218,.4)'; cell.style.borderColor='#f1aeb5'; }
 
-    // Book button
+    if (blkList.some(b => !b.fromTime)) {
+      cell.style.background = 'rgba(248,215,218,.4)';
+      cell.style.borderColor = '#f1aeb5';
+    }
+
     if (!isPast && blkList.every(b => b.fromTime)) {
       cell.classList.add('bookable');
       const btn = document.createElement('button');
       btn.className = 'book-btn';
       btn.textContent = AR ? '+ احجز' : '+ Book';
-      btn.onclick = (e) => {
+      btn.onclick = function(e) {
         e.stopPropagation();
-        window.location.href = `/book?date=${dateStr}&lang=${LANG}`;
+        window.location.href = '/book?date=' + dateStr + '&lang=' + LANG;
       };
       cell.appendChild(btn);
-      cell.onclick = () => openDayModal(dateStr, dayBks, blkList);
+      cell.onclick = function() { openDayModal(dateStr, dayBks, blkList); };
     } else {
-      cell.onclick = () => openDayModal(dateStr, dayBks, blkList);
+      cell.onclick = function() { openDayModal(dateStr, dayBks, blkList); };
     }
 
     grid.appendChild(cell);
@@ -307,29 +240,25 @@ function openDayModal(dateStr, bookings, blocked) {
   let html = '';
 
   if (blocked.length) {
-    html += `<div class="alert alert-error" style="margin-bottom:10px">
-      <i class="fas fa-ban"></i> ${AR ? 'الفترات المحظورة:' : 'Blocked periods:'}
-      <ul style="margin-top:4px;padding-right:16px">
-        ${blocked.map(b => `<li>${b.reason}${b.fromTime ? ` (${b.fromTime} - ${b.toTime})` : ''}</li>`).join('')}
-      </ul>
-    </div>`;
+    html += '<div class="alert alert-error" style="margin-bottom:10px"><i class="fas fa-ban"></i> ' +
+      (AR ? 'الفترات المحظورة:' : 'Blocked periods:') +
+      '<ul style="margin-top:4px;padding-right:16px">' +
+      blocked.map(function(b) { return '<li>' + esc(b.reason) + (b.fromTime ? ' (' + b.fromTime + ' - ' + b.toTime + ')' : '') + '</li>'; }).join('') +
+      '</ul></div>';
   }
 
   const visibleBks = curHall ? bookings.filter(b => b.hall === curHall) : bookings;
   if (visibleBks.length) {
-    for (const bk of visibleBks) {
-      const timeStr = bk.fullDay ? (AR ? 'يوم كامل' : 'Full Day') :
-                      `${bk.startTime} - ${bk.endTime}`;
-      html += `<div class="bk-card">
-        <div class="bk-meta">
-          <span><i class="fas fa-door-open"></i> ${esc(bk.hall)}</span>
-          <span><i class="fas fa-clock"></i> ${timeStr}</span>
-          <span class="badge badge-${bk.status}">${statusLabel(bk.status)}</span>
-        </div>
-      </div>`;
-    }
-  } else if (!blocked.length && !visibleBks.length) {
-    html = `<p style="color:var(--muted);text-align:center">${AR ? 'لا توجد حجوزات في هذا اليوم' : 'No bookings for this day'}</p>`;
+    visibleBks.forEach(function(bk) {
+      const timeStr = bk.fullDay ? (AR ? 'يوم كامل' : 'Full Day') : (bk.startTime + ' - ' + bk.endTime);
+      html += '<div class="bk-card"><div class="bk-meta">' +
+        '<span><i class="fas fa-door-open"></i> ' + esc(bk.hall) + '</span>' +
+        '<span><i class="fas fa-clock"></i> ' + timeStr + '</span>' +
+        '<span class="badge badge-' + bk.status + '">' + statusLabel(bk.status) + '</span>' +
+        '</div></div>';
+    });
+  } else if (!blocked.length) {
+    html = '<p style="color:var(--muted);text-align:center">' + (AR ? 'لا توجد حجوزات في هذا اليوم' : 'No bookings for this day') + '</p>';
   }
 
   content.innerHTML = html;
@@ -337,7 +266,7 @@ function openDayModal(dateStr, bookings, blocked) {
   const bookBtn = document.getElementById('modalBookBtn');
   const fullyBlocked = blocked.some(b => !b.fromTime);
   if (dateStr >= today && !fullyBlocked) {
-    bookBtn.href = `/book?date=${dateStr}&lang=${LANG}`;
+    bookBtn.href = '/book?date=' + dateStr + '&lang=' + LANG;
     bookBtn.style.display = 'inline-flex';
   } else {
     bookBtn.style.display = 'none';
@@ -345,10 +274,8 @@ function openDayModal(dateStr, bookings, blocked) {
   document.getElementById('dayModal').classList.add('open');
 }
 
-function closeModal() {
-  document.getElementById('dayModal').classList.remove('open');
-}
-document.getElementById('dayModal').addEventListener('click', (e) => {
+function closeModal() { document.getElementById('dayModal').classList.remove('open'); }
+document.getElementById('dayModal').addEventListener('click', function(e) {
   if (e.target === e.currentTarget) closeModal();
 });
 
@@ -356,7 +283,16 @@ function changeMonth(dir) {
   curMonth += dir;
   if (curMonth > 12) { curMonth = 1; curYear++; }
   if (curMonth < 1)  { curMonth = 12; curYear--; }
-  let curHall = '';
+  renderCalendar();
+}
+
+function filterHall(val, btn) {
+  curHall = val;
+  document.querySelectorAll('.hall-btn').forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  renderCalendar();
+}
+
 async function loadHalls() {
   if (hallsLoaded) return;
   hallsLoaded = true;
@@ -364,49 +300,23 @@ async function loadHalls() {
     const res = await fetch('/api/halls-list');
     const halls = await res.json();
     const container = document.getElementById('hallBtns');
-    halls.forEach(h => {
+    halls.forEach(function(h) {
       const btn = document.createElement('button');
-      btn.textContent = h.nameAr;
       btn.className = 'hall-btn';
-      btn.style.cssText = 'padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:#fff;color:var(--text);font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer';
-      btn.onclick = () => filterHall(h.nameAr, btn);
+      btn.textContent = h.nameAr;
+      btn.onclick = function() { filterHall(h.nameAr, btn); };
       container.appendChild(btn);
     });
   } catch(e) {}
 }
-function filterHall(val, btn) {
-  curHall = val;
-  document.querySelectorAll('.hall-btn').forEach(b => {
-    b.style.background = '#fff';
-    b.style.color = 'var(--text)';
-    b.style.borderColor = 'var(--border)';
-  });
-  if (btn) { btn.style.background='var(--primary)'; btn.style.color='#fff'; btn.style.borderColor='var(--primary)'; }
-  else {
-    const first = document.querySelector('.hall-btn');
-    if (first) { first.style.background='var(--primary)'; first.style.color='#fff'; first.style.borderColor='var(--primary)'; }
-  }
-  renderCalendar();
-}
-loadHalls();
-renderCalendar();
-let hallsLoaded = false;
-}
 
 function statusLabel(s) {
-  const map = {
-    approved: AR ? 'معتمد' : 'Approved',
-    pending:  AR ? 'قيد المراجعة' : 'Pending',
-    rejected: AR ? 'مرفوض' : 'Rejected',
-    cancelled:AR ? 'ملغي' : 'Cancelled',
-  };
+  const map = { approved: AR?'معتمد':'Approved', pending: AR?'قيد المراجعة':'Pending', rejected: AR?'مرفوض':'Rejected', cancelled: AR?'ملغي':'Cancelled' };
   return map[s] || s;
 }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
+loadHalls();
 renderCalendar();
 </script>
 {% endblock %}
