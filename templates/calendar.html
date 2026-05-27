@@ -358,6 +358,8 @@ function changeMonth(dir) {
   if (curMonth < 1)  { curMonth = 12; curYear--; }
   let curHall = '';
 async function loadHalls() {
+  if (hallsLoaded) return;
+  hallsLoaded = true;
   try {
     const res = await fetch('/api/halls-list');
     const halls = await res.json();
@@ -374,7 +376,6 @@ async function loadHalls() {
 }
 function filterHall(val, btn) {
   curHall = val;
-  monthCache = {};
   document.querySelectorAll('.hall-btn').forEach(b => {
     b.style.background = '#fff';
     b.style.color = 'var(--text)';
@@ -389,6 +390,7 @@ function filterHall(val, btn) {
 }
 loadHalls();
 renderCalendar();
+let hallsLoaded = false;
 }
 
 function statusLabel(s) {
