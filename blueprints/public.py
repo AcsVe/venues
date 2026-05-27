@@ -23,6 +23,12 @@ def index():
     return redirect(url_for('public.calendar'))
 
 
+@public_bp.route('/api/halls-list')
+def api_halls_list():
+    from models import Hall
+    halls = Hall.query.filter_by(active=True).all()
+    return jsonify([{'nameAr': h.name_ar, 'nameEn': h.name_en or ''} for h in halls])
+
 @public_bp.route('/calendar')
 def calendar():
     lang = request.args.get('lang', 'ar')
