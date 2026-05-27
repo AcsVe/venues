@@ -131,9 +131,11 @@
     <span style="font-size:.9rem;color:var(--text);font-weight:600">
       {{ 'اختر القاعة أولاً لمعرفة التواريخ والأوقات المتاحة' if lang == 'ar' else 'Select a hall first to see available dates and times' }}
     </span>
-    <select id="hallFilter" onchange="filterHall(this.value)" style="margin-right:auto;padding:7px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.88rem;min-width:160px">
-      <option value="">{{ 'كل القاعات' if lang == 'ar' else 'All Halls' }}</option>
-    </select>
+    <div id="hallBtns" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;width:100%">
+      <button onclick="filterHall('')" class="hall-btn active" style="padding:6px 14px;border-radius:20px;border:1.5px solid var(--primary);background:var(--primary);color:#fff;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer">
+        {{ 'كل القاعات' if lang == 'ar' else 'All' }}
+      </button>
+    </div>
   </div>
 </div>
 <div class="card">
@@ -359,15 +361,32 @@ async function loadHalls() {
   try {
     const res = await fetch('/api/halls-list');
     const halls = await res.json();
-    const sel = document.getElementById('hallFilter');
+    const container = document.getElementById('hallBtns');
     halls.forEach(h => {
-      const opt = document.createElement('option');
-      opt.value = h.nameAr; opt.textContent = h.nameAr;
-      sel.appendChild(opt);
+      const btn = document.createElement('button');
+      btn.textContent = h.nameAr;
+      btn.className = 'hall-btn';
+      btn.style.cssText = 'padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:#fff;color:var(--text);font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer';
+      btn.onclick = () => filterHall(h.nameAr, btn);
+      container.appendChild(btn);
     });
   } catch(e) {}
 }
-function filterHall(val) { curHall = val; monthCache = {}; renderCalendar(); }
+function filterHall(val, btn) {
+  curHall = val;
+  monthCache = {};
+  document.querySelectorAll('.hall-btn').forEach(b => {
+    b.style.background = '#fff';
+    b.style.color = 'var(--text)';
+    b.style.borderColor = 'var(--border)';
+  });
+  if (btn) { btn.style.background='var(--primary)'; btn.style.color='#fff'; btn.style.borderColor='var(--primary)'; }
+  else {
+    const first = document.querySelector('.hall-btn');
+    if (first) { first.style.background='var(--primary)'; first.style.color='#fff'; first.style.borderColor='var(--primary)'; }
+  }
+  renderCalendar();
+}
 loadHalls();
 renderCalendar();
 }
