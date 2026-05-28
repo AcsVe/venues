@@ -366,6 +366,16 @@
         </div>
         <div class="form-group"><label>الوصف</label><textarea id="hDesc"></textarea></div>
         <div class="form-group"><label>ملاحظات</label><input type="text" id="hNotes"></div>
+
+        <!-- Pricing -->
+        <div style="font-weight:700;color:var(--primary);margin-bottom:10px;font-size:.9rem"><i class="fas fa-tag"></i> التسعير (بالدينار الأردني JOD)</div>
+        <div class="form-grid">
+          <div class="form-group"><label>سعر الساعة (JOD)</label><input type="number" step="0.5" min="0" id="hPriceHour" placeholder="0.00"></div>
+          <div class="form-group"><label>سعر اليوم الكامل (JOD)</label><input type="number" step="0.5" min="0" id="hPriceFullDay" placeholder="0.00"></div>
+          <div class="form-group"><label>سعر اليوم عند الحجز متعدد (JOD)</label><input type="number" step="0.5" min="0" id="hPriceMultiDay" placeholder="0.00"></div>
+          <div class="form-group"><label>ملاحظات التسعير</label><input type="text" id="hPriceNotes" placeholder="مثال: أسعار خاصة للجمعيات"></div>
+        </div>
+
         <div style="display:flex;gap:16px;align-items:center;margin-bottom:12px">
           <label style="display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" id="hRequiresApproval"> تتطلب موافقة مسبقة</label>
           <label style="display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" id="hActive" checked> قاعة فعالة</label>
