@@ -330,6 +330,10 @@ def api_add_hall():
         notes             = data.get('notes', ''),
         requires_approval = bool(data.get('requiresApproval')),
         active            = data.get('active', True) is not False,
+        price_per_hour    = float(data['pricePerHour']) if data.get('pricePerHour') else None,
+        price_full_day    = float(data['priceFullDay']) if data.get('priceFullDay') else None,
+        price_multi_day   = float(data['priceMultiDay']) if data.get('priceMultiDay') else None,
+        price_notes       = data.get('priceNotes', ''),
     )
     db.session.add(h)
     db.session.commit()
@@ -353,6 +357,10 @@ def api_update_hall():
     h.notes             = data.get('notes', h.notes or '')
     h.requires_approval = bool(data.get('requiresApproval'))
     h.active            = data.get('active', True) is not False
+    if data.get('pricePerHour')  is not None: h.price_per_hour  = float(data['pricePerHour'])  if data['pricePerHour']  else None
+    if data.get('priceFullDay')  is not None: h.price_full_day  = float(data['priceFullDay'])  if data['priceFullDay']  else None
+    if data.get('priceMultiDay') is not None: h.price_multi_day = float(data['priceMultiDay']) if data['priceMultiDay'] else None
+    if data.get('priceNotes')    is not None: h.price_notes     = data['priceNotes']
     db.session.commit()
     return jsonify({'success': True})
 
