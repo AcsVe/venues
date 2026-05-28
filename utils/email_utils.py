@@ -193,7 +193,7 @@ def send_staff_notification(event_type, data, contacts):
 
     content = f"""
     <h2 style="color:{color};margin-top:0">{icon} {title}</h2>
-    <p style="color:#555;font-size:13px">هذا إشعار داخلي — لا تقم بالرد على هذا البريد</p>
+
     <table style="width:100%;border-collapse:collapse;margin:16px 0">
       <tr><td style="padding:8px;background:#f0f7f8;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data.get('reqId','')}</strong></td></tr>
       <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">مقدم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('name','')}</td></tr>
@@ -203,11 +203,7 @@ def send_staff_notification(event_type, data, contacts):
       <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">التاريخ والوقت</td><td style="padding:8px;border-bottom:1px solid #eee">{date_label}</td></tr>
       {f'<tr><td style="padding:8px;background:#fdf0f0;font-weight:600">سبب الرفض</td><td style="padding:8px;color:#c0392b;font-weight:600">{data.get("reason","")}</td></tr>' if data.get("reason") else ""}
     </table>
-    <p style="text-align:center;margin-top:16px">
-      <a href="https://acsv.onrender.com/admin" style="background:{color};color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:700">
-        فتح لوحة التحكم
-      </a>
-    </p>
+
     """
 
     subject_map = {
