@@ -27,7 +27,14 @@ def index():
 def api_halls_list():
     from models import Hall
     halls = Hall.query.filter_by(active=True).all()
-    return jsonify([{'nameAr': h.name_ar, 'nameEn': h.name_en or ''} for h in halls])
+    return jsonify([{
+        'nameAr': h.name_ar,
+        'nameEn': h.name_en or '',
+        'pricePerHour': h.price_per_hour,
+        'priceFullDay': h.price_full_day,
+        'priceMultiDay': h.price_multi_day,
+        'priceNotes': h.price_notes or '',
+    } for h in halls])
 
 @public_bp.route('/calendar')
 def calendar():
