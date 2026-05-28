@@ -130,6 +130,10 @@
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.85rem" id="hiDetails"></div>
           <div id="hiDesc" style="margin-top:10px;font-size:.85rem;color:var(--text);line-height:1.6"></div>
           <div id="hiPricing" style="display:none;margin-top:10px"></div>
+          <div id="hiEstimate" style="display:none;margin-top:10px;background:linear-gradient(135deg,#d1e7dd,#a3cfbb);border-radius:8px;padding:12px 16px;text-align:center">
+            <div style="font-size:.82rem;color:#0a6640;font-weight:600;margin-bottom:2px">{{ 'التكلفة التقديرية' if lang == 'ar' else 'Estimated Cost' }}</div>
+            <div id="hiEstimateVal" style="font-size:1.5rem;font-weight:800;color:#0a6640"></div>
+          </div>
           <div id="hiApproval" style="display:none;margin-top:10px;background:#fff3cd;border-radius:8px;padding:8px 12px;font-size:.82rem;color:#856404;font-weight:600">
             <i class="fas fa-exclamation-triangle"></i>
             {{ 'هذه القاعة تتطلب موافقة مسبقة قبل التأكيد' if lang == 'ar' else 'This venue requires prior approval before confirmation' }}
@@ -143,7 +147,7 @@
     </div>
 
     <div class="toggle-group">
-      <input type="checkbox" id="multiDay" onchange="toggleMultiDay()">
+      <input type="checkbox" id="multiDay" onchange="toggleMultiDay(); calcPrice()">
       <label for="multiDay">
         <i class="fas fa-calendar-week"></i>
         {{ 'حجز متعدد الأيام' if lang == 'ar' else 'Multi-day booking' }}
@@ -151,11 +155,11 @@
     </div>
     <div id="endDateWrap" style="display:none" class="form-group" style="margin-top:10px">
       <label>{{ 'تاريخ الانتهاء' if lang == 'ar' else 'End Date' }}</label>
-      <input type="date" id="endDate" min="{{ today }}">
+      <input type="date" id="endDate" onchange="calcPrice()" min="{{ today }}">
     </div>
 
     <div class="toggle-group" style="margin-top:10px">
-      <input type="checkbox" id="fullDay" onchange="toggleFullDay()">
+      <input type="checkbox" id="fullDay" onchange="toggleFullDay(); calcPrice()">
       <label for="fullDay">
         <i class="fas fa-sun"></i>
         {{ 'يوم كامل' if lang == 'ar' else 'Full Day' }}
@@ -167,11 +171,11 @@
       <div class="time-row">
         <div>
           <small style="color:var(--muted)">{{ 'من' if lang == 'ar' else 'From' }}</small>
-          <input type="time" id="startTime" value="09:00">
+          <input type="time" id="startTime" value="09:00" onchange="calcPrice()">
         </div>
         <div>
           <small style="color:var(--muted)">{{ 'إلى' if lang == 'ar' else 'To' }}</small>
-          <input type="time" id="endTime" value="12:00">
+          <input type="time" id="endTime" value="12:00" onchange="calcPrice()">
         </div>
       </div>
     </div>
@@ -281,6 +285,55 @@ function showHallInfo(val) {
   }
 
   card.style.display = 'block';
+  calcPrice();
+}
+
+function calcPrice() {
+  const hallSel = document.getElementById('hall');
+  const opt = hallSel ? hallSel.options[hallSel.selectedIndex] : null;
+  const estEl = document.getElementById('hiEstimate');
+  const estVal = document.getElementById('hiEstimateVal');
+  if (!opt || !opt.value || !estEl) return;
+
+  const ph  = parseFloat(opt.dataset.priceHour) || 0;
+  const pfd = parseFloat(opt.dataset.pricefullDay || opt.dataset.priceFullDay) || 0;
+  const pmd = parseFloat(opt.dataset.pricemultiDay || opt.dataset.priceMultiDay) || 0;
+
+  if (!ph && !pfd && !pmd) { estEl.style.display='none'; return; }
+
+  const fullDay  = document.getElementById('fullDay')?.checked;
+  const multiDay = document.getElementById('multiDay')?.checked;
+  const startT   = document.getElementById('startTime')?.value;
+  const endT     = document.getElementById('endTime')?.value;
+  const bdate    = document.getElementById('bdate')?.value;
+  const endDate  = document.getElementById('endDate')?.value;
+
+  let amount = 0;
+  let label  = '';
+
+  if (multiDay && bdate && endDate && pmd) {
+    const d1 = new Date(bdate), d2 = new Date(endDate);
+    const days = Math.max(1, Math.round((d2-d1)/(1000*60*60*24)) + 1);
+    amount = pmd * days;
+    label = days + ' يوم × ' + pmd + ' JOD';
+  } else if (fullDay && pfd) {
+    amount = pfd;
+    label = 'يوم كامل';
+  } else if (!fullDay && startT && endT && ph) {
+    const [sh,sm] = startT.split(':').map(Number);
+    const [eh,em] = endT.split(':').map(Number);
+    const hours = Math.max(0, (eh*60+em - sh*60-sm) / 60);
+    amount = Math.round(hours * ph * 100) / 100;
+    label = hours.toFixed(1) + ' ساعة × ' + ph + ' JOD';
+  }
+
+  if (amount > 0) {
+    estVal.textContent = amount.toFixed(2) + ' JOD';
+    estEl.title = label;
+    estEl.style.display = 'block';
+  } else {
+    estEl.style.display = 'none';
+  }
 }
 
 let selectedFiles = [];
