@@ -98,15 +98,38 @@
     <div class="form-row">
       <div class="form-group">
         <label>{{ 'القاعة' if lang == 'ar' else 'Venue' }} <span class="req">*</span></label>
-        <select id="hall">
+        <select id="hall" onchange="showHallInfo(this.value)">
           <option value="">{{ '-- اختر القاعة --' if lang == 'ar' else '-- Select Venue --' }}</option>
           {% for h in halls %}
-          <option value="{{ h.name_ar }}">
+          <option value="{{ h.name_ar }}"
+            data-name-en="{{ h.name_en or '' }}"
+            data-capacity="{{ h.capacity or '' }}"
+            data-location="{{ h.location or '' }}"
+            data-equipment="{{ h.equipment or '' }}"
+            data-description="{{ h.description or '' }}"
+            data-notes="{{ h.notes or '' }}"
+            data-approval="{{ h.requires_approval }}">
             {{ h.name_ar }}{% if h.name_en %} / {{ h.name_en }}{% endif %}
             {% if h.capacity %} ({{ h.capacity }}){% endif %}
           </option>
           {% endfor %}
         </select>
+      </div>
+
+      <!-- Hall Info Card -->
+      <div id="hallInfoCard" style="display:none;margin-bottom:16px">
+        <div style="background:linear-gradient(135deg,#f0f7f8,#e8f4f5);border:1.5px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-weight:800;color:var(--primary);font-size:1rem;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            <i class="fas fa-door-open"></i>
+            <span id="hiName"></span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.85rem" id="hiDetails"></div>
+          <div id="hiDesc" style="margin-top:10px;font-size:.85rem;color:var(--text);line-height:1.6"></div>
+          <div id="hiApproval" style="display:none;margin-top:10px;background:#fff3cd;border-radius:8px;padding:8px 12px;font-size:.82rem;color:#856404;font-weight:600">
+            <i class="fas fa-exclamation-triangle"></i>
+            {{ 'هذه القاعة تتطلب موافقة مسبقة قبل التأكيد' if lang == 'ar' else 'This venue requires prior approval before confirmation' }}
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label>{{ 'تاريخ الحجز' if lang == 'ar' else 'Booking Date' }} <span class="req">*</span></label>
@@ -214,6 +237,27 @@
 <script>
 const LANG = '{{ lang }}';
 const AR = LANG === 'ar';
+// Hall info
+const AR2 = '{{ lang }}' === 'ar';
+function showHallInfo(val) {
+  const card = document.getElementById('hallInfoCard');
+  if (!val) { card.style.display='none'; return; }
+  const opt = document.querySelector('#hall option[value="'+val+'"]');
+  if (!opt) { card.style.display='none'; return; }
+  document.getElementById('hiName').textContent = val + (opt.dataset.nameEn ? ' / '+opt.dataset.nameEn : '');
+  const details = [];
+  if (opt.dataset.capacity)  details.push(['<i class="fas fa-users"></i>', AR2?'السعة':'Capacity', opt.dataset.capacity]);
+  if (opt.dataset.location)  details.push(['<i class="fas fa-map-marker-alt"></i>', AR2?'الموقع':'Location', opt.dataset.location]);
+  if (opt.dataset.equipment) details.push(['<i class="fas fa-tools"></i>', AR2?'التجهيزات':'Equipment', opt.dataset.equipment]);
+  if (opt.dataset.notes)     details.push(['<i class="fas fa-sticky-note"></i>', AR2?'ملاحظات':'Notes', opt.dataset.notes]);
+  document.getElementById('hiDetails').innerHTML = details.map(([icon,label,val]) =>
+    '<div style="display:flex;align-items:flex-start;gap:6px"><span style="color:var(--primary)">'+icon+'</span><div><div style="font-weight:700;color:var(--muted);font-size:.75rem">'+label+'</div><div style="font-weight:600">'+val+'</div></div></div>'
+  ).join('');
+  document.getElementById('hiDesc').textContent = opt.dataset.description || '';
+  document.getElementById('hiApproval').style.display = opt.dataset.approval==='True' ? 'block' : 'none';
+  card.style.display = 'block';
+}
+
 let selectedFiles = [];
 
 function toggleFullDay() {
