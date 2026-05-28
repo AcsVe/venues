@@ -138,6 +138,18 @@ class Contact(db.Model):
 def init_db(app):
     """Create tables and seed default halls if empty."""
     db.create_all()
+    # Migration: add new columns if not exist
+    try:
+        with db.engine.connect() as conn:
+            conn.exec_driver_sql("ALTER TABLE halls ADD COLUMN IF NOT EXISTS price_per_hour FLOAT")
+            conn.exec_driver_sql("ALTER TABLE halls ADD COLUMN IF NOT EXISTS price_full_day FLOAT")
+            conn.exec_driver_sql("ALTER TABLE halls ADD COLUMN IF NOT EXISTS price_multi_day FLOAT")
+            conn.exec_driver_sql("ALTER TABLE halls ADD COLUMN IF NOT EXISTS price_notes VARCHAR(300)")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS invoice_amount FLOAT")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS invoice_notes VARCHAR(300)")
+            conn.commit()
+    except Exception:
+        pass
     if Hall.query.count() == 0:
         db.session.add_all([
             Hall(name_ar='القاعة الرئيسية', name_en='Main Hall',
