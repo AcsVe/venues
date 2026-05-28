@@ -182,6 +182,7 @@ def send_staff_notification(event_type, data, contacts):
         'reject':  ('❌', '#c0392b', 'تم رفض حجز'),
         'cancel':  ('🚫', '#e67e22', 'تم إلغاء حجز'),
         'update':  ('✏️', '#247680', 'تم تعديل حجز'),
+        'revert':  ('🔄', '#e67e22', 'تم إرجاع الحجز لقيد المراجعة'),
     }
     icon, color, title = icons.get(event_type, ('📌', '#247680', 'إشعار حجز'))
 
@@ -214,6 +215,7 @@ def send_staff_notification(event_type, data, contacts):
         'approve': f"[إشعار] تم اعتماد الحجز #{data.get('reqId','')}",
         'reject':  f"[إشعار] تم رفض الحجز #{data.get('reqId','')}",
         'cancel':  f"[إشعار] تم إلغاء الحجز #{data.get('reqId','')}",
+        'revert':  f"[إشعار] تم إرجاع الحجز لقيد المراجعة #" + data.get('reqId','') + "",
         'update':  f"[إشعار] تم تعديل الحجز #{data.get('reqId','')}",
     }
     subject = subject_map.get(event_type, f"[إشعار] حجز #{data.get('reqId','')}")
