@@ -102,7 +102,10 @@ def api_approve():
     # Auto-calculate invoice amount
     if not b.invoice_amount:
         hall = Hall.query.filter_by(name_ar=b.hall).first()
+        import logging
+        logging.warning(f"INVOICE DEBUG: hall={b.hall}, found={hall}, full_day={b.full_day}, start={b.start_time}, end={b.end_time}")
         if hall:
+            logging.warning(f"PRICES: hour={hall.price_per_hour}, full={hall.price_full_day}, multi={hall.price_multi_day}")
             try:
                 from datetime import datetime as dt
                 # Multi-day
