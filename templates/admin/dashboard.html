@@ -856,6 +856,7 @@ async function loadHalls() {
       <td>${esc(h.location)}</td>
       <td><span class="badge ${h.active?'badge-approved':'badge-cancelled'}">${h.active?'فعالة':'معطلة'}</span></td>
       <td>
+        <button class="btn btn-sm btn-outline" onclick="editHall(${h.id})"><i class="fas fa-edit"></i></button>
         <button class="btn btn-red btn-sm" onclick="deleteHall(${h.id})"><i class="fas fa-trash"></i></button>
         <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${h.id},${h.active?'false':'true'})">
           ${h.active?'<i class="fas fa-toggle-off"></i> تعطيل':'<i class="fas fa-toggle-on"></i> تفعيل'}
@@ -880,6 +881,51 @@ async function addHall() {
   });
   if (data.success) { showToast('تمت الإضافة'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function editHall(id) {
+  const h = hallsList.find(x => x.id === id);
+  if (!h) return;
+  document.getElementById('ehId').value          = id;
+  document.getElementById('ehNameAr').value       = h.nameAr || '';
+  document.getElementById('ehNameEn').value       = h.nameEn || '';
+  document.getElementById('ehLocation').value     = h.location || '';
+  document.getElementById('ehCode').value         = h.code || '';
+  document.getElementById('ehCapacity').value     = h.capacity || '';
+  document.getElementById('ehEquipment').value    = h.equipment || '';
+  document.getElementById('ehDesc').value         = h.description || '';
+  document.getElementById('ehNotes').value        = h.notes || '';
+  document.getElementById('ehPriceHour').value    = h.pricePerHour || '';
+  document.getElementById('ehPriceFullDay').value = h.priceFullDay || '';
+  document.getElementById('ehPriceMultiDay').value= h.priceMultiDay || '';
+  document.getElementById('ehPriceNotes').value   = h.priceNotes || '';
+  document.getElementById('ehRequiresApproval').checked = h.requiresApproval;
+  document.getElementById('ehActive').checked     = h.active;
+  openModal('editHallModal');
+}
+
+async function saveHall() {
+  const data = {
+    id:               document.getElementById('ehId').value,
+    nameAr:           document.getElementById('ehNameAr').value,
+    nameEn:           document.getElementById('ehNameEn').value,
+    location:         document.getElementById('ehLocation').value,
+    code:             document.getElementById('ehCode').value,
+    capacity:         document.getElementById('ehCapacity').value,
+    equipment:        document.getElementById('ehEquipment').value,
+    description:      document.getElementById('ehDesc').value,
+    notes:            document.getElementById('ehNotes').value,
+    pricePerHour:     document.getElementById('ehPriceHour').value || null,
+    priceFullDay:     document.getElementById('ehPriceFullDay').value || null,
+    priceMultiDay:    document.getElementById('ehPriceMultiDay').value || null,
+    priceNotes:       document.getElementById('ehPriceNotes').value,
+    requiresApproval: document.getElementById('ehRequiresApproval').checked,
+    active:           document.getElementById('ehActive').checked,
+  };
+  const res = await fetch('/admin/api/update-hall', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  const j = await res.json();
+  if (j.success) { closeModal('editHallModal'); loadHalls(); showToast('تم الحفظ ✓'); }
+  else showToast(j.error || 'خطأ');
 }
 
 async function deleteHall(id) {
