@@ -884,8 +884,9 @@ async function addHall() {
 }
 
 async function openEditHall(id) {
+  await loadHalls();
   const h = hallsList.find(x => x.id === id);
-  if (!h) return;
+  if (!h) { showToast('لم يتم العثور على القاعة'); return; }
   document.getElementById('ehId').value          = id;
   document.getElementById('ehNameAr').value       = h.nameAr || '';
   document.getElementById('ehNameEn').value       = h.nameEn || '';
