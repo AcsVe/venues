@@ -884,8 +884,10 @@ async function addHall() {
 }
 
 async function openEditHall(id) {
-  await loadHalls();
-  const h = hallsList.find(x => x.id === id);
+  // Fetch directly without touching hallsList to avoid loop
+  const res = await fetch('/admin/api/halls');
+  const halls = await res.json();
+  const h = halls.find(x => x.id === id);
   if (!h) { showToast('لم يتم العثور على القاعة'); return; }
   document.getElementById('ehId').value          = id;
   document.getElementById('ehNameAr').value       = h.nameAr || '';
