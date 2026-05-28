@@ -884,7 +884,9 @@ async function addHall() {
 }
 
 async function editHall(id) {
-  const h = hallsList.find(x => x.id === id);
+  const res = await fetch('/admin/api/halls');
+  const halls = await res.json();
+  const h = halls.find(x => x.id === id);
   if (!h) return;
   document.getElementById('ehId').value          = id;
   document.getElementById('ehNameAr').value       = h.nameAr || '';
