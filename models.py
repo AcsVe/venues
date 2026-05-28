@@ -26,6 +26,8 @@ class Booking(db.Model):
     reject_reason = db.Column(db.Text)
     cc_emails     = db.Column(db.Text)   # semicolon-separated
     action_date   = db.Column(db.DateTime)
+    invoice_amount = db.Column(db.Float)
+    invoice_notes  = db.Column(db.String(300))
 
     def to_dict(self):
         end = self.end_date or self.booking_date
@@ -51,6 +53,8 @@ class Booking(db.Model):
             'rejectReason': self.reject_reason or '',
             'cc': self.cc_emails or '',
             'multiDay': end != self.booking_date,
+            'invoiceAmount': self.invoice_amount,
+            'invoiceNotes': self.invoice_notes or '',
         }
 
 
@@ -67,6 +71,10 @@ class Hall(db.Model):
     notes             = db.Column(db.Text)
     requires_approval = db.Column(db.Boolean, default=False)
     active            = db.Column(db.Boolean, default=True)
+    price_per_hour    = db.Column(db.Float)
+    price_full_day    = db.Column(db.Float)
+    price_multi_day   = db.Column(db.Float)  # per day when multi-day
+    price_notes       = db.Column(db.String(300))
 
     def to_dict(self):
         return {
@@ -81,6 +89,10 @@ class Hall(db.Model):
             'notes': self.notes or '',
             'requiresApproval': self.requires_approval,
             'active': self.active,
+            'pricePerHour': self.price_per_hour,
+            'priceFullDay': self.price_full_day,
+            'priceMultiDay': self.price_multi_day,
+            'priceNotes': self.price_notes or '',
         }
 
 
