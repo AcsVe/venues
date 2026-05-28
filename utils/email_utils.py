@@ -82,6 +82,11 @@ def send_confirm(data):
                  _base_html(content))
 
 
+def _format_price(amount):
+    if amount is None:
+        return ''
+    return f'{amount:.2f} JOD'
+
 def send_approve(data):
     date_label = _date_label(data.get('date'), data.get('endDate'),
                               data.get('fullDay'), data.get('startTime'), data.get('endTime'))

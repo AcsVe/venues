@@ -98,6 +98,34 @@ def api_approve():
 
     b.status      = 'approved'
     b.action_date = datetime.utcnow()
+
+    # Auto-calculate invoice amount
+    if not b.invoice_amount:
+        hall = Hall.query.filter_by(name_ar=b.hall).first()
+        if hall:
+            try:
+                from datetime import datetime as dt
+                # Multi-day
+                if b.end_date and b.end_date != b.booking_date:
+                    d1 = dt.strptime(b.booking_date, '%Y-%m-%d')
+                    d2 = dt.strptime(b.end_date, '%Y-%m-%d')
+                    days = (d2 - d1).days + 1
+                    if hall.price_multi_day:
+                        b.invoice_amount = round(hall.price_multi_day * days, 2)
+                # Full day
+                elif b.full_day:
+                    if hall.price_full_day:
+                        b.invoice_amount = round(hall.price_full_day, 2)
+                # Hourly
+                elif b.start_time and b.end_time:
+                    sh, sm = map(int, b.start_time.split(':'))
+                    eh, em = map(int, b.end_time.split(':'))
+                    hours = round((eh * 60 + em - sh * 60 - sm) / 60, 2)
+                    if hall.price_per_hour:
+                        b.invoice_amount = round(hall.price_per_hour * hours, 2)
+            except Exception:
+                pass
+
     db.session.commit()
 
     end = b.end_date or b.booking_date
@@ -107,7 +135,9 @@ def api_approve():
                       'title': b.event_title, 'hall': b.hall,
                       'date': b.booking_date, 'endDate': end,
                       'startTime': b.start_time, 'endTime': b.end_time,
-                      'fullDay': b.full_day})
+                      'fullDay': b.full_day,
+                      'invoiceAmount': b.invoice_amount,
+                      'invoiceNotes': b.invoice_notes or ''})
     except Exception:
         pass
 
