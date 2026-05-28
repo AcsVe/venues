@@ -856,7 +856,7 @@ async function loadHalls() {
       <td>${esc(h.location)}</td>
       <td><span class="badge ${h.active?'badge-approved':'badge-cancelled'}">${h.active?'فعالة':'معطلة'}</span></td>
       <td>
-        <button class="btn btn-sm btn-outline" onclick="editHall(${h.id})"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-sm btn-outline" onclick="openEditHall(${h.id})"><i class="fas fa-edit"></i></button>
         <button class="btn btn-red btn-sm" onclick="deleteHall(${h.id})"><i class="fas fa-trash"></i></button>
         <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${h.id},${h.active?'false':'true'})">
           ${h.active?'<i class="fas fa-toggle-off"></i> تعطيل':'<i class="fas fa-toggle-on"></i> تفعيل'}
@@ -883,7 +883,7 @@ async function addHall() {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 
-async function editHall(id) {
+async function openEditHall(id) {
   const h = hallsList.find(x => x.id === id);
   if (!h) return;
   document.getElementById('ehId').value          = id;
