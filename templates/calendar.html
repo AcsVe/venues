@@ -61,12 +61,12 @@
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
     <i class="fas fa-info-circle" style="color:var(--primary);font-size:1.1rem"></i>
     <span style="font-size:.9rem;color:var(--text);font-weight:600">
-      {{ 'اختر القاعة لمعرفة التواريخ والأوقات المتاحة' if lang == 'ar' else 'Select a hall to see available dates' }}
+      {{ 'اختر المرحلة (العربة) لمعرفة التواريخ والحصص المتاحة' if lang == 'ar' else 'Select a stage (trolley) to see available dates' }}
     </span>
   </div>
   <div id="hallBtns" style="display:flex;gap:6px;flex-wrap:wrap">
     <button class="hall-btn active" onclick="filterHall('', this)">
-      {{ 'كل القاعات' if lang == 'ar' else 'All' }}
+      {{ 'كل المراحل' if lang == 'ar' else 'All' }}
     </button>
   </div>
 </div>
@@ -115,7 +115,7 @@ const DAYS_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 let curYear  = new Date().getFullYear();
 let curMonth = new Date().getMonth() + 1;
-let curHall  = '';
+let curHall  = ''; // trolley_code filter
 let monthCache = {};
 let hallsLoaded = false;
 
@@ -181,7 +181,7 @@ async function renderCalendar() {
       cell.appendChild(el);
     }
 
-    const dayBks = bookings.filter(b => b.date <= dateStr && (b.endDate || b.date) >= dateStr);
+    const dayBks = bookings.filter(b => b.date === dateStr);
     const filteredBks = curHall ? dayBks.filter(b => b.hall === curHall) : dayBks;
 
     if (filteredBks.length) {
@@ -197,7 +197,7 @@ async function renderCalendar() {
       }
       const dot = document.createElement('div');
       dot.style.cssText = 'display:flex;gap:3px;flex-wrap:wrap;margin-top:3px';
-      filteredBks.slice(0,4).forEach(function(bk) {
+      filteredBks.slice(0,8).forEach(function(bk) {
         const d = document.createElement('span');
         const color = bk.status==='approved' ? '#27ae60' : bk.status==='pending' ? '#e67e22' : '#c0392b';
         d.style.cssText = 'width:8px;height:8px;border-radius:50%;display:inline-block;background:' + color;
@@ -215,8 +215,7 @@ async function renderCalendar() {
       cell.style.borderColor = '#f1aeb5';
     }
 
-    const hasApprovedFullDay = filteredBks.some(b => b.status === 'approved' && b.fullDay);
-    if (!isPast && blkList.every(b => b.fromTime) && !hasApprovedFullDay) {
+    if (!isPast && blkList.every(b => b.fromTime)) {
       cell.classList.add('bookable');
       const btn = document.createElement('button');
       btn.className = 'book-btn';
@@ -250,11 +249,13 @@ function openDayModal(dateStr, bookings, blocked) {
 
   const visibleBks = curHall ? bookings.filter(b => b.hall === curHall) : bookings;
   if (visibleBks.length) {
+    visibleBks.sort((a,b) => (a.periodNumber||0) - (b.periodNumber||0));
     visibleBks.forEach(function(bk) {
-      const timeStr = bk.fullDay ? (AR ? 'يوم كامل' : 'Full Day') : (bk.startTime + ' - ' + bk.endTime);
+      const timeStr = bk.startTime && bk.endTime ? (bk.startTime + ' - ' + bk.endTime) :
+        (bk.periodNumber ? (AR ? 'الحصة ' + bk.periodNumber : 'Period ' + bk.periodNumber) : '');
       html += '<div class="bk-card"><div class="bk-meta">' +
-        '<span><i class="fas fa-door-open"></i> ' + esc(bk.hall) + '</span>' +
-        '<span><i class="fas fa-clock"></i> ' + timeStr + '</span>' +
+        '<span><i class="fas fa-laptop"></i> ' + esc(bk.stage || bk.hall) + '</span>' +
+        (timeStr ? '<span><i class="fas fa-clock"></i> ' + timeStr + '</span>' : '') +
         '<span class="badge badge-' + bk.status + '">' + statusLabel(bk.status) + '</span>' +
         '</div></div>';
     });
@@ -298,14 +299,14 @@ async function loadHalls() {
   if (hallsLoaded) return;
   hallsLoaded = true;
   try {
-    const res = await fetch('/api/halls-list');
-    const halls = await res.json();
+    const res = await fetch('/api/stages-list');
+    const stages = await res.json();
     const container = document.getElementById('hallBtns');
-    halls.forEach(function(h) {
+    stages.forEach(function(s) {
       const btn = document.createElement('button');
       btn.className = 'hall-btn';
-      btn.textContent = h.nameAr;
-      btn.onclick = function() { filterHall(h.nameAr, btn); };
+      btn.textContent = AR ? s.nameAr : (s.nameEn || s.nameAr);
+      btn.onclick = function() { filterHall(s.trolleyCode, btn); };
       container.appendChild(btn);
     });
   } catch(e) {}

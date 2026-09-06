@@ -1,19 +1,12 @@
 {% extends 'base_public.html' %}
-{% block title %}{{ 'نموذج الحجز' if lang == 'ar' else 'New Booking' }}{% endblock %}
+{% block title %}{{ 'نموذج حجز عربة الحواسيب' if lang == 'ar' else 'Laptop Trolley Booking Form' }}{% endblock %}
 
 {% block extra_head %}
 <style>
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .form-row.single { grid-template-columns: 1fr; }
-  @media (max-width:640px) { .form-row { grid-template-columns: 1fr; } }
-  .toggle-group {
-    display: flex; gap: 8px; align-items: center;
-    background: #f0f7f8; padding: 10px 14px; border-radius: 8px;
-    margin-bottom: 4px;
-  }
-  .toggle-group label { margin: 0; font-weight: 600; flex: 1; cursor: pointer; }
-  .toggle-group input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
-  .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-row.quad { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width:640px) { .form-row, .form-row.quad { grid-template-columns: 1fr; } }
   .upload-area {
     border: 2px dashed var(--border);
     border-radius: 10px;
@@ -40,6 +33,12 @@
   }
   .req-id-box .req-id { font-size: 2rem; font-weight: 800; color: #0a6640; letter-spacing: 2px; }
   .req-id-box p { color: #0a6640; margin-top: 8px; }
+  .trolley-info {
+    display:none; background:linear-gradient(135deg,#f0f7f8,#e8f4f5);
+    border:1.5px solid var(--border); border-radius:12px; padding:14px 16px;
+    margin-bottom:16px; font-size:.88rem; font-weight:700; color:var(--primary);
+    align-items:center; gap:8px;
+  }
   @keyframes slideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
   @keyframes slideDown { from { opacity:0; transform:translateX(-50%) translateY(-20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
   @keyframes fadeOut { from { opacity:1; } to { opacity:0; } }
@@ -65,15 +64,15 @@
 <div id="formWrap">
   <div class="card">
     <div class="card-title">
-      <i class="fas fa-calendar-plus"></i>
-      {{ 'نموذج حجز قاعة' if lang == 'ar' else 'Venue Booking Form' }}
+      <i class="fas fa-laptop"></i>
+      {{ 'نموذج حجز عربة الحواسيب' if lang == 'ar' else 'Laptop Trolley Booking Form' }}
     </div>
 
     <div id="alertBox"></div>
 
     <div class="form-row">
       <div class="form-group">
-        <label>{{ 'الاسم الكامل' if lang == 'ar' else 'Full Name' }} <span class="req">*</span></label>
+        <label>{{ 'اسم المعلم/ة' if lang == 'ar' else 'Teacher Name' }} <span class="req">*</span></label>
         <input type="text" id="fullName" placeholder="{{ 'الاسم الرباعي' if lang == 'ar' else 'Enter full name' }}">
       </div>
       <div class="form-group">
@@ -84,105 +83,57 @@
     <div class="form-row">
       <div class="form-group">
         <label>{{ 'الجوال' if lang == 'ar' else 'Phone' }}</label>
-        <input type="tel" id="phone" placeholder="+966 5x xxx xxxx" dir="ltr">
+        <input type="tel" id="phone" placeholder="+962 7x xxx xxxx" dir="ltr">
       </div>
       <div class="form-group">
-        <label>{{ 'نيابة عن جهة' if lang == 'ar' else 'On Behalf Of' }}</label>
-        <input type="text" id="onBehalf" placeholder="{{ 'اسم الجهة أو القسم' if lang == 'ar' else 'Organization / Department' }}">
+        <label>{{ 'المادة / الغرض' if lang == 'ar' else 'Subject / Purpose' }}</label>
+        <input type="text" id="eventTitle" placeholder="{{ 'مثال: حصة حاسوب' if lang == 'ar' else 'e.g. Computer class' }}">
       </div>
     </div>
-    <div class="form-group">
-      <label>{{ 'عنوان المناسبة' if lang == 'ar' else 'Event Title' }} <span class="req">*</span></label>
-      <input type="text" id="eventTitle" placeholder="{{ 'عنوان الفعالية أو الاجتماع' if lang == 'ar' else 'Event or meeting title' }}">
-    </div>
-    <div class="form-row">
+
+    <div class="form-row quad">
       <div class="form-group">
-        <label>{{ 'القاعة' if lang == 'ar' else 'Venue' }} <span class="req">*</span></label>
-        <select id="hall" onchange="showHallInfo(this.value)">
-          <option value="">{{ '-- اختر القاعة --' if lang == 'ar' else '-- Select Venue --' }}</option>
-          {% for h in halls %}
-          <option value="{{ h.name_ar }}"
-            data-name-en="{{ h.name_en or '' }}"
-            data-capacity="{{ h.capacity or '' }}"
-            data-location="{{ h.location or '' }}"
-            data-equipment="{{ h.equipment or '' }}"
-            data-description="{{ h.description or '' }}"
-            data-notes="{{ h.notes or '' }}"
-            data-approval="{{ h.requires_approval }}"
-            data-price-hour="{{ h.price_per_hour or '' }}"
-            data-price-full-day="{{ h.price_full_day or '' }}"
-            data-price-multi-day="{{ h.price_multi_day or '' }}"
-            data-price-notes="{{ h.price_notes or '' }}">
-            {{ h.name_ar }}{% if h.name_en %} / {{ h.name_en }}{% endif %}
-            {% if h.capacity %} ({{ h.capacity }}){% endif %}
-          </option>
+        <label>{{ 'المرحلة' if lang == 'ar' else 'Stage' }} <span class="req">*</span></label>
+        <select id="stageSel" onchange="onStageChange()">
+          <option value="">{{ '-- اختر المرحلة --' if lang == 'ar' else '-- Select Stage --' }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>{{ 'الصف' if lang == 'ar' else 'Grade' }} <span class="req">*</span></label>
+        <select id="gradeSel" onchange="onGradeChange()" disabled>
+          <option value="">{{ '-- اختر الصف --' if lang == 'ar' else '-- Select Grade --' }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>{{ 'الشعبة' if lang == 'ar' else 'Section' }} <span class="req">*</span></label>
+        <select id="sectionSel" disabled>
+          <option value="">{{ '-- اختر الشعبة --' if lang == 'ar' else '-- Select Section --' }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>{{ 'الحصة' if lang == 'ar' else 'Period' }} <span class="req">*</span></label>
+        <select id="periodSel">
+          <option value="">{{ '-- اختر الحصة --' if lang == 'ar' else '-- Select Period --' }}</option>
+          {% for p in periods %}
+          <option value="{{ p.id }}">{{ p.label_ar or ('الحصة ' ~ p.number) }}{% if p.start_time %} ({{ p.start_time }} - {{ p.end_time }}){% endif %}</option>
           {% endfor %}
         </select>
       </div>
-
-      <!-- Hall Info Card -->
-      <div id="hallInfoCard" style="display:none;margin-bottom:16px">
-        <div style="background:linear-gradient(135deg,#f0f7f8,#e8f4f5);border:1.5px solid var(--border);border-radius:12px;padding:16px">
-          <div style="font-weight:800;color:var(--primary);font-size:1rem;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-            <i class="fas fa-door-open"></i>
-            <span id="hiName"></span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.85rem" id="hiDetails"></div>
-          <div id="hiDesc" style="margin-top:10px;font-size:.85rem;color:var(--text);line-height:1.6"></div>
-          <div id="hiPricing" style="display:none;margin-top:10px"></div>
-          <div id="hiEstimate" style="display:none;margin-top:10px;background:linear-gradient(135deg,#d1e7dd,#a3cfbb);border-radius:8px;padding:12px 16px;text-align:center">
-            <div style="font-size:.82rem;color:#0a6640;font-weight:600;margin-bottom:2px">{{ 'التكلفة التقديرية' if lang == 'ar' else 'Estimated Cost' }}</div>
-            <div id="hiEstimateVal" style="font-size:1.5rem;font-weight:800;color:#0a6640"></div>
-          </div>
-          <div id="hiApproval" style="display:none;margin-top:10px;background:#fff3cd;border-radius:8px;padding:8px 12px;font-size:.82rem;color:#856404;font-weight:600">
-            <i class="fas fa-exclamation-triangle"></i>
-            {{ 'هذه القاعة تتطلب موافقة مسبقة قبل التأكيد' if lang == 'ar' else 'This venue requires prior approval before confirmation' }}
-          </div>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>{{ 'تاريخ الحجز' if lang == 'ar' else 'Booking Date' }} <span class="req">*</span></label>
-        <input type="date" id="bookingDate" min="{{ today }}" value="{{ pre_date }}">
-      </div>
     </div>
 
-    <div class="toggle-group">
-      <input type="checkbox" id="multiDay" onchange="toggleMultiDay(); calcPrice()">
-      <label for="multiDay">
-        <i class="fas fa-calendar-week"></i>
-        {{ 'حجز متعدد الأيام' if lang == 'ar' else 'Multi-day booking' }}
-      </label>
-    </div>
-    <div id="endDateWrap" style="display:none" class="form-group" style="margin-top:10px">
-      <label>{{ 'تاريخ الانتهاء' if lang == 'ar' else 'End Date' }}</label>
-      <input type="date" id="endDate" onchange="calcPrice()" min="{{ today }}">
+    <div id="trolleyInfo" class="trolley-info">
+      <i class="fas fa-laptop-house"></i>
+      <span id="trolleyInfoText"></span>
     </div>
 
-    <div class="toggle-group" style="margin-top:10px">
-      <input type="checkbox" id="fullDay" onchange="toggleFullDay(); calcPrice()">
-      <label for="fullDay">
-        <i class="fas fa-sun"></i>
-        {{ 'يوم كامل' if lang == 'ar' else 'Full Day' }}
-      </label>
-    </div>
-
-    <div id="timeWrap" class="form-group" style="margin-top:10px">
-      <label>{{ 'الوقت' if lang == 'ar' else 'Time' }}</label>
-      <div class="time-row">
-        <div>
-          <small style="color:var(--muted)">{{ 'من' if lang == 'ar' else 'From' }}</small>
-          <input type="time" id="startTime" value="09:00" onchange="calcPrice()">
-        </div>
-        <div>
-          <small style="color:var(--muted)">{{ 'إلى' if lang == 'ar' else 'To' }}</small>
-          <input type="time" id="endTime" value="12:00" onchange="calcPrice()">
-        </div>
-      </div>
+    <div class="form-group">
+      <label>{{ 'تاريخ الحجز' if lang == 'ar' else 'Booking Date' }} <span class="req">*</span></label>
+      <input type="date" id="bookingDate" min="{{ today }}" value="{{ pre_date }}">
     </div>
 
     <div class="form-group">
       <label>{{ 'ملاحظات' if lang == 'ar' else 'Notes' }}</label>
-      <textarea id="notes" placeholder="{{ 'أي تفاصيل أو متطلبات إضافية...' if lang == 'ar' else 'Additional details or requirements...' }}"></textarea>
+      <textarea id="notes" placeholder="{{ 'أي شيء تودون إبلاغنا به بخصوص هذا الحجز...' if lang == 'ar' else 'Anything you would like to tell us about this booking...' }}"></textarea>
     </div>
 
     <!-- File upload -->
@@ -201,24 +152,24 @@
     <div style="background:#f0f7f8;border-radius:10px;padding:16px;margin-bottom:16px;border:1.5px solid var(--border)">
       <div style="font-weight:700;color:var(--primary);margin-bottom:10px;font-size:.95rem">
         <i class="fas fa-file-contract"></i>
-        {{ 'سياسة الحجز' if lang == 'ar' else 'Booking Policy' }}
+        {{ 'سياسة الاستخدام' if lang == 'ar' else 'Usage Policy' }}
       </div>
       <div style="font-size:.88rem;color:var(--text);line-height:1.8;margin-bottom:12px">
         {% if lang == 'ar' %}
         <ul style="padding-right:18px;margin:0">
-          <li>الالتزام بالمحافظة على نظافة القاعة وترتيبها.</li>
-          <li>تحمّل المسؤولية الكاملة عن أي أضرار أو تخريب يحدث خلال فترة الحجز.</li>
-          <li>الالتزام بتسديد تكاليف أي أضرار تلحق بالمرافق أو التجهيزات.</li>
-          <li>الالتزام بأوقات الحجز المحددة وإخلاء القاعة في الموعد المقرر.</li>
-          <li>احترام أنظمة وتعليمات الجمعية الثقافية العربية.</li>
+          <li>الالتزام بالمحافظة على العربة والأجهزة وإعادتها بالحالة نفسها.</li>
+          <li>تحمّل المسؤولية الكاملة عن أي أضرار أو تلف يحدث خلال فترة الاستخدام.</li>
+          <li>الالتزام بموعد الحصة المحدد وعدم تجاوزه.</li>
+          <li>إبلاغ الإدارة فوراً عن أي عطل أو خلل في الأجهزة.</li>
+          <li>احترام أنظمة وتعليمات المدرسة.</li>
         </ul>
         {% else %}
         <ul style="padding-left:18px;margin:0">
-          <li>Maintain cleanliness and order of the venue.</li>
-          <li>Bear full responsibility for any damage or vandalism during the booking period.</li>
-          <li>Cover the costs of any damage to facilities or equipment.</li>
-          <li>Adhere to the specified booking times and vacate the venue on time.</li>
-          <li>Respect the regulations and instructions of the Arab Cultural Society.</li>
+          <li>Maintain the trolley and its laptops, and return them in the same condition.</li>
+          <li>Bear full responsibility for any damage during the usage period.</li>
+          <li>Keep to the assigned period and not exceed it.</li>
+          <li>Report any device fault or issue to the administration immediately.</li>
+          <li>Respect the school's regulations and instructions.</li>
         </ul>
         {% endif %}
       </div>
@@ -226,9 +177,9 @@
         <input type="checkbox" id="policyAgree" style="width:18px;height:18px;margin-top:2px;flex-shrink:0;accent-color:var(--primary)">
         <span>
           {% if lang == 'ar' %}
-          أوافق على سياسة وأنظمة حجز القاعات في الجمعية الثقافية العربية، وأتحمل المسؤولية الكاملة عن الالتزام بها.
+          أوافق على سياسة استخدام عربات الحواسيب، وأتحمل المسؤولية الكاملة عن الالتزام بها.
           {% else %}
-          I agree to the venue booking policy of the Arab Cultural Society and take full responsibility for compliance.
+          I agree to the laptop trolley usage policy and take full responsibility for compliance.
           {% endif %}
         </span>
       </label>
@@ -246,106 +197,62 @@
 <script>
 const LANG = '{{ lang }}';
 const AR = LANG === 'ar';
-// Hall info
-const AR2 = '{{ lang }}' === 'ar';
-function showHallInfo(val) {
-  const card = document.getElementById('hallInfoCard');
-  if (!val) { card.style.display='none'; return; }
-  const opt = document.querySelector('#hall option[value="'+val+'"]');
-  if (!opt) { card.style.display='none'; return; }
-  document.getElementById('hiName').textContent = val + (opt.dataset.nameEn ? ' / '+opt.dataset.nameEn : '');
-  const details = [];
-  if (opt.dataset.capacity)  details.push(['<i class="fas fa-users"></i>', AR2?'السعة':'Capacity', opt.dataset.capacity]);
-  if (opt.dataset.location)  details.push(['<i class="fas fa-map-marker-alt"></i>', AR2?'الموقع':'Location', opt.dataset.location]);
-  if (opt.dataset.equipment) details.push(['<i class="fas fa-tools"></i>', AR2?'التجهيزات':'Equipment', opt.dataset.equipment]);
-  if (opt.dataset.notes)     details.push(['<i class="fas fa-sticky-note"></i>', AR2?'ملاحظات':'Notes', opt.dataset.notes]);
-  document.getElementById('hiDetails').innerHTML = details.map(([icon,label,val]) =>
-    '<div style="display:flex;align-items:flex-start;gap:6px"><span style="color:var(--primary)">'+icon+'</span><div><div style="font-weight:700;color:var(--muted);font-size:.75rem">'+label+'</div><div style="font-weight:600">'+val+'</div></div></div>'
-  ).join('');
-  document.getElementById('hiDesc').textContent = opt.dataset.description || '';
-  document.getElementById('hiApproval').style.display = opt.dataset.approval==='True' ? 'block' : 'none';
+let STRUCTURE = [];
 
-  // Pricing
-  const ph  = opt.dataset.priceHour;
-  const pfd = opt.dataset.pricefullDay || opt.dataset.priceFullDay;
-  const pmd = opt.dataset.pricemultiDay || opt.dataset.priceMultiDay;
-  const pn  = opt.dataset.priceNotes;
-  const priceLines = [];
-  if (ph)  priceLines.push('<span style="background:#e8f4f5;padding:3px 10px;border-radius:6px;font-weight:700">⏰ ' + ph + ' JOD/ساعة</span>');
-  if (pfd) priceLines.push('<span style="background:#e8f4f5;padding:3px 10px;border-radius:6px;font-weight:700">🌙 ' + pfd + ' JOD/يوم كامل</span>');
-  if (pmd) priceLines.push('<span style="background:#e8f4f5;padding:3px 10px;border-radius:6px;font-weight:700">📅 ' + pmd + ' JOD/يوم (متعدد)</span>');
-  const priceEl = document.getElementById('hiPricing');
-  if (priceLines.length) {
-    priceEl.innerHTML = '<div style="font-weight:700;color:var(--primary);margin-bottom:6px;font-size:.85rem"><i class="fas fa-tag"></i> الأسعار</div>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap">' + priceLines.join('') + '</div>' +
-      (pn ? '<div style="font-size:.78rem;color:var(--muted);margin-top:4px">'+pn+'</div>' : '');
-    priceEl.style.display = 'block';
-  } else {
-    priceEl.style.display = 'none';
-  }
-
-  card.style.display = 'block';
-  calcPrice();
+async function loadStructure() {
+  const res = await fetch('/api/structure');
+  STRUCTURE = await res.json();
+  const stageSel = document.getElementById('stageSel');
+  stageSel.innerHTML = `<option value="">${AR ? '-- اختر المرحلة --' : '-- Select Stage --'}</option>` +
+    STRUCTURE.map(s => `<option value="${s.id}">${AR ? s.nameAr : (s.nameEn||s.nameAr)}</option>`).join('');
 }
 
-function calcPrice() {
-  const hallSel = document.getElementById('hall');
-  const opt = hallSel ? hallSel.options[hallSel.selectedIndex] : null;
-  const estEl = document.getElementById('hiEstimate');
-  const estVal = document.getElementById('hiEstimateVal');
-  if (!opt || !opt.value || !estEl) return;
+function onStageChange() {
+  const stageId = document.getElementById('stageSel').value;
+  const gradeSel = document.getElementById('gradeSel');
+  const sectionSel = document.getElementById('sectionSel');
+  sectionSel.innerHTML = `<option value="">${AR ? '-- اختر الشعبة --' : '-- Select Section --'}</option>`;
+  sectionSel.disabled = true;
 
-  const ph  = parseFloat(opt.dataset.priceHour) || 0;
-  const pfd = parseFloat(opt.dataset.pricefullDay || opt.dataset.priceFullDay) || 0;
-  const pmd = parseFloat(opt.dataset.pricemultiDay || opt.dataset.priceMultiDay) || 0;
+  const stage = STRUCTURE.find(s => String(s.id) === stageId);
+  showTrolleyInfo(stage);
 
-  if (!ph && !pfd && !pmd) { estEl.style.display='none'; return; }
-
-  const fullDay  = document.getElementById('fullDay')?.checked;
-  const multiDay = document.getElementById('multiDay')?.checked;
-  const startT   = document.getElementById('startTime')?.value;
-  const endT     = document.getElementById('endTime')?.value;
-  const bdate    = document.getElementById('bdate')?.value;
-  const endDate  = document.getElementById('endDate')?.value;
-
-  let amount = 0;
-  let label  = '';
-
-  if (multiDay && bdate && endDate && pmd) {
-    const d1 = new Date(bdate), d2 = new Date(endDate);
-    const days = Math.max(1, Math.round((d2-d1)/(1000*60*60*24)) + 1);
-    amount = pmd * days;
-    label = days + ' يوم × ' + pmd + ' JOD';
-  } else if (fullDay && pfd) {
-    amount = pfd;
-    label = 'يوم كامل';
-  } else if (!fullDay && startT && endT && ph) {
-    const [sh,sm] = startT.split(':').map(Number);
-    const [eh,em] = endT.split(':').map(Number);
-    const hours = Math.max(0, (eh*60+em - sh*60-sm) / 60);
-    amount = Math.round(hours * ph * 100) / 100;
-    label = hours.toFixed(1) + ' ساعة × ' + ph + ' JOD';
+  if (!stage) {
+    gradeSel.innerHTML = `<option value="">${AR ? '-- اختر الصف --' : '-- Select Grade --'}</option>`;
+    gradeSel.disabled = true;
+    return;
   }
+  gradeSel.innerHTML = `<option value="">${AR ? '-- اختر الصف --' : '-- Select Grade --'}</option>` +
+    stage.grades.map(g => `<option value="${g.id}">${AR ? g.nameAr : (g.nameEn||g.nameAr)}</option>`).join('');
+  gradeSel.disabled = false;
+}
 
-  if (amount > 0) {
-    estVal.textContent = amount.toFixed(2) + ' JOD';
-    estEl.title = label;
-    estEl.style.display = 'block';
-  } else {
-    estEl.style.display = 'none';
+function onGradeChange() {
+  const stageId = document.getElementById('stageSel').value;
+  const gradeId = document.getElementById('gradeSel').value;
+  const sectionSel = document.getElementById('sectionSel');
+  const stage = STRUCTURE.find(s => String(s.id) === stageId);
+  const grade = stage ? stage.grades.find(g => String(g.id) === gradeId) : null;
+
+  if (!grade) {
+    sectionSel.innerHTML = `<option value="">${AR ? '-- اختر الشعبة --' : '-- Select Section --'}</option>`;
+    sectionSel.disabled = true;
+    return;
   }
+  sectionSel.innerHTML = `<option value="">${AR ? '-- اختر الشعبة --' : '-- Select Section --'}</option>` +
+    grade.sections.map(sec => `<option value="${sec.id}">${AR ? sec.nameAr : (sec.nameEn||sec.nameAr)}</option>`).join('');
+  sectionSel.disabled = false;
+}
+
+function showTrolleyInfo(stage) {
+  const box = document.getElementById('trolleyInfo');
+  const txt = document.getElementById('trolleyInfoText');
+  if (!stage) { box.style.display = 'none'; return; }
+  txt.textContent = (AR ? 'العربة المخصصة لهذه المرحلة: ' : 'Trolley assigned to this stage: ') + stage.trolleyCode;
+  box.style.display = 'flex';
 }
 
 let selectedFiles = [];
-
-function toggleFullDay() {
-  const fd = document.getElementById('fullDay').checked;
-  document.getElementById('timeWrap').style.display = fd ? 'none' : 'block';
-}
-function toggleMultiDay() {
-  const md = document.getElementById('multiDay').checked;
-  document.getElementById('endDateWrap').style.display = md ? 'block' : 'none';
-}
 
 function addFiles(files) {
   for (const f of files) selectedFiles.push(f);
@@ -370,9 +277,7 @@ function renderFiles() {
 function showAlert(msg, type) {
   const box = document.getElementById('alertBox');
   box.innerHTML = `<div class="alert alert-${type}" style="animation:slideIn .3s ease"><i class="fas fa-${type==='error'?'exclamation-circle':'check-circle'}"></i> ${msg}</div>`;
-  // Scroll to alert
   box.scrollIntoView({behavior: 'smooth', block: 'center'});
-  // Also show floating toast
   showToast(msg, type);
 }
 function clearAlert() { document.getElementById('alertBox').innerHTML = ''; }
@@ -400,29 +305,20 @@ function showToast(msg, type) {
 async function submitBooking() {
   clearAlert();
   if (!document.getElementById('policyAgree').checked) {
-    showAlert(AR ? 'يجب الموافقة على سياسة الحجز أولاً' : 'You must agree to the booking policy first');
+    showAlert(AR ? 'يجب الموافقة على سياسة الاستخدام أولاً' : 'You must agree to the usage policy first');
     return;
   }
   const btn = document.getElementById('submitBtn');
   const name  = document.getElementById('fullName').value.trim();
   const email = document.getElementById('email').value.trim();
-  const title = document.getElementById('eventTitle').value.trim();
-  const hall  = document.getElementById('hall').value;
+  const stageId   = document.getElementById('stageSel').value;
+  const gradeId   = document.getElementById('gradeSel').value;
+  const sectionId = document.getElementById('sectionSel').value;
+  const periodId  = document.getElementById('periodSel').value;
   const bdate = document.getElementById('bookingDate').value;
 
-  if (!name || !email || !title || !hall || !bdate) {
+  if (!name || !email || !stageId || !gradeId || !sectionId || !periodId || !bdate) {
     showAlert(AR ? 'يرجى ملء جميع الحقول الإلزامية' : 'Please fill all required fields', 'error');
-    return;
-  }
-
-  const fullDay  = document.getElementById('fullDay').checked;
-  const multiDay = document.getElementById('multiDay').checked;
-  const endDate  = multiDay ? document.getElementById('endDate').value || bdate : bdate;
-  const startTime= fullDay ? '' : document.getElementById('startTime').value;
-  const endTime  = fullDay ? '' : document.getElementById('endTime').value;
-
-  if (!fullDay && startTime >= endTime) {
-    showAlert(AR ? 'وقت النهاية يجب أن يكون بعد وقت البداية' : 'End time must be after start time', 'error');
     return;
   }
 
@@ -434,14 +330,12 @@ async function submitBooking() {
     fd.append('fullName', name);
     fd.append('email', email);
     fd.append('phone', document.getElementById('phone').value.trim());
-    fd.append('onBehalf', document.getElementById('onBehalf').value.trim());
-    fd.append('eventTitle', title);
-    fd.append('hall', hall);
+    fd.append('eventTitle', document.getElementById('eventTitle').value.trim());
+    fd.append('stageId', stageId);
+    fd.append('gradeId', gradeId);
+    fd.append('sectionId', sectionId);
+    fd.append('periodId', periodId);
     fd.append('bookingDate', bdate);
-    fd.append('endDate', endDate);
-    fd.append('startTime', startTime);
-    fd.append('endTime', endTime);
-    fd.append('fullDay', fullDay ? 'true' : 'false');
     fd.append('notes', document.getElementById('notes').value.trim());
     for (const f of selectedFiles) fd.append('attachments', f);
 
@@ -467,5 +361,7 @@ async function submitBooking() {
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+loadStructure();
 </script>
 {% endblock %}

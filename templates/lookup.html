@@ -47,30 +47,36 @@
       <input type="tel" id="ePhone" dir="ltr">
     </div>
     <div class="form-group">
-      <label>{{ 'عنوان المناسبة' if lang == 'ar' else 'Event Title' }}</label>
+      <label>{{ 'المادة / الغرض' if lang == 'ar' else 'Subject / Purpose' }}</label>
       <input type="text" id="eTitle">
     </div>
     <div class="form-group">
-      <label>{{ 'القاعة' if lang == 'ar' else 'Venue' }}</label>
-      <select id="eHall">
-        {% for h in halls %}
-        <option value="{{ h.name_ar }}">{{ h.name_ar }}</option>
+      <label>{{ 'المرحلة' if lang == 'ar' else 'Stage' }}</label>
+      <select id="eStage" onchange="onEStageChange()">
+        {% for s in stages %}
+        <option value="{{ s.id }}">{{ s.name_ar }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>{{ 'الصف' if lang == 'ar' else 'Grade' }}</label>
+      <select id="eGrade" onchange="onEGradeChange()"></select>
+    </div>
+    <div class="form-group">
+      <label>{{ 'الشعبة' if lang == 'ar' else 'Section' }}</label>
+      <select id="eSection"></select>
+    </div>
+    <div class="form-group">
+      <label>{{ 'الحصة' if lang == 'ar' else 'Period' }}</label>
+      <select id="ePeriod">
+        {% for p in periods %}
+        <option value="{{ p.id }}">{{ p.label_ar or ('الحصة ' ~ p.number) }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="form-group">
       <label>{{ 'تاريخ الحجز' if lang == 'ar' else 'Date' }}</label>
       <input type="date" id="eDate">
-    </div>
-    <div class="form-group" style="display:flex;gap:12px">
-      <div style="flex:1">
-        <label>{{ 'من' if lang == 'ar' else 'From' }}</label>
-        <input type="time" id="eStart">
-      </div>
-      <div style="flex:1">
-        <label>{{ 'إلى' if lang == 'ar' else 'To' }}</label>
-        <input type="time" id="eEnd">
-      </div>
     </div>
     <div class="form-group">
       <label>{{ 'ملاحظات' if lang == 'ar' else 'Notes' }}</label>
@@ -91,6 +97,13 @@
 const LANG = '{{ lang }}';
 const AR = LANG === 'ar';
 let currentBooking = null;
+let STRUCTURE = [];
+
+async function loadStructure() {
+  const res = await fetch('/api/structure');
+  STRUCTURE = await res.json();
+}
+loadStructure();
 
 function showAlert(id, msg, type) {
   document.getElementById(id).innerHTML =
@@ -132,8 +145,8 @@ async function doLookup() {
 }
 
 function renderResult(b) {
-  const timeStr = b.fullDay ? (AR ? 'يوم كامل' : 'Full Day') : `${b.startTime} - ${b.endTime}`;
-  const dateStr = b.endDate && b.endDate !== b.date ? `${b.date} — ${b.endDate}` : b.date;
+  const classLabel = [b.stage, b.grade, b.section].filter(Boolean).join(' - ');
+  const periodLabel = b.periodNumber ? (AR ? 'الحصة ' + b.periodNumber : 'Period ' + b.periodNumber) : '';
   const statusLabels = {
     approved: AR ? 'معتمد' : 'Approved',
     pending:  AR ? 'قيد المراجعة' : 'Pending',
@@ -147,10 +160,10 @@ function renderResult(b) {
     <table style="width:100%;border-collapse:collapse">
       ${row(AR?'الاسم':'Name', b.name)}
       ${row(AR?'البريد':'Email', b.email)}
-      ${row(AR?'المناسبة':'Event', b.title)}
-      ${row(AR?'القاعة':'Venue', b.hall)}
-      ${row(AR?'التاريخ':'Date', dateStr)}
-      ${row(AR?'الوقت':'Time', timeStr)}
+      ${b.title ? row(AR?'المادة / الغرض':'Subject', b.title) : ''}
+      ${row(AR?'المرحلة / الصف / الشعبة':'Stage/Grade/Section', classLabel)}
+      ${row(AR?'الحصة':'Period', periodLabel)}
+      ${row(AR?'التاريخ':'Date', b.date)}
       ${b.rejectReason ? row(AR?'سبب الرفض':'Reject Reason', `<span style="color:#c0392b">${esc(b.rejectReason)}</span>`) : ''}
     </table>`;
 
@@ -172,15 +185,34 @@ function row(label, val) {
   </tr>`;
 }
 
+function onEStageChange() {
+  const stageId = document.getElementById('eStage').value;
+  const stage = STRUCTURE.find(s => String(s.id) === stageId);
+  const gradeSel = document.getElementById('eGrade');
+  gradeSel.innerHTML = stage ? stage.grades.map(g => `<option value="${g.id}">${g.nameAr}</option>`).join('') : '';
+  onEGradeChange();
+}
+function onEGradeChange() {
+  const stageId = document.getElementById('eStage').value;
+  const gradeId = document.getElementById('eGrade').value;
+  const stage = STRUCTURE.find(s => String(s.id) === stageId);
+  const grade = stage ? stage.grades.find(g => String(g.id) === gradeId) : null;
+  const sectionSel = document.getElementById('eSection');
+  sectionSel.innerHTML = grade ? grade.sections.map(s => `<option value="${s.id}">${s.nameAr}</option>`).join('') : '';
+}
+
 function showEdit() {
   const b = currentBooking;
   document.getElementById('eName').value  = b.name;
   document.getElementById('ePhone').value = b.phone;
   document.getElementById('eTitle').value = b.title;
-  document.getElementById('eHall').value  = b.hall;
+  if (b.stageId) document.getElementById('eStage').value = b.stageId;
+  onEStageChange();
+  if (b.gradeId) document.getElementById('eGrade').value = b.gradeId;
+  onEGradeChange();
+  if (b.sectionId) document.getElementById('eSection').value = b.sectionId;
+  if (b.periodId) document.getElementById('ePeriod').value = b.periodId;
   document.getElementById('eDate').value  = b.date;
-  document.getElementById('eStart').value = b.startTime;
-  document.getElementById('eEnd').value   = b.endTime;
   document.getElementById('eNotes').value = b.notes;
   document.getElementById('editWrap').style.display = 'block';
   document.getElementById('editWrap').scrollIntoView({behavior:'smooth'});
@@ -198,10 +230,11 @@ async function doAmend() {
   fd.append('fullName', document.getElementById('eName').value.trim());
   fd.append('phone',    document.getElementById('ePhone').value.trim());
   fd.append('eventTitle', document.getElementById('eTitle').value.trim());
-  fd.append('hall',     document.getElementById('eHall').value);
+  fd.append('stageId',   document.getElementById('eStage').value);
+  fd.append('gradeId',   document.getElementById('eGrade').value);
+  fd.append('sectionId', document.getElementById('eSection').value);
+  fd.append('periodId',  document.getElementById('ePeriod').value);
   fd.append('bookingDate', document.getElementById('eDate').value);
-  fd.append('startTime',   document.getElementById('eStart').value);
-  fd.append('endTime',     document.getElementById('eEnd').value);
   fd.append('notes',    document.getElementById('eNotes').value.trim());
 
   try {

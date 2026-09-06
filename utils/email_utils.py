@@ -35,16 +35,18 @@ def _send(to_email, to_name, subject, html_body, bcc_list=None):
         return False
 
 
-def _date_label(date_str, end_date_str=None, full_day=False, start_time='', end_time=''):
+def _date_label(date_str, start_time='', end_time=''):
     """Build human-readable date/time label in Arabic."""
     label = date_str or ''
-    if end_date_str and end_date_str != date_str:
-        label += f' — {end_date_str}'
-    if not full_day and start_time and end_time:
+    if start_time and end_time:
         label += f'  ({start_time} - {end_time})'
-    elif full_day:
-        label += '  (يوم كامل)'
     return label
+
+
+def _class_label(data):
+    """Build 'stage - grade - section' label."""
+    parts = [p for p in [data.get('stage'), data.get('grade'), data.get('section')] if p]
+    return ' - '.join(parts)
 
 
 def _base_html(content, color='#247680'):
@@ -58,22 +60,29 @@ def _base_html(content, color='#247680'):
   </div>
   <div style="padding:28px 24px;background:#fff">{content}</div>
   <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#888">
-    هذا البريد مُرسَل تلقائياً من نظام حجز القاعات — يُرجى عدم الرد عليه
+    هذا البريد مُرسَل تلقائياً من نظام حجز عربات الحواسيب — يُرجى عدم الرد عليه
   </div>
 </div>"""
 
 
+def _booking_table_rows(data, bg='#f0f7f8'):
+    date_label = _date_label(data.get('date'), data.get('startTime'), data.get('endTime'))
+    rows = f"""
+      <tr><td style="padding:8px;background:{bg};font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data.get('reqId','')}</strong></td></tr>
+      <tr><td style="padding:8px;background:{bg};font-weight:600">الموضوع</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
+      <tr><td style="padding:8px;background:{bg};font-weight:600">المرحلة / الصف / الشعبة</td><td style="padding:8px;border-bottom:1px solid #eee">{_class_label(data)}</td></tr>
+      <tr><td style="padding:8px;background:{bg};font-weight:600">الحصة</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('periodLabel','')}</td></tr>
+      <tr><td style="padding:8px;background:{bg};font-weight:600">التاريخ والوقت</td><td style="padding:8px">{date_label}</td></tr>
+    """
+    return rows
+
+
 def send_confirm(data):
-    date_label = _date_label(data.get('date'), data.get('endDate'),
-                              data.get('fullDay'), data.get('startTime'), data.get('endTime'))
     content = f"""
     <h2 style="color:#247680;margin-top:0">✅ تم استلام طلب حجزك</h2>
-    <p>شكراً <strong>{data['name']}</strong>، تم استلام طلب حجزك وهو قيد المراجعة.</p>
+    <p>شكراً <strong>{data['name']}</strong>، تم استلام طلب حجز عربة الحواسيب وهو قيد المراجعة.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data['reqId']}</strong></td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">المناسبة</td><td style="padding:8px;border-bottom:1px solid #eee">{data['title']}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">القاعة</td><td style="padding:8px;border-bottom:1px solid #eee">{data['hall']}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">التاريخ والوقت</td><td style="padding:8px">{date_label}</td></tr>
+      {_booking_table_rows(data)}
     </table>
     <p style="color:#555">سيتم إشعارك بقرار الإدارة في أقرب وقت ممكن. احتفظ برقم الطلب للاستعلام والتعديل.</p>
     """
@@ -82,24 +91,14 @@ def send_confirm(data):
                  _base_html(content))
 
 
-def _format_price(amount):
-    if amount is None:
-        return ''
-    return f'{amount:.2f} JOD'
-
 def send_approve(data):
-    date_label = _date_label(data.get('date'), data.get('endDate'),
-                              data.get('fullDay'), data.get('startTime'), data.get('endTime'))
     content = f"""
     <h2 style="color:#27ae60;margin-top:0">✅ تمت الموافقة على حجزك</h2>
-    <p>عزيزي <strong>{data['name']}</strong>، يسعدنا إخبارك بأنه تمت الموافقة على طلب حجزك.</p>
+    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، يسعدنا إخبارك بأنه تمت الموافقة على طلب حجز العربة.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data['reqId']}</strong></td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">المناسبة</td><td style="padding:8px;border-bottom:1px solid #eee">{data['title']}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">القاعة</td><td style="padding:8px;border-bottom:1px solid #eee">{data['hall']}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">التاريخ والوقت</td><td style="padding:8px">{date_label}</td></tr>
+      {_booking_table_rows(data)}
     </table>
-    <p style="color:#555">نتمنى لكم تجربة ممتازة. في حال الحاجة لأي تعديل يُرجى التواصل معنا.</p>
+    <p style="color:#555">نتمنى لكم حصة مفيدة. في حال الحاجة لأي تعديل يُرجى التواصل معنا.</p>
     """
     return _send(data['email'], data['name'],
                  f"[ACS] ✅ تمت الموافقة على حجزك #{data['reqId']}",
@@ -110,13 +109,13 @@ def send_approve(data):
 def send_reject(data):
     content = f"""
     <h2 style="color:#c0392b;margin-top:0">❌ اعتذار — تعذّر اعتماد طلب الحجز</h2>
-    <p>عزيزي <strong>{data['name']}</strong>، نأسف لإخبارك بأنه تعذّر اعتماد طلب حجزك.</p>
+    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، نأسف لإخبارك بأنه تعذّر اعتماد طلب حجزك.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">
       <tr><td style="padding:8px;background:#fdf0f0;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee">{data['reqId']}</td></tr>
-      <tr><td style="padding:8px;background:#fdf0f0;font-weight:600">المناسبة</td><td style="padding:8px;border-bottom:1px solid #eee">{data['title']}</td></tr>
+      <tr><td style="padding:8px;background:#fdf0f0;font-weight:600">الموضوع</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
       <tr><td style="padding:8px;background:#fdf0f0;font-weight:600">سبب الرفض</td><td style="padding:8px;color:#c0392b;font-weight:600">{data.get('reason','')}</td></tr>
     </table>
-    <p style="color:#555">يمكنك تقديم طلب جديد باختيار تاريخ أو وقت آخر. نعتذر عن الإزعاج.</p>
+    <p style="color:#555">يمكنك تقديم طلب جديد باختيار تاريخ أو حصة أخرى. نعتذر عن الإزعاج.</p>
     """
     return _send(data['email'], data['name'],
                  f"[ACS] بخصوص طلب الحجز #{data['reqId']}",
@@ -126,11 +125,11 @@ def send_reject(data):
 def send_cancel(data):
     content = f"""
     <h2 style="color:#e67e22;margin-top:0">🚫 تم إلغاء الحجز</h2>
-    <p>عزيزي <strong>{data['name']}</strong>، تم إلغاء طلب الحجز التالي.</p>
+    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، تم إلغاء طلب الحجز التالي.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">
       <tr><td style="padding:8px;background:#fef9f0;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee">{data['reqId']}</td></tr>
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">المناسبة</td><td style="padding:8px;border-bottom:1px solid #eee">{data['title']}</td></tr>
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">القاعة</td><td style="padding:8px">{data['hall']}</td></tr>
+      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">الموضوع</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
+      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">المرحلة / الصف / الشعبة</td><td style="padding:8px">{_class_label(data)}</td></tr>
     </table>
     """
     return _send(data['email'], data['name'],
@@ -139,16 +138,11 @@ def send_cancel(data):
 
 
 def send_update(data):
-    date_label = _date_label(data.get('date'), data.get('endDate'),
-                              data.get('fullDay'), data.get('startTime'), data.get('endTime'))
     content = f"""
     <h2 style="color:#247680;margin-top:0">✏️ تم تعديل بيانات الحجز</h2>
-    <p>عزيزي <strong>{data['name']}</strong>، تم تعديل بيانات طلب حجزك.</p>
+    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، تم تعديل بيانات طلب حجزك.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data['reqId']}</strong></td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">المناسبة</td><td style="padding:8px;border-bottom:1px solid #eee">{data['title']}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">القاعة</td><td style="padding:8px;border-bottom:1px solid #eee">{data['hall']}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">التاريخ والوقت</td><td style="padding:8px">{date_label}</td></tr>
+      {_booking_table_rows(data)}
     </table>
     <p style="color:#555">إذا تم التعديل على حجز معتمد، سيُعاد الحجز إلى قيد المراجعة وسيتم إخطارك بالقرار.</p>
     """
@@ -159,15 +153,11 @@ def send_update(data):
 
 
 def send_pending(data):
-    date_label = _date_label(data.get('date'), data.get('endDate'))
     content = f"""
     <h2 style="color:#e67e22;margin-top:0">🔄 إعادة الحجز لقيد المراجعة</h2>
-    <p>عزيزي <strong>{data['name']}</strong>، تم إعادة طلب حجزك إلى قيد المراجعة.</p>
+    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، تم إعادة طلب حجزك إلى قيد المراجعة.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee">{data['reqId']}</td></tr>
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">المناسبة</td><td style="padding:8px;border-bottom:1px solid #eee">{data['title']}</td></tr>
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">القاعة</td><td style="padding:8px;border-bottom:1px solid #eee">{data['hall']}</td></tr>
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">التاريخ</td><td style="padding:8px">{date_label}</td></tr>
+      {_booking_table_rows(data, bg='#fef9f0')}
     </table>
     """
     return _send(data['email'], data['name'],
@@ -191,11 +181,6 @@ def send_staff_notification(event_type, data, contacts):
     }
     icon, color, title = icons.get(event_type, ('📌', '#247680', 'إشعار حجز'))
 
-    date_label = _date_label(
-        data.get('date'), data.get('endDate'),
-        data.get('fullDay'), data.get('startTime'), data.get('endTime')
-    )
-
     content = f"""
     <h2 style="color:{color};margin-top:0">{icon} {title}</h2>
 
@@ -203,9 +188,10 @@ def send_staff_notification(event_type, data, contacts):
       <tr><td style="padding:8px;background:#f0f7f8;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data.get('reqId','')}</strong></td></tr>
       <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">مقدم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('name','')}</td></tr>
       <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">البريد</td><td style="padding:8px;border-bottom:1px solid #eee" dir="ltr">{data.get('email','')}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">المناسبة</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title','')}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">القاعة</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('hall','')}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">التاريخ والوقت</td><td style="padding:8px;border-bottom:1px solid #eee">{date_label}</td></tr>
+      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">الموضوع</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
+      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">المرحلة / الصف / الشعبة</td><td style="padding:8px;border-bottom:1px solid #eee">{_class_label(data)}</td></tr>
+      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">الحصة</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('periodLabel','')}</td></tr>
+      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">التاريخ</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('date','')}</td></tr>
       {f'<tr><td style="padding:8px;background:#fdf0f0;font-weight:600">سبب الرفض</td><td style="padding:8px;color:#c0392b;font-weight:600">{data.get("reason","")}</td></tr>' if data.get("reason") else ""}
     </table>
 

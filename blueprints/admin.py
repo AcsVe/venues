@@ -2,7 +2,7 @@ from datetime import datetime, date
 from functools import wraps
 from flask import (Blueprint, render_template, request, jsonify,
                    session, redirect, url_for, current_app)
-from models import db, Booking, Hall, BlockedPeriod, Contact
+from models import db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
                             get_all_contact_emails, check_conflict, check_blocked)
 from utils.email_utils import (send_approve, send_reject, send_cancel,
@@ -13,6 +13,20 @@ admin_bp = Blueprint('admin', __name__)
 def _get_contacts():
     from models import Contact
     return [{'email': c.email} for c in Contact.query.all()]
+
+
+def _booking_email_ctx(b, **extra):
+    ctx = {
+        'reqId': b.req_id, 'name': b.name, 'email': b.email,
+        'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
+        'section': b.section_name, 'date': b.booking_date,
+        'startTime': b.start_time, 'endTime': b.end_time,
+    }
+    period = Period.query.get(b.period_id) if b.period_id else None
+    ctx['periodLabel'] = (period.label_ar if period else None) or (
+        f'الحصة {b.period_number}' if b.period_number else '')
+    ctx.update(extra)
+    return ctx
 
 
 # ── Auth decorator ────────────────────────────────────────────────────────
@@ -68,7 +82,6 @@ def api_bookings():
 @login_required
 def api_stats():
     today = date.today().strftime('%Y-%m-%d')
-    week_start = date.today().strftime('%Y-%m-%d')  # simplified
 
     total   = Booking.query.count()
     pending = Booking.query.filter_by(status='pending').count()
@@ -76,12 +89,12 @@ def api_stats():
     rejected= Booking.query.filter_by(status='rejected').count()
     cancelled=Booking.query.filter_by(status='cancelled').count()
     today_c = Booking.query.filter_by(booking_date=today).count()
-    halls_c = Hall.query.filter_by(active=True).count()
+    stages_c = Stage.query.filter_by(active=True).count()
 
     return jsonify({
         'total': total, 'pending': pending, 'approved': approved,
         'rejected': rejected, 'cancelled': cancelled,
-        'today': today_c, 'halls': halls_c,
+        'today': today_c, 'halls': stages_c,
     })
 
 
@@ -90,7 +103,6 @@ def api_stats():
 def api_approve():
     data   = request.get_json(silent=True) or {}
     req_id = data.get('reqId', '')
-    extra  = data.get('extraBcc', '')
 
     b = Booking.query.filter_by(req_id=req_id).first()
     if not b:
@@ -98,46 +110,11 @@ def api_approve():
 
     b.status      = 'approved'
     b.action_date = datetime.utcnow()
-
-    # Auto-calculate invoice amount
-    if b.invoice_amount is None:
-        hall = Hall.query.filter_by(name_ar=b.hall).first()
-        if hall:
-            try:
-                from datetime import datetime as dt
-                # Multi-day
-                if b.end_date and b.end_date != b.booking_date:
-                    d1 = dt.strptime(b.booking_date, '%Y-%m-%d')
-                    d2 = dt.strptime(b.end_date, '%Y-%m-%d')
-                    days = (d2 - d1).days + 1
-                    if hall.price_multi_day:
-                        b.invoice_amount = round(hall.price_multi_day * days, 2)
-                # Full day
-                elif b.full_day:
-                    if hall.price_full_day:
-                        b.invoice_amount = round(hall.price_full_day, 2)
-                # Hourly
-                elif b.start_time and b.end_time:
-                    sh, sm = map(int, b.start_time.split(':'))
-                    eh, em = map(int, b.end_time.split(':'))
-                    hours = round((eh * 60 + em - sh * 60 - sm) / 60, 2)
-                    if hall.price_per_hour:
-                        b.invoice_amount = round(hall.price_per_hour * hours, 2)
-            except Exception:
-                pass
-
     db.session.commit()
 
-    end = b.end_date or b.booking_date
     try:
-        send_staff_notification('approve', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date, 'endDate': b.end_date, 'startTime': b.start_time, 'endTime': b.end_time, 'fullDay': b.full_day}, _get_contacts())
-        send_approve({'reqId': req_id, 'name': b.name, 'email': b.email,
-                      'title': b.event_title, 'hall': b.hall,
-                      'date': b.booking_date, 'endDate': end,
-                      'startTime': b.start_time, 'endTime': b.end_time,
-                      'fullDay': b.full_day,
-                      'invoiceAmount': b.invoice_amount,
-                      'invoiceNotes': b.invoice_notes or ''})
+        send_staff_notification('approve', _booking_email_ctx(b), _get_contacts())
+        send_approve(_booking_email_ctx(b))
     except Exception:
         pass
 
@@ -161,7 +138,7 @@ def api_reject():
     db.session.commit()
 
     try:
-        send_staff_notification('reject', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date, 'reason': data.get('reason','')}, _get_contacts())
+        send_staff_notification('reject', _booking_email_ctx(b, reason=reason), _get_contacts())
         send_reject({'reqId': req_id, 'name': b.name, 'email': b.email,
                      'title': b.event_title, 'reason': reason})
     except Exception:
@@ -187,9 +164,8 @@ def api_cancel():
     db.session.commit()
 
     try:
-        send_staff_notification('cancel', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date}, _get_contacts())
-        send_cancel({'reqId': req_id, 'name': b.name, 'email': b.email,
-                     'title': b.event_title, 'hall': b.hall})
+        send_staff_notification('cancel', _booking_email_ctx(b), _get_contacts())
+        send_cancel(_booking_email_ctx(b))
     except Exception:
         pass
 
@@ -212,10 +188,8 @@ def api_set_pending():
     db.session.commit()
 
     try:
-        send_staff_notification('revert', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date}, _get_contacts())
-        send_pending({'reqId': req_id, 'name': b.name, 'email': b.email,
-                      'title': b.event_title, 'hall': b.hall,
-                      'date': b.booking_date, 'endDate': b.end_date or b.booking_date})
+        send_staff_notification('revert', _booking_email_ctx(b), _get_contacts())
+        send_pending(_booking_email_ctx(b))
     except Exception:
         pass
 
@@ -238,26 +212,42 @@ def api_update_booking():
     if not b:
         return jsonify({'success': False, 'error': 'غير موجود'}), 404
 
-    hall         = f.get('hall', b.hall)
     booking_date = f.get('bookingDate', b.booking_date)
-    end_date     = f.get('endDate') or booking_date
-    start_time   = f.get('startTime', b.start_time or '')
-    end_time     = f.get('endTime', b.end_time or '')
-    full_day     = f.get('fullDay') in (True, 'true', '1', 'on')
 
-    b.name         = f.get('name', b.name)
-    b.email        = sanitize_email(f.get('email', b.email))
-    b.phone        = f.get('phone', b.phone or '')
-    b.on_behalf    = f.get('behalf', b.on_behalf or '')
-    b.event_title  = f.get('title', b.event_title)
-    b.hall         = hall
-    b.booking_date = booking_date
-    b.end_date     = end_date
-    b.start_time   = start_time
-    b.end_time     = end_time
-    b.full_day     = full_day
-    b.notes        = f.get('notes', b.notes or '')
-    b.action_date  = datetime.utcnow()
+    stage_id   = f.get('stageId') or b.stage_id
+    grade_id   = f.get('gradeId') or b.grade_id
+    section_id = f.get('sectionId') or b.section_id
+    period_id  = f.get('periodId') or b.period_id
+    stage   = Stage.query.get(stage_id)
+    grade   = Grade.query.get(grade_id)
+    section = Section.query.get(section_id)
+    period  = Period.query.get(period_id)
+    if not (stage and grade and section and period):
+        return jsonify({'success': False, 'error': 'بيانات المرحلة/الصف/الشعبة/الحصة غير صحيحة'}), 400
+
+    conflict = check_conflict(stage.trolley_code, booking_date, period.number, req_id)
+    if conflict:
+        return jsonify({'success': False, 'error': conflict}), 400
+
+    b.name          = f.get('name', b.name)
+    b.email         = sanitize_email(f.get('email', b.email))
+    b.phone         = f.get('phone', b.phone or '')
+    b.on_behalf     = f.get('behalf', b.on_behalf or '')
+    b.event_title   = f.get('title', b.event_title or '')
+    b.booking_date  = booking_date
+    b.stage_id      = stage.id
+    b.grade_id      = grade.id
+    b.section_id    = section.id
+    b.period_id     = period.id
+    b.trolley_code  = stage.trolley_code
+    b.stage_name    = stage.name_ar
+    b.grade_name    = grade.name_ar
+    b.section_name  = section.name_ar
+    b.period_number = period.number
+    b.start_time    = period.start_time or ''
+    b.end_time      = period.end_time or ''
+    b.notes         = f.get('notes', b.notes or '')
+    b.action_date   = datetime.utcnow()
 
     for file_obj in files:
         if file_obj and file_obj.filename:
@@ -268,12 +258,8 @@ def api_update_booking():
     db.session.commit()
 
     try:
-        send_staff_notification('update', {'reqId': req_id, 'name': b.name, 'email': b.email, 'title': b.event_title, 'hall': b.hall, 'date': b.booking_date}, _get_contacts())
-        send_update({'reqId': req_id, 'name': b.name, 'email': b.email,
-                     'title': b.event_title, 'hall': b.hall,
-                     'date': booking_date, 'endDate': end_date,
-                     'startTime': start_time, 'endTime': end_time,
-                     'fullDay': full_day})
+        send_staff_notification('update', _booking_email_ctx(b), _get_contacts())
+        send_update(_booking_email_ctx(b))
     except Exception:
         pass
 
@@ -305,76 +291,168 @@ def api_bulk_delete():
     return jsonify({'success': True, 'count': len(ids)})
 
 
-# ── Halls API ─────────────────────────────────────────────────────────────
+# ── Academic structure API (stages / grades / sections / periods) ─────────
 @admin_bp.route('/api/halls')
 @login_required
 def api_halls():
-    halls = Hall.query.all()
-    return jsonify([h.to_dict() for h in halls])
+    """Kept at the same URL for compatibility with the dashboard JS.
+    Returns stages with their nested grades/sections."""
+    stages = Stage.query.order_by(Stage.sort_order).all()
+    return jsonify([s.to_dict(with_grades=True) for s in stages])
 
 
 @admin_bp.route('/api/add-hall', methods=['POST'])
 @login_required
-def api_add_hall():
+def api_add_stage():
     data = request.get_json(silent=True) or {}
     if not data.get('nameAr'):
-        return jsonify({'success': False, 'error': 'الاسم مطلوب'}), 400
-    h = Hall(
-        name_ar           = data['nameAr'],
-        name_en           = data.get('nameEn', ''),
-        location          = data.get('location', ''),
-        code              = data.get('code', ''),
-        capacity          = str(data.get('capacity', '')),
-        equipment         = data.get('equipment', ''),
-        description       = data.get('description', ''),
-        notes             = data.get('notes', ''),
-        requires_approval = bool(data.get('requiresApproval')),
-        active            = data.get('active', True) is not False,
-        price_per_hour    = float(data['pricePerHour']) if data.get('pricePerHour') else None,
-        price_full_day    = float(data['priceFullDay']) if data.get('priceFullDay') else None,
-        price_multi_day   = float(data['priceMultiDay']) if data.get('priceMultiDay') else None,
-        price_notes       = data.get('priceNotes', ''),
+        return jsonify({'success': False, 'error': 'اسم المرحلة مطلوب'}), 400
+    if not data.get('trolleyCode'):
+        return jsonify({'success': False, 'error': 'معرّف العربة (trolley) مطلوب'}), 400
+    if Stage.query.filter_by(trolley_code=data['trolleyCode']).first():
+        return jsonify({'success': False, 'error': 'معرّف العربة مستخدم مسبقاً'}), 400
+    s = Stage(
+        name_ar      = data['nameAr'],
+        name_en      = data.get('nameEn', ''),
+        trolley_code = data['trolleyCode'],
+        active       = data.get('active', True) is not False,
+        sort_order   = Stage.query.count(),
     )
-    db.session.add(h)
+    db.session.add(s)
     db.session.commit()
-    return jsonify({'success': True, 'id': h.id})
+    return jsonify({'success': True, 'id': s.id})
 
 
 @admin_bp.route('/api/update-hall', methods=['POST'])
 @login_required
-def api_update_hall():
+def api_update_stage():
     data = request.get_json(silent=True) or {}
-    h = Hall.query.get(data.get('id'))
-    if not h:
+    s = Stage.query.get(data.get('id'))
+    if not s:
         return jsonify({'success': False, 'error': 'غير موجود'}), 404
-    h.name_ar           = data.get('nameAr', h.name_ar)
-    h.name_en           = data.get('nameEn', h.name_en or '')
-    h.location          = data.get('location', h.location or '')
-    h.code              = data.get('code', h.code or '')
-    h.capacity          = str(data.get('capacity', h.capacity or ''))
-    h.equipment         = data.get('equipment', h.equipment or '')
-    h.description       = data.get('description', h.description or '')
-    h.notes             = data.get('notes', h.notes or '')
-    h.requires_approval = bool(data.get('requiresApproval'))
-    h.active            = data.get('active', True) is not False
-    if data.get('pricePerHour')  is not None: h.price_per_hour  = float(data['pricePerHour'])  if data['pricePerHour']  else None
-    if data.get('priceFullDay')  is not None: h.price_full_day  = float(data['priceFullDay'])  if data['priceFullDay']  else None
-    if data.get('priceMultiDay') is not None: h.price_multi_day = float(data['priceMultiDay']) if data['priceMultiDay'] else None
-    if data.get('priceNotes')    is not None: h.price_notes     = data['priceNotes']
+    if data.get('trolleyCode') and data['trolleyCode'] != s.trolley_code:
+        if Stage.query.filter_by(trolley_code=data['trolleyCode']).first():
+            return jsonify({'success': False, 'error': 'معرّف العربة مستخدم مسبقاً'}), 400
+        s.trolley_code = data['trolleyCode']
+    s.name_ar = data.get('nameAr', s.name_ar)
+    s.name_en = data.get('nameEn', s.name_en or '')
+    s.active  = data.get('active', True) is not False
     db.session.commit()
     return jsonify({'success': True})
 
 
 @admin_bp.route('/api/delete-hall', methods=['POST'])
 @login_required
-def api_delete_hall():
+def api_delete_stage():
     data = request.get_json(silent=True) or {}
-    h = Hall.query.get(data.get('id'))
-    if not h:
+    s = Stage.query.get(data.get('id'))
+    if not s:
         return jsonify({'success': False, 'error': 'غير موجود'}), 404
-    if Hall.query.filter_by(active=True).count() <= 1:
-        return jsonify({'success': False, 'error': 'لا يمكن حذف آخر قاعة'}), 400
-    db.session.delete(h)
+    if Stage.query.filter_by(active=True).count() <= 1:
+        return jsonify({'success': False, 'error': 'لا يمكن حذف آخر مرحلة'}), 400
+    db.session.delete(s)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/add-grade', methods=['POST'])
+@login_required
+def api_add_grade():
+    data = request.get_json(silent=True) or {}
+    if not data.get('nameAr') or not data.get('stageId'):
+        return jsonify({'success': False, 'error': 'اسم الصف والمرحلة مطلوبان'}), 400
+    g = Grade(stage_id=data['stageId'], name_ar=data['nameAr'], name_en=data.get('nameEn', ''),
+              sort_order=Grade.query.filter_by(stage_id=data['stageId']).count())
+    db.session.add(g)
+    db.session.commit()
+    return jsonify({'success': True, 'id': g.id})
+
+
+@admin_bp.route('/api/delete-grade', methods=['POST'])
+@login_required
+def api_delete_grade():
+    data = request.get_json(silent=True) or {}
+    g = Grade.query.get(data.get('id'))
+    if not g:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    db.session.delete(g)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/add-section', methods=['POST'])
+@login_required
+def api_add_section():
+    data = request.get_json(silent=True) or {}
+    if not data.get('nameAr') or not data.get('gradeId'):
+        return jsonify({'success': False, 'error': 'اسم الشعبة والصف مطلوبان'}), 400
+    sec = Section(grade_id=data['gradeId'], name_ar=data['nameAr'], name_en=data.get('nameEn', ''),
+                  sort_order=Section.query.filter_by(grade_id=data['gradeId']).count())
+    db.session.add(sec)
+    db.session.commit()
+    return jsonify({'success': True, 'id': sec.id})
+
+
+@admin_bp.route('/api/delete-section', methods=['POST'])
+@login_required
+def api_delete_section():
+    data = request.get_json(silent=True) or {}
+    sec = Section.query.get(data.get('id'))
+    if not sec:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    db.session.delete(sec)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/periods')
+@login_required
+def api_admin_periods():
+    periods = Period.query.order_by(Period.number).all()
+    return jsonify([p.to_dict() for p in periods])
+
+
+@admin_bp.route('/api/add-period', methods=['POST'])
+@login_required
+def api_add_period():
+    data = request.get_json(silent=True) or {}
+    try:
+        number = int(data.get('number'))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'رقم الحصة مطلوب'}), 400
+    if Period.query.filter_by(number=number).first():
+        return jsonify({'success': False, 'error': 'رقم الحصة مستخدم مسبقاً'}), 400
+    p = Period(number=number, label_ar=data.get('label') or f'الحصة {number}',
+               start_time=data.get('startTime', ''), end_time=data.get('endTime', ''),
+               active=data.get('active', True) is not False)
+    db.session.add(p)
+    db.session.commit()
+    return jsonify({'success': True, 'id': p.id})
+
+
+@admin_bp.route('/api/update-period', methods=['POST'])
+@login_required
+def api_update_period():
+    data = request.get_json(silent=True) or {}
+    p = Period.query.get(data.get('id'))
+    if not p:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    p.label_ar   = data.get('label', p.label_ar)
+    p.start_time = data.get('startTime', p.start_time or '')
+    p.end_time   = data.get('endTime', p.end_time or '')
+    p.active     = data.get('active', True) is not False
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/delete-period', methods=['POST'])
+@login_required
+def api_delete_period():
+    data = request.get_json(silent=True) or {}
+    p = Period.query.get(data.get('id'))
+    if not p:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    db.session.delete(p)
     db.session.commit()
     return jsonify({'success': True})
 
@@ -396,7 +474,7 @@ def api_add_blocked():
     blk = BlockedPeriod(
         from_date = data['fromDate'],
         to_date   = data['toDate'],
-        hall      = data.get('hall', ''),
+        hall      = data.get('hall', ''),   # trolley_code, or '' = all stages
         from_time = data.get('fromTime', ''),
         to_time   = data.get('toTime', ''),
         reason    = data.get('reason', ''),

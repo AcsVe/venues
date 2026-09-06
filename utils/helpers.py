@@ -27,42 +27,35 @@ def gen_req_id():
     return 'BK-' + uuid.uuid4().hex[:10].upper()
 
 
-def check_conflict(hall, booking_date, end_date, start_time, end_time, full_day, exclude_req_id=None):
-    """Returns error string if conflict found, else None."""
+def check_conflict(trolley_code, booking_date, period_number, exclude_req_id=None):
+    """A trolley can only be used by one class at a time: same trolley + same
+    date + same period = conflict. Returns an error string, or None."""
     from models import Booking
-    end = end_date or booking_date
     q = Booking.query.filter(
-        Booking.hall == hall,
+        Booking.trolley_code == trolley_code,
+        Booking.booking_date == booking_date,
+        Booking.period_number == period_number,
         Booking.status.notin_(['rejected', 'cancelled'])
     )
     if exclude_req_id:
         q = q.filter(Booking.req_id != exclude_req_id)
 
-    for b in q.all():
-        b_end = b.end_date or b.booking_date
-        # date range overlap?
-        if booking_date > b_end or end < b.booking_date:
-            continue
-        # full-day conflicts
-        if b.full_day:
-            return f'القاعة محجوزة يوم كامل في هذا التاريخ: {b.event_title}'
-        if full_day:
-            return f'لا يمكن الحجز يوم كامل، يوجد حجز في هذا التاريخ: {b.event_title}'
-        # time overlap
-        if start_time and end_time and b.start_time and b.end_time:
-            if start_time < b.end_time and end_time > b.start_time:
-                return f'القاعة محجوزة في هذا الوقت ({b.start_time} - {b.end_time}) بتاريخ {b.booking_date}'
+    existing = q.first()
+    if existing:
+        return (f'العربة محجوزة مسبقاً في هذه الحصة بتاريخ {booking_date} '
+                f'({existing.stage_name or ""} - {existing.grade_name or ""} {existing.section_name or ""})')
     return None
 
 
-def check_blocked(booking_date, start_time, end_time, hall_name):
-    """Returns {'blocked': bool, 'reason': str, 'fullBlock': bool}."""
+def check_blocked(booking_date, start_time, end_time, trolley_code):
+    """Returns {'blocked': bool, 'reason': str, 'fullBlock': bool}.
+    trolley_code may be '' to mean 'applies to all trolleys'."""
     from models import BlockedPeriod
     blocks = BlockedPeriod.query.all()
     for blk in blocks:
         if booking_date < blk.from_date or booking_date > blk.to_date:
             continue
-        if blk.hall and hall_name and blk.hall != hall_name:
+        if blk.hall and trolley_code and blk.hall != trolley_code:
             continue
         if not blk.from_time or not blk.to_time:
             return {'blocked': True, 'reason': blk.reason or 'فترة غير متاحة', 'fullBlock': True}

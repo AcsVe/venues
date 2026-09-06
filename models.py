@@ -13,25 +13,35 @@ class Booking(db.Model):
     email         = db.Column(db.String(200), nullable=False)
     phone         = db.Column(db.String(50))
     on_behalf     = db.Column(db.String(200))
-    event_title   = db.Column(db.String(300), nullable=False)
-    hall          = db.Column(db.String(200), nullable=False)
+    event_title   = db.Column(db.String(300))
     booking_date  = db.Column(db.String(10), nullable=False)   # yyyy-MM-dd
-    end_date      = db.Column(db.String(10))                   # yyyy-MM-dd
-    start_time    = db.Column(db.String(5))
-    end_time      = db.Column(db.String(5))
+
+    # ── Academic-structure fields (stage/grade/section/period) ─────────────
+    stage_id       = db.Column(db.Integer, db.ForeignKey('stages.id'))
+    grade_id       = db.Column(db.Integer, db.ForeignKey('grades.id'))
+    section_id     = db.Column(db.Integer, db.ForeignKey('sections.id'))
+    period_id      = db.Column(db.Integer, db.ForeignKey('periods.id'))
+    trolley_code   = db.Column(db.String(50))    # snapshot of the trolley identifier at booking time
+    stage_name     = db.Column(db.String(200))   # snapshot labels (survive later edits/deletes)
+    grade_name     = db.Column(db.String(100))
+    section_name   = db.Column(db.String(100))
+    period_number  = db.Column(db.Integer)
+    start_time     = db.Column(db.String(5))     # derived from the period, kept for display/reports
+    end_time       = db.Column(db.String(5))
+
+    # ── Legacy hall-booking fields (kept only so old records keep displaying) ──
+    hall          = db.Column(db.String(200))
+    end_date      = db.Column(db.String(10))
     full_day      = db.Column(db.Boolean, default=False)
+
     notes         = db.Column(db.Text)
     attachments   = db.Column(db.Text)   # comma-separated URLs
     status        = db.Column(db.String(20), default='pending')  # pending/approved/rejected/cancelled
     reject_reason = db.Column(db.Text)
     cc_emails     = db.Column(db.Text)   # semicolon-separated
     action_date   = db.Column(db.DateTime)
-    invoice_amount = db.Column(db.Float)
-    invoice_notes  = db.Column(db.String(300))
 
     def to_dict(self):
-        end = self.end_date or self.booking_date
-        att = [a for a in (self.attachments or '').split(',') if a and '[DEL]' not in a]
         return {
             'id': self.id,
             'reqId': self.req_id,
@@ -40,68 +50,124 @@ class Booking(db.Model):
             'email': self.email,
             'phone': self.phone or '',
             'behalf': self.on_behalf or '',
-            'title': self.event_title,
-            'hall': self.hall,
+            'title': self.event_title or '',
+            'stageId': self.stage_id,
+            'gradeId': self.grade_id,
+            'sectionId': self.section_id,
+            'periodId': self.period_id,
+            'trolleyCode': self.trolley_code or '',
+            'stage': self.stage_name or self.hall or '',
+            'grade': self.grade_name or '',
+            'section': self.section_name or '',
+            'periodNumber': self.period_number,
             'date': self.booking_date,
-            'endDate': end,
             'startTime': self.start_time or '',
             'endTime': self.end_time or '',
-            'fullDay': self.full_day,
             'notes': self.notes or '',
-            'att': att,
+            'att': [a for a in (self.attachments or '').split(',') if a and '[DEL]' not in a],
             'status': self.status,
             'rejectReason': self.reject_reason or '',
             'cc': self.cc_emails or '',
-            'multiDay': end != self.booking_date,
-            'invoiceAmount': self.invoice_amount,
-            'invoiceNotes': self.invoice_notes or '',
         }
 
 
-class Hall(db.Model):
-    __tablename__ = 'halls'
-    id                = db.Column(db.Integer, primary_key=True)
-    name_ar           = db.Column(db.String(200), nullable=False)
-    name_en           = db.Column(db.String(200))
-    location          = db.Column(db.String(200))
-    code              = db.Column(db.String(50))
-    capacity          = db.Column(db.String(20))
-    equipment         = db.Column(db.Text)
-    description       = db.Column(db.Text)
-    notes             = db.Column(db.Text)
-    requires_approval = db.Column(db.Boolean, default=False)
-    active            = db.Column(db.Boolean, default=True)
-    price_per_hour    = db.Column(db.Float)
-    price_full_day    = db.Column(db.Float)
-    price_multi_day   = db.Column(db.Float)  # per day when multi-day
-    price_notes       = db.Column(db.String(300))
+class Stage(db.Model):
+    """A study stage (e.g. أساسي / ثانوي). Each stage owns exactly one laptop
+    trolley, identified by a unique trolley_code — this is the physical
+    resource being booked."""
+    __tablename__ = 'stages'
+    id           = db.Column(db.Integer, primary_key=True)
+    name_ar      = db.Column(db.String(200), nullable=False)
+    name_en      = db.Column(db.String(200))
+    trolley_code = db.Column(db.String(50), unique=True, nullable=False)
+    active       = db.Column(db.Boolean, default=True)
+    sort_order   = db.Column(db.Integer, default=0)
+
+    grades = db.relationship('Grade', backref='stage', cascade='all, delete-orphan',
+                              order_by='Grade.sort_order')
+
+    def to_dict(self, with_grades=False):
+        d = {
+            'id': self.id,
+            'nameAr': self.name_ar,
+            'nameEn': self.name_en or self.name_ar,
+            'trolleyCode': self.trolley_code,
+            'active': self.active,
+        }
+        if with_grades:
+            d['grades'] = [g.to_dict(with_sections=True) for g in self.grades]
+        return d
+
+
+class Grade(db.Model):
+    __tablename__ = 'grades'
+    id         = db.Column(db.Integer, primary_key=True)
+    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'), nullable=False)
+    name_ar    = db.Column(db.String(100), nullable=False)
+    name_en    = db.Column(db.String(100))
+    sort_order = db.Column(db.Integer, default=0)
+
+    sections = db.relationship('Section', backref='grade', cascade='all, delete-orphan',
+                                order_by='Section.sort_order')
+
+    def to_dict(self, with_sections=False):
+        d = {
+            'id': self.id,
+            'stageId': self.stage_id,
+            'nameAr': self.name_ar,
+            'nameEn': self.name_en or self.name_ar,
+        }
+        if with_sections:
+            d['sections'] = [s.to_dict() for s in self.sections]
+        return d
+
+
+class Section(db.Model):
+    __tablename__ = 'sections'
+    id         = db.Column(db.Integer, primary_key=True)
+    grade_id   = db.Column(db.Integer, db.ForeignKey('grades.id'), nullable=False)
+    name_ar    = db.Column(db.String(100), nullable=False)
+    name_en    = db.Column(db.String(100))
+    sort_order = db.Column(db.Integer, default=0)
 
     def to_dict(self):
         return {
             'id': self.id,
+            'gradeId': self.grade_id,
             'nameAr': self.name_ar,
             'nameEn': self.name_en or self.name_ar,
-            'location': self.location or '',
-            'code': self.code or '',
-            'capacity': self.capacity or '',
-            'equipment': self.equipment or '',
-            'description': self.description or '',
-            'notes': self.notes or '',
-            'requiresApproval': self.requires_approval,
+        }
+
+
+class Period(db.Model):
+    """One of the 8 daily class periods, shared by both stages."""
+    __tablename__ = 'periods'
+    id         = db.Column(db.Integer, primary_key=True)
+    number     = db.Column(db.Integer, nullable=False, unique=True)  # 1..8
+    label_ar   = db.Column(db.String(100))
+    start_time = db.Column(db.String(5))
+    end_time   = db.Column(db.String(5))
+    active     = db.Column(db.Boolean, default=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'number': self.number,
+            'label': self.label_ar or f'الحصة {self.number}',
+            'startTime': self.start_time or '',
+            'endTime': self.end_time or '',
             'active': self.active,
-            'pricePerHour': self.price_per_hour,
-            'priceFullDay': self.price_full_day,
-            'priceMultiDay': self.price_multi_day,
-            'priceNotes': self.price_notes or '',
         }
 
 
 class BlockedPeriod(db.Model):
+    """A date/time range during which a stage's trolley (or all trolleys, if
+    left blank) cannot be booked."""
     __tablename__ = 'blocked_periods'
     id         = db.Column(db.Integer, primary_key=True)
     from_date  = db.Column(db.String(10), nullable=False)
     to_date    = db.Column(db.String(10), nullable=False)
-    hall       = db.Column(db.String(200))   # empty = all halls
+    hall       = db.Column(db.String(200))   # stores the trolley_code; empty = all stages
     from_time  = db.Column(db.String(5))
     to_time    = db.Column(db.String(5))
     reason     = db.Column(db.String(300))
@@ -136,30 +202,64 @@ class Contact(db.Model):
 
 
 def init_db(app):
-    """Create tables and seed default halls if empty."""
+    """Create tables and seed default academic structure if empty."""
     db.create_all()
-    # Migration: add new columns if not exist
+
+    # Migration: add new columns to existing tables if they don't exist yet
     try:
         with db.engine.connect() as conn:
-            conn.exec_driver_sql("ALTER TABLE halls ADD COLUMN IF NOT EXISTS price_per_hour FLOAT")
-            conn.exec_driver_sql("ALTER TABLE halls ADD COLUMN IF NOT EXISTS price_full_day FLOAT")
-            conn.exec_driver_sql("ALTER TABLE halls ADD COLUMN IF NOT EXISTS price_multi_day FLOAT")
-            conn.exec_driver_sql("ALTER TABLE halls ADD COLUMN IF NOT EXISTS price_notes VARCHAR(300)")
-            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS invoice_amount FLOAT")
-            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS invoice_notes VARCHAR(300)")
+            for col, coltype in [
+                ('stage_id', 'INTEGER'), ('grade_id', 'INTEGER'),
+                ('section_id', 'INTEGER'), ('period_id', 'INTEGER'),
+                ('trolley_code', 'VARCHAR(50)'), ('stage_name', 'VARCHAR(200)'),
+                ('grade_name', 'VARCHAR(100)'), ('section_name', 'VARCHAR(100)'),
+                ('period_number', 'INTEGER'),
+            ]:
+                conn.exec_driver_sql(f"ALTER TABLE bookings ADD COLUMN IF NOT EXISTS {col} {coltype}")
             conn.commit()
     except Exception:
         pass
-    if Hall.query.count() == 0:
-        db.session.add_all([
-            Hall(name_ar='القاعة الرئيسية', name_en='Main Hall',
-                 location='المبنى الرئيسي', code='H001', capacity='100',
-                 equipment='جهاز عرض، سبورة ذكية', active=True),
-            Hall(name_ar='قاعة الاجتماعات', name_en='Meeting Room',
-                 location='المبنى الرئيسي', code='H002', capacity='30',
-                 equipment='شاشة، ميكروفون', active=True),
-            Hall(name_ar='قاعة متعددة الأغراض', name_en='Multi-Purpose Hall',
-                 location='المبنى الفرعي', code='H003', capacity='80',
-                 equipment='نظام صوت، إضاءة مسرحية', active=True),
-        ])
+
+    if Stage.query.count() == 0:
+        basic = Stage(name_ar='المرحلة الأساسية', name_en='Basic Stage',
+                       trolley_code='TROLLEY-A', active=True, sort_order=1)
+        secondary = Stage(name_ar='المرحلة الثانوية', name_en='Secondary Stage',
+                           trolley_code='TROLLEY-B', active=True, sort_order=2)
+        db.session.add_all([basic, secondary])
+        db.session.flush()
+
+        for i, num in enumerate([5, 6]):
+            db.session.add(Grade(stage_id=basic.id, name_ar=f'الصف {_ordinal_ar_m(num)}',
+                                  name_en=f'Grade {num}', sort_order=i))
+        for i, num in enumerate(range(7, 13)):
+            db.session.add(Grade(stage_id=secondary.id, name_ar=f'الصف {_ordinal_ar_m(num)}',
+                                  name_en=f'Grade {num}', sort_order=i))
         db.session.commit()
+
+        # One default section (أ) per grade — admin can add more from the panel
+        for g in Grade.query.all():
+            db.session.add(Section(grade_id=g.id, name_ar='أ', name_en='A', sort_order=0))
+        db.session.commit()
+
+    if Period.query.count() == 0:
+        for n in range(1, 9):
+            db.session.add(Period(number=n, label_ar=f'الحصة {_ordinal_ar(n)}', active=True))
+        db.session.commit()
+
+
+_ORDINALS_AR_F = {  # feminine — used for الحصة (period)
+    1: 'الأولى', 2: 'الثانية', 3: 'الثالثة', 4: 'الرابعة', 5: 'الخامسة',
+    6: 'السادسة', 7: 'السابعة', 8: 'الثامنة', 9: 'التاسعة', 10: 'العاشرة',
+    11: 'الحادية عشرة', 12: 'الثانية عشرة',
+}
+_ORDINALS_AR_M = {  # masculine — used for الصف (grade)
+    1: 'الأول', 2: 'الثاني', 3: 'الثالث', 4: 'الرابع', 5: 'الخامس',
+    6: 'السادس', 7: 'السابع', 8: 'الثامن', 9: 'التاسع', 10: 'العاشر',
+    11: 'الحادي عشر', 12: 'الثاني عشر',
+}
+
+def _ordinal_ar(n):
+    return _ORDINALS_AR_F.get(n, str(n))
+
+def _ordinal_ar_m(n):
+    return _ORDINALS_AR_M.get(n, str(n))

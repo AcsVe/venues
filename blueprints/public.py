@@ -2,7 +2,7 @@ import os
 from datetime import date, datetime
 from flask import (Blueprint, render_template, request, jsonify,
                    redirect, url_for, send_from_directory, current_app)
-from models import db, Booking, Hall, BlockedPeriod
+from models import db, Booking, Stage, Grade, Section, Period, BlockedPeriod
 from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
                             get_blocked_for_date, is_valid_email, sanitize_email)
@@ -23,18 +23,24 @@ def index():
     return redirect(url_for('public.calendar'))
 
 
-@public_bp.route('/api/halls-list')
-def api_halls_list():
-    from models import Hall
-    halls = Hall.query.filter_by(active=True).all()
-    return jsonify([{
-        'nameAr': h.name_ar,
-        'nameEn': h.name_en or '',
-        'pricePerHour': h.price_per_hour,
-        'priceFullDay': h.price_full_day,
-        'priceMultiDay': h.price_multi_day,
-        'priceNotes': h.price_notes or '',
-    } for h in halls])
+# ── Academic structure (stages → grades → sections) + periods ────────────
+@public_bp.route('/api/structure')
+def api_structure():
+    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
+    return jsonify([s.to_dict(with_grades=True) for s in stages])
+
+
+@public_bp.route('/api/stages-list')
+def api_stages_list():
+    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
+    return jsonify([s.to_dict() for s in stages])
+
+
+@public_bp.route('/api/periods')
+def api_periods():
+    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
+    return jsonify([p.to_dict() for p in periods])
+
 
 @public_bp.route('/calendar')
 def calendar():
@@ -58,9 +64,8 @@ def month_data():
 
     bookings = Booking.query.filter(
         Booking.status.notin_(['rejected', 'cancelled']),
+        Booking.booking_date >= month_start,
         Booking.booking_date < month_end,
-        db.or_(Booking.end_date >= month_start,
-               Booking.booking_date >= month_start)
     ).all()
 
     blocked_map = {}
@@ -74,7 +79,6 @@ def month_data():
                     'toTime': blk.to_time or '',
                     'hall': blk.hall or '',
                 })
-            # advance date
             parts = cur.split('-')
             d_obj = date(int(parts[0]), int(parts[1]), int(parts[2]))
             from datetime import timedelta
@@ -86,28 +90,19 @@ def month_data():
     # Public view: hide sensitive details for privacy
     public_bookings = []
     for b in bookings:
-        end = b.end_date or b.booking_date
         public_bookings.append({
             'date': b.booking_date,
-            'endDate': end,
-            'hall': b.hall,
+            'hall': b.trolley_code or b.hall or '',
+            'stage': b.stage_name or '',
             'startTime': b.start_time or '',
             'endTime': b.end_time or '',
-            'fullDay': b.full_day,
+            'periodNumber': b.period_number,
             'status': b.status,
-            'multiDay': end != b.booking_date,
         })
     return jsonify({
         'bookings': public_bookings,
         'blocked': blocked_map,
     })
-
-
-# ── Halls list (public) ───────────────────────────────────────────────────
-@public_bp.route('/api/halls')
-def api_halls():
-    halls = Hall.query.filter_by(active=True).all()
-    return jsonify([h.to_dict() for h in halls])
 
 
 # ── Booking form ──────────────────────────────────────────────────────────
@@ -127,33 +122,55 @@ def book():
             msg = f'هذا اليوم غير متاح بالكامل: {blk["reason"]}'
             return render_template('error.html', msg=msg, lang=lang)
 
-    halls = Hall.query.filter_by(active=True).all()
+    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
+    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
     return render_template('book.html', lang=lang, pre_date=pre_date,
-                           halls=halls, today=today)
+                           stages=stages, periods=periods, today=today)
+
+
+def _resolve_selection(data):
+    """Look up Stage/Grade/Section/Period objects from posted ids.
+    Returns (stage, grade, section, period, error)."""
+    try:
+        stage_id  = int(data.get('stageId'))
+        grade_id  = int(data.get('gradeId'))
+        section_id = int(data.get('sectionId'))
+        period_id  = int(data.get('periodId'))
+    except (TypeError, ValueError):
+        return None, None, None, None, 'يرجى اختيار المرحلة والصف والشعبة والحصة'
+
+    stage = Stage.query.get(stage_id)
+    grade = Grade.query.get(grade_id)
+    section = Section.query.get(section_id)
+    period = Period.query.get(period_id)
+    if not (stage and grade and section and period):
+        return None, None, None, None, 'اختيار غير صحيح للمرحلة/الصف/الشعبة/الحصة'
+    if grade.stage_id != stage.id or section.grade_id != grade.id:
+        return None, None, None, None, 'اختيار غير متطابق للمرحلة/الصف/الشعبة'
+    return stage, grade, section, period, None
 
 
 @public_bp.route('/api/check-slot', methods=['POST'])
 def check_slot():
     data = request.get_json(silent=True) or {}
-    hall      = data.get('hall', '')
-    bdate     = data.get('date', '')
-    end_date  = data.get('endDate') or bdate
-    start     = data.get('startTime', '')
-    end       = data.get('endTime', '')
-    full_day  = bool(data.get('fullDay'))
-    exclude   = data.get('excludeReqId')
+    bdate = data.get('date', '')
+    exclude = data.get('excludeReqId')
 
-    if not hall or not bdate:
+    if not bdate:
         return jsonify({'ok': False, 'error': 'بيانات ناقصة'})
 
-    blk = check_blocked(bdate, start, end, hall)
+    stage, grade, section, period, err = _resolve_selection(data)
+    if err:
+        return jsonify({'ok': False, 'error': err})
+
+    blk = check_blocked(bdate, period.start_time or '', period.end_time or '', stage.trolley_code)
     if blk['blocked']:
         msg = f'التاريخ غير متاح: {blk["reason"]}'
         if blk.get('blkFromT'):
             msg += f' ({blk["blkFromT"]} - {blk["blkToT"]})'
         return jsonify({'ok': False, 'error': msg})
 
-    conflict = check_conflict(hall, bdate, end_date, start, end, full_day, exclude)
+    conflict = check_conflict(stage.trolley_code, bdate, period.number, exclude)
     if conflict:
         return jsonify({'ok': False, 'error': conflict})
 
@@ -164,7 +181,6 @@ def check_slot():
 def submit_booking():
     today = date.today().strftime('%Y-%m-%d')
 
-    # Handle multipart / urlencoded (with files) or JSON
     if request.content_type and ('multipart' in request.content_type or
                                   'form' in request.content_type):
         f = request.form
@@ -173,33 +189,30 @@ def submit_booking():
         f = request.get_json(silent=True) or {}
         files = []
 
-    required = ['fullName', 'email', 'eventTitle', 'hall', 'bookingDate']
+    required = ['fullName', 'email', 'bookingDate', 'stageId', 'gradeId', 'sectionId', 'periodId']
     for field in required:
         if not f.get(field):
             return jsonify({'success': False, 'error': f'الحقل {field} مطلوب'}), 400
 
     booking_date = f.get('bookingDate')
-    end_date     = f.get('endDate') or booking_date
-    start_time   = f.get('startTime', '')
-    end_time     = f.get('endTime', '')
-    full_day     = f.get('fullDay') in (True, 'true', '1', 'on')
-    hall         = f.get('hall')
-
     if booking_date < today:
         return jsonify({'success': False, 'error': 'لا يمكن الحجز بتاريخ سابق'}), 400
 
-    blk = check_blocked(booking_date, start_time, end_time, hall)
+    stage, grade, section, period, err = _resolve_selection(f)
+    if err:
+        return jsonify({'success': False, 'error': err}), 400
+
+    blk = check_blocked(booking_date, period.start_time or '', period.end_time or '', stage.trolley_code)
     if blk['blocked']:
         msg = f'التاريخ غير متاح: {blk["reason"]}'
         if blk.get('blkFromT'):
             msg += f' ({blk["blkFromT"]} - {blk["blkToT"]})'
         return jsonify({'success': False, 'error': msg}), 400
 
-    conflict = check_conflict(hall, booking_date, end_date, start_time, end_time, full_day)
+    conflict = check_conflict(stage.trolley_code, booking_date, period.number)
     if conflict:
         return jsonify({'success': False, 'error': conflict}), 400
 
-    # Save attachments
     att_urls = []
     for file_obj in files:
         if file_obj and file_obj.filename:
@@ -209,43 +222,44 @@ def submit_booking():
 
     req_id = gen_req_id()
     booking = Booking(
-        req_id       = req_id,
-        name         = f.get('fullName'),
-        email        = sanitize_email(f.get('email')),
-        phone        = f.get('phone', ''),
-        on_behalf    = f.get('onBehalf', ''),
-        event_title  = f.get('eventTitle'),
-        hall         = hall,
-        booking_date = booking_date,
-        end_date     = end_date,
-        start_time   = start_time,
-        end_time     = end_time,
-        full_day     = full_day,
-        notes        = f.get('notes', ''),
-        attachments  = ','.join(att_urls),
-        status       = 'pending',
+        req_id        = req_id,
+        name          = f.get('fullName'),
+        email         = sanitize_email(f.get('email')),
+        phone         = f.get('phone', ''),
+        on_behalf     = f.get('onBehalf', ''),
+        event_title   = f.get('eventTitle', ''),
+        booking_date  = booking_date,
+        stage_id      = stage.id,
+        grade_id      = grade.id,
+        section_id    = section.id,
+        period_id     = period.id,
+        trolley_code  = stage.trolley_code,
+        stage_name    = stage.name_ar,
+        grade_name    = grade.name_ar,
+        section_name  = section.name_ar,
+        period_number = period.number,
+        start_time    = period.start_time or '',
+        end_time      = period.end_time or '',
+        notes         = f.get('notes', ''),
+        attachments   = ','.join(att_urls),
+        status        = 'pending',
     )
     db.session.add(booking)
     db.session.commit()
 
+    email_ctx = {
+        'reqId': req_id, 'name': booking.name, 'email': booking.email,
+        'title': booking.event_title, 'stage': stage.name_ar, 'grade': grade.name_ar,
+        'section': section.name_ar, 'periodLabel': period.label_ar or f'الحصة {period.number}',
+        'date': booking_date, 'startTime': booking.start_time, 'endTime': booking.end_time,
+    }
     try:
-        from models import Contact
-        contacts = [{'email': c.email} for c in Contact.query.all()]
-        send_staff_notification('new', {
-            'reqId': req_id, 'name': booking.name, 'email': booking.email,
-            'title': booking.event_title, 'hall': booking.hall,
-            'date': booking_date, 'endDate': end_date,
-            'startTime': start_time, 'endTime': end_time, 'fullDay': full_day,
-        }, contacts)
+        contacts = [{'email': e} for e in get_all_contact_emails()]
+        send_staff_notification('new', email_ctx, contacts)
     except Exception:
         pass
     try:
-        send_confirm({
-            'reqId': req_id, 'name': booking.name, 'email': booking.email,
-            'title': booking.event_title, 'hall': booking.hall,
-            'date': booking_date, 'endDate': end_date,
-            'startTime': start_time, 'endTime': end_time, 'fullDay': full_day,
-        })
+        send_confirm(email_ctx)
     except Exception:
         pass
 
@@ -256,8 +270,9 @@ def submit_booking():
 @public_bp.route('/lookup')
 def lookup():
     lang = request.args.get('lang', 'ar')
-    halls = Hall.query.filter_by(active=True).all()
-    return render_template('lookup.html', lang=lang, halls=halls)
+    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
+    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
+    return render_template('lookup.html', lang=lang, stages=stages, periods=periods)
 
 
 @public_bp.route('/api/lookup-booking', methods=['POST'])
@@ -293,7 +308,8 @@ def api_cancel_by_user():
 
     try:
         send_cancel({'reqId': req_id, 'name': b.name, 'email': b.email,
-                     'title': b.event_title, 'hall': b.hall})
+                     'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
+                     'section': b.section_name})
     except Exception:
         pass
 
@@ -319,30 +335,48 @@ def api_amend_by_user():
     if b.status == 'cancelled':
         return jsonify({'success': False, 'error': 'الحجز ملغي'}), 400
 
-    hall         = f.get('hall', b.hall)
     booking_date = f.get('bookingDate', b.booking_date)
-    end_date     = f.get('endDate') or booking_date
-    start_time   = f.get('startTime', b.start_time or '')
-    end_time     = f.get('endTime', b.end_time or '')
-    full_day     = f.get('fullDay') in (True, 'true', '1', 'on')
 
-    conflict = check_conflict(hall, booking_date, end_date, start_time, end_time, full_day, req_id)
+    if f.get('stageId') or f.get('gradeId') or f.get('sectionId') or f.get('periodId'):
+        stage, grade, section, period, err = _resolve_selection({
+            'stageId': f.get('stageId') or b.stage_id,
+            'gradeId': f.get('gradeId') or b.grade_id,
+            'sectionId': f.get('sectionId') or b.section_id,
+            'periodId': f.get('periodId') or b.period_id,
+        })
+        if err:
+            return jsonify({'success': False, 'error': err}), 400
+    else:
+        stage = Stage.query.get(b.stage_id)
+        grade = Grade.query.get(b.grade_id)
+        section = Section.query.get(b.section_id)
+        period = Period.query.get(b.period_id)
+        if not (stage and grade and section and period):
+            return jsonify({'success': False, 'error': 'تعذر إيجاد بيانات الحجز الأصلية'}), 400
+
+    conflict = check_conflict(stage.trolley_code, booking_date, period.number, req_id)
     if conflict:
         return jsonify({'success': False, 'error': conflict}), 400
 
     was_approved = b.status == 'approved'
-    b.name         = f.get('fullName', b.name)
-    b.phone        = f.get('phone', b.phone or '')
-    b.on_behalf    = f.get('onBehalf', b.on_behalf or '')
-    b.event_title  = f.get('eventTitle', b.event_title)
-    b.hall         = hall
-    b.booking_date = booking_date
-    b.end_date     = end_date
-    b.start_time   = start_time
-    b.end_time     = end_time
-    b.full_day     = full_day
-    b.notes        = f.get('notes', b.notes or '')
-    b.action_date  = datetime.utcnow()
+    b.name          = f.get('fullName', b.name)
+    b.phone         = f.get('phone', b.phone or '')
+    b.on_behalf     = f.get('onBehalf', b.on_behalf or '')
+    b.event_title   = f.get('eventTitle', b.event_title or '')
+    b.booking_date  = booking_date
+    b.stage_id      = stage.id
+    b.grade_id      = grade.id
+    b.section_id    = section.id
+    b.period_id     = period.id
+    b.trolley_code  = stage.trolley_code
+    b.stage_name    = stage.name_ar
+    b.grade_name    = grade.name_ar
+    b.section_name  = section.name_ar
+    b.period_number = period.number
+    b.start_time    = period.start_time or ''
+    b.end_time      = period.end_time or ''
+    b.notes         = f.get('notes', b.notes or '')
+    b.action_date   = datetime.utcnow()
     if was_approved:
         b.status = 'pending'
 
@@ -356,9 +390,10 @@ def api_amend_by_user():
 
     try:
         send_update({'reqId': req_id, 'name': b.name, 'email': b.email,
-                     'title': b.event_title, 'hall': b.hall,
-                     'date': booking_date, 'endDate': end_date,
-                     'startTime': start_time, 'endTime': end_time, 'fullDay': full_day})
+                     'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
+                     'section': b.section_name,
+                     'periodLabel': period.label_ar or f'الحصة {period.number}',
+                     'date': booking_date, 'startTime': b.start_time, 'endTime': b.end_time})
     except Exception:
         pass
 

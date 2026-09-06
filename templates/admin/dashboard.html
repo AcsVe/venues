@@ -283,7 +283,7 @@
   </div>
   <div class="sidebar-nav">
     <button class="nav-item active" onclick="showTab('bookings')"><i class="fas fa-calendar-check"></i> طلبات الحجز <span class="nav-badge" id="nbPending">0</span></button>
-    <button class="nav-item" onclick="showTab('halls')"><i class="fas fa-door-open"></i> القاعات</button>
+    <button class="nav-item" onclick="showTab('halls')"><i class="fas fa-laptop"></i> المراحل والعربات</button>
     <button class="nav-item" onclick="showTab('blocked')"><i class="fas fa-ban"></i> غير متاح</button>
     <button class="nav-item" onclick="showTab('contacts')"><i class="fas fa-address-book"></i> جهات الاتصال</button>
     <button class="nav-item" onclick="showTab('reports')"><i class="fas fa-chart-bar"></i> التقارير</button>
@@ -338,10 +338,12 @@
                 <th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
                 <th>رقم الطلب</th>
                 <th>الاسم</th>
-                <th>المناسبة</th>
-                <th>القاعة</th>
+                <th>الموضوع</th>
+                <th>المرحلة</th>
+                <th>الصف</th>
+                <th>الشعبة</th>
+                <th>الحصة</th>
                 <th>التاريخ</th>
-                <th>الوقت</th>
                 <th>الحالة</th>
                 <th>الإجراءات</th>
               </tr>
@@ -352,42 +354,39 @@
       </div>
     </div>
 
-    <!-- ── HALLS TAB ── -->
+    <!-- ── STAGES / GRADES / SECTIONS / PERIODS TAB ── -->
     <div class="tab-panel" id="tab-halls">
       <div class="card">
-        <div class="card-title"><i class="fas fa-plus"></i> إضافة قاعة جديدة</div>
+        <div class="card-title"><i class="fas fa-plus"></i> إضافة مرحلة جديدة</div>
         <div class="form-grid">
-          <div class="form-group"><label>الاسم (عربي) <span style="color:#c0392b">*</span></label><input type="text" id="hNameAr"></div>
+          <div class="form-group"><label>اسم المرحلة (عربي) <span style="color:#c0392b">*</span></label><input type="text" id="hNameAr" placeholder="مثال: المرحلة الأساسية"></div>
           <div class="form-group"><label>الاسم (إنجليزي)</label><input type="text" id="hNameEn" dir="ltr"></div>
-          <div class="form-group"><label>الموقع</label><input type="text" id="hLocation"></div>
-          <div class="form-group"><label>الرمز</label><input type="text" id="hCode" dir="ltr"></div>
-          <div class="form-group"><label>السعة</label><input type="number" id="hCapacity"></div>
-          <div class="form-group"><label>المعدات والمرافق</label><input type="text" id="hEquipment"></div>
+          <div class="form-group"><label>معرّف العربة (Trolley) <span style="color:#c0392b">*</span></label><input type="text" id="hTrolleyCode" dir="ltr" placeholder="مثال: TROLLEY-A"></div>
         </div>
-        <div class="form-group"><label>الوصف</label><textarea id="hDesc"></textarea></div>
-        <div class="form-group"><label>ملاحظات</label><input type="text" id="hNotes"></div>
-
-        <!-- Pricing -->
-        <div style="font-weight:700;color:var(--primary);margin-bottom:10px;font-size:.9rem"><i class="fas fa-tag"></i> التسعير (بالدينار الأردني JOD)</div>
-        <div class="form-grid">
-          <div class="form-group"><label>سعر الساعة (JOD)</label><input type="number" step="0.5" min="0" id="hPriceHour" placeholder="0.00"></div>
-          <div class="form-group"><label>سعر اليوم الكامل (JOD)</label><input type="number" step="0.5" min="0" id="hPriceFullDay" placeholder="0.00"></div>
-          <div class="form-group"><label>سعر اليوم عند الحجز متعدد (JOD)</label><input type="number" step="0.5" min="0" id="hPriceMultiDay" placeholder="0.00"></div>
-          <div class="form-group"><label>ملاحظات التسعير</label><input type="text" id="hPriceNotes" placeholder="مثال: أسعار خاصة للجمعيات"></div>
-        </div>
-
         <div style="display:flex;gap:16px;align-items:center;margin-bottom:12px">
-          <label style="display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" id="hRequiresApproval"> تتطلب موافقة مسبقة</label>
-          <label style="display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" id="hActive" checked> قاعة فعالة</label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" id="hActive" checked> مرحلة فعالة</label>
         </div>
-        <button class="btn btn-primary" onclick="addHall()"><i class="fas fa-plus"></i> إضافة</button>
+        <button class="btn btn-primary" onclick="addHall()"><i class="fas fa-plus"></i> إضافة مرحلة</button>
       </div>
+
       <div class="card">
-        <div class="card-title"><i class="fas fa-list"></i> القاعات المتاحة</div>
-        <div class="table-wrap">
+        <div class="card-title"><i class="fas fa-list"></i> المراحل والعربات، الصفوف والشعب</div>
+        <div id="stagesTree"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fas fa-clock"></i> الحصص (مشتركة بين المرحلتين)</div>
+        <div class="form-grid">
+          <div class="form-group"><label>رقم الحصة <span style="color:#c0392b">*</span></label><input type="number" min="1" id="pNumber"></div>
+          <div class="form-group"><label>اسم الحصة</label><input type="text" id="pLabel" placeholder="مثال: الحصة الأولى"></div>
+          <div class="form-group"><label>من الساعة (اختياري)</label><input type="time" id="pStart"></div>
+          <div class="form-group"><label>إلى الساعة (اختياري)</label><input type="time" id="pEnd"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addPeriod()"><i class="fas fa-plus"></i> إضافة حصة</button>
+        <div class="table-wrap" style="margin-top:14px">
           <table>
-            <thead><tr><th>الاسم (عربي)</th><th>الاسم (إنجليزي)</th><th>الرمز</th><th>السعة</th><th>الموقع</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
-            <tbody id="hallsTable"></tbody>
+            <thead><tr><th>رقم الحصة</th><th>الاسم</th><th>من</th><th>إلى</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+            <tbody id="periodsTable"></tbody>
           </table>
         </div>
       </div>
@@ -400,8 +399,8 @@
         <div class="form-grid">
           <div class="form-group"><label>من تاريخ <span style="color:#c0392b">*</span></label><input type="date" id="blkFrom"></div>
           <div class="form-group"><label>إلى تاريخ <span style="color:#c0392b">*</span></label><input type="date" id="blkTo"></div>
-          <div class="form-group"><label>القاعة (اتركه فارغاً لحظر الكل)</label>
-            <select id="blkHall"><option value="">-- كل القاعات --</option></select>
+          <div class="form-group"><label>المرحلة/العربة (اتركه فارغاً لحظر الكل)</label>
+            <select id="blkHall"><option value="">-- كل المراحل --</option></select>
           </div>
           <div class="form-group"><label>السبب</label><input type="text" id="blkReason"></div>
           <div class="form-group"><label>من الساعة (اختياري)</label><input type="time" id="blkFromT"></div>
@@ -413,7 +412,7 @@
         <div class="card-title"><i class="fas fa-list"></i> الفترات المحظورة</div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>من تاريخ</th><th>إلى تاريخ</th><th>القاعة</th><th>من الساعة</th><th>إلى الساعة</th><th>السبب</th><th>حذف</th></tr></thead>
+            <thead><tr><th>من تاريخ</th><th>إلى تاريخ</th><th>المرحلة</th><th>من الساعة</th><th>إلى الساعة</th><th>السبب</th><th>حذف</th></tr></thead>
             <tbody id="blockedTable"></tbody>
           </table>
         </div>
@@ -452,7 +451,7 @@
     <div class="card-title"><i class="fas fa-calendar-alt"></i> التقويم المرئي</div>
     <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <select id="calHallFilter" class="form-select" style="max-width:200px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.88rem" onchange="renderCal()">
-        <option value="">كل القاعات</option>
+        <option value="">كل المراحل</option>
       </select>
       <span style="font-size:.82rem;color:var(--muted)">
         <span style="background:#d1e7dd;padding:2px 10px;border-radius:10px;margin-left:6px">معتمد</span>
@@ -469,9 +468,9 @@
         <div class="stat-card green"><div class="stat-val" id="rs-approved">-</div><div class="stat-label">معتمدة</div></div>
         <div class="stat-card accent"><div class="stat-val" id="rs-pending">-</div><div class="stat-label">قيد المراجعة</div></div>
         <div class="stat-card red"><div class="stat-val" id="rs-rejected">-</div><div class="stat-label">مرفوضة/ملغية</div></div>
-        <div class="stat-card"><div class="stat-val" id="rs-halls" style="font-size:1rem">-</div><div class="stat-label">أكثر قاعة</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-halls" style="font-size:1rem">-</div><div class="stat-label">أكثر مرحلة استخداماً</div></div>
         <div class="stat-card"><div class="stat-val" id="rs-month" style="font-size:1rem">-</div><div class="stat-label">أكثر شهر</div></div>
-        <div class="stat-card"><div class="stat-val" id="rs-hours">-</div><div class="stat-label">إجمالي الساعات</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-hours">-</div><div class="stat-label">إجمالي الحصص</div></div>
       </div>
 
       <!-- Charts Row -->
@@ -487,9 +486,9 @@
         </div>
       </div>
 
-      <!-- Hall Comparison -->
+      <!-- Stage/Trolley Comparison -->
       <div class="card">
-        <div class="card-title"><i class="fas fa-door-open"></i> مقارنة القاعات</div>
+        <div class="card-title"><i class="fas fa-laptop"></i> مقارنة المراحل (العربات)</div>
         <div id="hallBars"></div>
       </div>
 
@@ -500,7 +499,7 @@
           <div class="form-group">
             <label>تجميع حسب</label>
             <select id="anaDim">
-              <option value="hall">القاعات</option>
+              <option value="hall">المراحل</option>
               <option value="person">الأشخاص</option>
               <option value="month">الأشهر</option>
               <option value="dow">أيام الأسبوع</option>
@@ -550,15 +549,12 @@
       <div class="form-group"><label>البريد</label><input type="email" id="editEmail" dir="ltr"></div>
       <div class="form-group"><label>الجوال</label><input type="tel" id="editPhone" dir="ltr"></div>
       <div class="form-group"><label>نيابة عن</label><input type="text" id="editBehalf"></div>
-      <div class="form-group"><label>عنوان المناسبة</label><input type="text" id="editTitle"></div>
-      <div class="form-group"><label>القاعة</label><select id="editHall"></select></div>
+      <div class="form-group"><label>المادة / الغرض</label><input type="text" id="editTitle"></div>
+      <div class="form-group"><label>المرحلة</label><select id="editStage" onchange="onEditStageChange()"></select></div>
+      <div class="form-group"><label>الصف</label><select id="editGrade" onchange="onEditGradeChange()"></select></div>
+      <div class="form-group"><label>الشعبة</label><select id="editSection"></select></div>
+      <div class="form-group"><label>الحصة</label><select id="editPeriod"></select></div>
       <div class="form-group"><label>تاريخ الحجز</label><input type="date" id="editDate"></div>
-      <div class="form-group"><label>تاريخ الانتهاء</label><input type="date" id="editEndDate"></div>
-      <div class="form-group"><label>من الساعة</label><input type="time" id="editStart"></div>
-      <div class="form-group"><label>إلى الساعة</label><input type="time" id="editEnd"></div>
-    </div>
-    <div class="form-group">
-      <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="editFullDay"> يوم كامل</label>
     </div>
     <div class="form-group"><label>ملاحظات</label><textarea id="editNotes"></textarea></div>
     <div class="modal-footer">
@@ -588,6 +584,15 @@
 // ── Global state ──
 let allBookings = [], hallsList = [], curFilter = 'all', curSearch = '';
 let selectedIds = new Set();
+let STRUCTURE = [];   // stages → grades → sections
+let PERIODS = [];
+
+async function loadStructure() {
+  STRUCTURE = await fetch('/admin/api/halls').then(r => r.json());
+}
+async function loadPeriods() {
+  PERIODS = await fetch('/admin/api/periods').then(r => r.json());
+}
 
 // ── Tab navigation ──
 function showTab(name) {
@@ -601,9 +606,9 @@ function showTab(name) {
       n.classList.add('active');
     }
   });
-  const titles = {bookings:'طلبات الحجز', halls:'القاعات', blocked:'الفترات غير المتاحة', contacts:'جهات الاتصال', reports:'التقارير', calview:'التقويم المرئي'};
+  const titles = {bookings:'طلبات الحجز', halls:'المراحل والعربات', blocked:'الفترات غير المتاحة', contacts:'جهات الاتصال', reports:'التقارير', calview:'التقويم المرئي'};
   document.getElementById('pageTitle').textContent = titles[name] || name;
-  if (name === 'halls')    loadHalls();
+  if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
   if (name === 'calview')  initAdminCal();
   if (name === 'blocked')  loadBlocked();
   if (name === 'contacts') loadContacts();
@@ -673,7 +678,7 @@ function renderTable() {
   const tbody = document.getElementById('bkTable');
   let rows = allBookings;
   if (curSearch) rows = rows.filter(b =>
-    (b.reqId + b.name + b.title + b.hall + b.email).toLowerCase().includes(curSearch)
+    (b.reqId + b.name + (b.title||'') + (b.stage||'') + (b.grade||'') + (b.section||'') + b.email).toLowerCase().includes(curSearch)
   );
   const sLabels = {approved:'معتمد',pending:'قيد المراجعة',rejected:'مرفوض',cancelled:'ملغي'};
   tbody.innerHTML = rows.map(b => `
@@ -681,10 +686,12 @@ function renderTable() {
       <td><input type="checkbox" ${selectedIds.has(b.reqId)?'checked':''} onchange="toggleSel('${b.reqId}',this)"></td>
       <td><strong style="color:var(--primary)">${esc(b.reqId)}</strong></td>
       <td>${esc(b.name)}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(b.title)}">${esc(b.title)}</td>
-      <td>${esc(b.hall)}</td>
-      <td>${b.date}${b.multiDay?'<br><small style="color:var(--muted)">→ '+b.endDate+'</small>':''}</td>
-      <td>${b.fullDay ? '<span style="font-size:.78rem">يوم كامل</span>' : (b.startTime+' - '+b.endTime)}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(b.title||'')}">${esc(b.title||'-')}</td>
+      <td>${esc(b.stage||'')}</td>
+      <td>${esc(b.grade||'')}</td>
+      <td>${esc(b.section||'')}</td>
+      <td>${b.periodNumber ? 'الحصة '+b.periodNumber : ''}</td>
+      <td>${b.date}</td>
       <td><span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span></td>
       <td>
         <div class="action-btns">
@@ -694,7 +701,7 @@ function renderTable() {
           ${b.status!=='cancelled'&&b.status!=='rejected'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')"><i class="fas fa-ban"></i></button>`:''}
         </div>
       </td>
-    </tr>`).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">لا توجد نتائج</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">لا توجد نتائج</td></tr>';
   document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
 }
 
@@ -750,16 +757,16 @@ function openDetail(reqId) {
   document.getElementById('bkModalAlert').innerHTML = '';
   document.getElementById('bkModalTitle').innerHTML = `<i class="fas fa-calendar-check"></i> ${b.reqId}`;
   const sLabels = {approved:'معتمد',pending:'قيد المراجعة',rejected:'مرفوض',cancelled:'ملغي'};
-  const timeStr = b.fullDay ? 'يوم كامل' : `${b.startTime} - ${b.endTime}`;
-  const dateStr = b.multiDay ? `${b.date} → ${b.endDate}` : b.date;
+  const periodStr = b.periodNumber ? ('الحصة ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
   document.getElementById('bkModalBody').innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:.88rem">
       ${drow('رقم الطلب', `<strong style="color:var(--primary)">${b.reqId}</strong>`)}
       ${drow('الحالة', `<span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span>`)}
       ${drow('الاسم', b.name)} ${drow('البريد', b.email)}
-      ${drow('الجوال', b.phone||'-')} ${drow('نيابة عن', b.behalf||'-')}
-      ${drow('المناسبة', b.title)} ${drow('القاعة', b.hall)}
-      ${drow('التاريخ', dateStr)} ${drow('الوقت', timeStr)}
+      ${drow('الجوال', b.phone||'-')} ${drow('المادة/الغرض', b.title||'-')}
+      ${drow('المرحلة', b.stage||'-')} ${drow('الصف', b.grade||'-')}
+      ${drow('الشعبة', b.section||'-')} ${drow('الحصة', periodStr)}
+      ${drow('التاريخ', b.date)}
       ${drow('ملاحظات', b.notes||'-')}
       ${b.rejectReason ? drow('سبب الرفض', `<span style="color:#c0392b">${esc(b.rejectReason)}</span>`) : ''}
       ${b.att&&b.att.length ? drow('المرفقات', b.att.map(u=>`<a href="${u}" target="_blank" style="color:var(--primary)"><i class="fas fa-paperclip"></i> ملف</a>`).join(' ')) : ''}
@@ -792,6 +799,31 @@ function drow(label, val) {
   return `<tr><td style="padding:7px 10px;font-weight:700;background:#f0f7f8;width:36%">${label}</td><td style="padding:7px 10px;border-bottom:1px solid var(--border)">${val}</td></tr>`;
 }
 
+function editPopulateStages(selectedStageId) {
+  const sel = document.getElementById('editStage');
+  sel.innerHTML = STRUCTURE.map(s => `<option value="${s.id}">${esc(s.nameAr)}</option>`).join('');
+  if (selectedStageId) sel.value = selectedStageId;
+}
+function onEditStageChange(selectedGradeId) {
+  const stage = STRUCTURE.find(s => String(s.id) === document.getElementById('editStage').value);
+  const gradeSel = document.getElementById('editGrade');
+  gradeSel.innerHTML = stage ? stage.grades.map(g => `<option value="${g.id}">${esc(g.nameAr)}</option>`).join('') : '';
+  if (selectedGradeId) gradeSel.value = selectedGradeId;
+  onEditGradeChange();
+}
+function onEditGradeChange(selectedSectionId) {
+  const stage = STRUCTURE.find(s => String(s.id) === document.getElementById('editStage').value);
+  const grade = stage ? stage.grades.find(g => String(g.id) === document.getElementById('editGrade').value) : null;
+  const sectionSel = document.getElementById('editSection');
+  sectionSel.innerHTML = grade ? grade.sections.map(s => `<option value="${s.id}">${esc(s.nameAr)}</option>`).join('') : '';
+  if (selectedSectionId) sectionSel.value = selectedSectionId;
+}
+function editPopulatePeriods(selectedPeriodId) {
+  const sel = document.getElementById('editPeriod');
+  sel.innerHTML = PERIODS.map(p => `<option value="${p.id}">${esc(p.label)}</option>`).join('');
+  if (selectedPeriodId) sel.value = selectedPeriodId;
+}
+
 function openEdit(reqId) {
   const b = allBookings.find(x => x.reqId === reqId);
   if (!b) return;
@@ -802,14 +834,11 @@ function openEdit(reqId) {
   document.getElementById('editBehalf').value= b.behalf;
   document.getElementById('editTitle').value = b.title;
   document.getElementById('editDate').value  = b.date;
-  document.getElementById('editEndDate').value = b.endDate || b.date;
-  document.getElementById('editStart').value = b.startTime;
-  document.getElementById('editEnd').value   = b.endTime;
-  document.getElementById('editFullDay').checked = b.fullDay;
+  editPopulateStages(b.stageId);
+  onEditStageChange(b.gradeId);
+  onEditGradeChange(b.sectionId);
+  editPopulatePeriods(b.periodId);
   document.getElementById('editNotes').value = b.notes;
-  // populate halls
-  const sel = document.getElementById('editHall');
-  sel.innerHTML = hallsList.map(h => `<option value="${h.nameAr}" ${h.nameAr===b.hall?'selected':''}>${h.nameAr}</option>`).join('');
   document.getElementById('editAlert').innerHTML = '';
   openModal('editModal');
 }
@@ -822,12 +851,11 @@ async function saveEdit() {
     phone:    document.getElementById('editPhone').value.trim(),
     behalf:   document.getElementById('editBehalf').value.trim(),
     title:    document.getElementById('editTitle').value.trim(),
-    hall:     document.getElementById('editHall').value,
+    stageId:   document.getElementById('editStage').value,
+    gradeId:   document.getElementById('editGrade').value,
+    sectionId: document.getElementById('editSection').value,
+    periodId:  document.getElementById('editPeriod').value,
     bookingDate: document.getElementById('editDate').value,
-    endDate:  document.getElementById('editEndDate').value,
-    startTime:document.getElementById('editStart').value,
-    endTime:  document.getElementById('editEnd').value,
-    fullDay:  document.getElementById('editFullDay').checked,
     notes:    document.getElementById('editNotes').value.trim(),
   });
   if (data.success) {
@@ -838,125 +866,208 @@ async function saveEdit() {
   }
 }
 
-// ── Halls ──────────────────────────────────────────────────────
+// ── Stages / Grades / Sections ──────────────────────────────────
 async function loadHalls() {
-  const data = await fetch('/admin/api/halls').then(r => r.json());
-  hallsList = data;
-  // Update blocked hall select too
+  await loadStructure();
+  hallsList = STRUCTURE;
+  // Update blocked-period stage select too
   const blkSel = document.getElementById('blkHall');
-  blkSel.innerHTML = '<option value="">-- كل القاعات --</option>' +
-    data.map(h => `<option value="${h.nameAr}">${h.nameAr}</option>`).join('');
+  blkSel.innerHTML = '<option value="">-- كل المراحل --</option>' +
+    STRUCTURE.map(s => `<option value="${s.trolleyCode}">${esc(s.nameAr)}</option>`).join('');
 
-  document.getElementById('hallsTable').innerHTML = data.map(h => `
-    <tr>
-      <td>${esc(h.nameAr)}</td>
-      <td dir="ltr">${esc(h.nameEn)}</td>
-      <td dir="ltr">${esc(h.code)}</td>
-      <td>${esc(h.capacity)}</td>
-      <td>${esc(h.location)}</td>
-      <td><span class="badge ${h.active?'badge-approved':'badge-cancelled'}">${h.active?'فعالة':'معطلة'}</span></td>
-      <td>
-        <button class="btn btn-sm btn-outline" onclick="openEditHall(${h.id})"><i class="fas fa-edit"></i></button>
-        <button class="btn btn-red btn-sm" onclick="deleteHall(${h.id})"><i class="fas fa-trash"></i></button>
-        <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${h.id},${h.active?'false':'true'})">
-          ${h.active?'<i class="fas fa-toggle-off"></i> تعطيل':'<i class="fas fa-toggle-on"></i> تفعيل'}
-        </button>
-      </td>
-    </tr>`).join('');
+  renderStagesTree();
+}
+
+function renderStagesTree() {
+  const el = document.getElementById('stagesTree');
+  if (!el) return;
+  if (!STRUCTURE.length) { el.innerHTML = '<p style="color:var(--muted);text-align:center">لا توجد مراحل بعد</p>'; return; }
+
+  el.innerHTML = STRUCTURE.map(s => `
+    <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div>
+          <strong style="font-size:1.02rem;color:var(--primary)"><i class="fas fa-laptop"></i> ${esc(s.nameAr)}</strong>
+          <span style="color:var(--muted);font-size:.82rem"> — عربة: <span dir="ltr" style="font-weight:700">${esc(s.trolleyCode)}</span></span>
+          <span class="badge ${s.active?'badge-approved':'badge-cancelled'}" style="margin-right:8px">${s.active?'فعالة':'معطلة'}</span>
+        </div>
+        <div class="action-btns">
+          <button class="btn btn-sm btn-outline" onclick="openEditStage(${s.id})"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${s.id},${s.active?'false':'true'})">${s.active?'<i class="fas fa-toggle-off"></i> تعطيل':'<i class="fas fa-toggle-on"></i> تفعيل'}</button>
+          <button class="btn btn-red btn-sm" onclick="deleteHall(${s.id})"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        ${s.grades.map(g => `
+          <div style="background:#f7fbfb;border:1px solid var(--border);border-radius:8px;padding:10px;min-width:180px;flex:1">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <strong style="font-size:.88rem">${esc(g.nameAr)}</strong>
+              <button class="btn btn-red btn-sm" style="padding:2px 6px" onclick="deleteGrade(${g.id})"><i class="fas fa-trash" style="font-size:.7rem"></i></button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
+              ${g.sections.map(sec => `
+                <span style="background:#e8f4f5;border-radius:12px;padding:2px 10px;font-size:.78rem;display:inline-flex;align-items:center;gap:5px">
+                  ${esc(sec.nameAr)}
+                  <button onclick="deleteSection(${sec.id})" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:.8rem">✕</button>
+                </span>`).join('') || '<span style="color:var(--muted);font-size:.78rem">لا توجد شعب</span>'}
+            </div>
+            <div style="display:flex;gap:4px">
+              <input type="text" placeholder="اسم شعبة جديدة" id="newSec_${g.id}" style="flex:1;font-size:.78rem;padding:4px 6px;border:1px solid var(--border);border-radius:6px">
+              <button class="btn btn-sm btn-outline" style="padding:3px 8px" onclick="addSection(${g.id})"><i class="fas fa-plus" style="font-size:.7rem"></i></button>
+            </div>
+          </div>`).join('')}
+        <div style="background:#fff;border:1.5px dashed var(--border);border-radius:8px;padding:10px;min-width:180px;flex:1;display:flex;flex-direction:column;gap:6px;justify-content:center">
+          <input type="text" placeholder="اسم صف جديد" id="newGrade_${s.id}" style="font-size:.82rem;padding:5px 8px;border:1px solid var(--border);border-radius:6px">
+          <button class="btn btn-sm btn-primary" onclick="addGrade(${s.id})"><i class="fas fa-plus"></i> إضافة صف</button>
+        </div>
+      </div>
+    </div>`).join('');
 }
 
 async function addHall() {
   const nameAr = document.getElementById('hNameAr').value.trim();
-  if (!nameAr) { showToast('الاسم مطلوب', '#c0392b'); return; }
+  const trolleyCode = document.getElementById('hTrolleyCode').value.trim();
+  if (!nameAr || !trolleyCode) { showToast('اسم المرحلة ومعرّف العربة مطلوبان', '#c0392b'); return; }
   const data = await api('/admin/api/add-hall', {
     nameAr, nameEn: document.getElementById('hNameEn').value.trim(),
-    location: document.getElementById('hLocation').value.trim(),
-    code:     document.getElementById('hCode').value.trim(),
-    capacity: document.getElementById('hCapacity').value,
-    equipment:document.getElementById('hEquipment').value.trim(),
-    description: document.getElementById('hDesc').value.trim(),
-    notes:    document.getElementById('hNotes').value.trim(),
-    requiresApproval: document.getElementById('hRequiresApproval').checked,
-    active:   document.getElementById('hActive').checked,
+    trolleyCode,
+    active: document.getElementById('hActive').checked,
   });
-  if (data.success) { showToast('تمت الإضافة'); loadHalls(); }
+  if (data.success) {
+    showToast('تمت إضافة المرحلة');
+    document.getElementById('hNameAr').value = '';
+    document.getElementById('hNameEn').value = '';
+    document.getElementById('hTrolleyCode').value = '';
+    loadHalls();
+  } else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function openEditStage(id) {
+  const s = STRUCTURE.find(x => x.id === id);
+  if (!s) return;
+  const nameAr = prompt('اسم المرحلة (عربي):', s.nameAr);
+  if (nameAr === null) return;
+  const trolleyCode = prompt('معرّف العربة (Trolley):', s.trolleyCode);
+  if (trolleyCode === null) return;
+  const data = await api('/admin/api/update-hall', {id, nameAr, trolleyCode, nameEn: s.nameEn, active: s.active});
+  if (data.success) { showToast('تم الحفظ ✓'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 
-async function openEditHall(id) {
-  // Fetch directly without touching hallsList to avoid loop
-  const res = await fetch('/admin/api/halls');
-  const halls = await res.json();
-  const h = halls.find(x => x.id === id);
-  if (!h) { showToast('لم يتم العثور على القاعة'); return; }
-  document.getElementById('ehId').value          = id;
-  document.getElementById('ehNameAr').value       = h.nameAr || '';
-  document.getElementById('ehNameEn').value       = h.nameEn || '';
-  document.getElementById('ehLocation').value     = h.location || '';
-  document.getElementById('ehCode').value         = h.code || '';
-  document.getElementById('ehCapacity').value     = h.capacity || '';
-  document.getElementById('ehEquipment').value    = h.equipment || '';
-  document.getElementById('ehDesc').value         = h.description || '';
-  document.getElementById('ehNotes').value        = h.notes || '';
-  document.getElementById('ehPriceHour').value    = h.pricePerHour || '';
-  document.getElementById('ehPriceFullDay').value = h.priceFullDay || '';
-  document.getElementById('ehPriceMultiDay').value= h.priceMultiDay || '';
-  document.getElementById('ehPriceNotes').value   = h.priceNotes || '';
-  document.getElementById('ehRequiresApproval').checked = h.requiresApproval;
-  document.getElementById('ehActive').checked     = h.active;
-  openModal('editHallModal');
-}
-
-async function saveHall() {
-  const data = {
-    id:               document.getElementById('ehId').value,
-    nameAr:           document.getElementById('ehNameAr').value,
-    nameEn:           document.getElementById('ehNameEn').value,
-    location:         document.getElementById('ehLocation').value,
-    code:             document.getElementById('ehCode').value,
-    capacity:         document.getElementById('ehCapacity').value,
-    equipment:        document.getElementById('ehEquipment').value,
-    description:      document.getElementById('ehDesc').value,
-    notes:            document.getElementById('ehNotes').value,
-    pricePerHour:     document.getElementById('ehPriceHour').value || null,
-    priceFullDay:     document.getElementById('ehPriceFullDay').value || null,
-    priceMultiDay:    document.getElementById('ehPriceMultiDay').value || null,
-    priceNotes:       document.getElementById('ehPriceNotes').value,
-    requiresApproval: document.getElementById('ehRequiresApproval').checked,
-    active:           document.getElementById('ehActive').checked,
-  };
-  const res = await fetch('/admin/api/update-hall', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
-  const j = await res.json();
-  if (j.success) { closeModal('editHallModal'); loadHalls(); showToast('تم الحفظ ✓'); }
-  else showToast(j.error || 'خطأ');
-}
-
 async function deleteHall(id) {
-  if (!confirm('حذف هذه القاعة؟')) return;
+  if (!confirm('حذف هذه المرحلة؟ سيتم حذف صفوفها وشعبها أيضاً.')) return;
   const data = await api('/admin/api/delete-hall', {id});
   if (data.success) { showToast('تم الحذف'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 
 async function toggleHallActive(id, active) {
-  const h = hallsList.find(x => x.id === id);
-  if (!h) return;
-  const data = await api('/admin/api/update-hall', {...h, id, active});
+  const s = STRUCTURE.find(x => x.id === id);
+  if (!s) return;
+  const data = await api('/admin/api/update-hall', {id, active, nameAr: s.nameAr, nameEn: s.nameEn});
   if (data.success) { showToast('تم التحديث'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function addGrade(stageId) {
+  const input = document.getElementById('newGrade_' + stageId);
+  const nameAr = input.value.trim();
+  if (!nameAr) { showToast('اسم الصف مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-grade', {stageId, nameAr});
+  if (data.success) { input.value=''; showToast('تمت الإضافة'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+async function deleteGrade(id) {
+  if (!confirm('حذف هذا الصف؟ سيتم حذف شعبه أيضاً.')) return;
+  const data = await api('/admin/api/delete-grade', {id});
+  if (data.success) { showToast('تم الحذف'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function addSection(gradeId) {
+  const input = document.getElementById('newSec_' + gradeId);
+  const nameAr = input.value.trim();
+  if (!nameAr) { showToast('اسم الشعبة مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-section', {gradeId, nameAr});
+  if (data.success) { input.value=''; showToast('تمت الإضافة'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+async function deleteSection(id) {
+  if (!confirm('حذف هذه الشعبة؟')) return;
+  const data = await api('/admin/api/delete-section', {id});
+  if (data.success) { showToast('تم الحذف'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+// ── Periods ──────────────────────────────────────────────────────
+async function renderPeriodsTable() {
+  await loadPeriods();
+  document.getElementById('periodsTable').innerHTML = PERIODS.map(p => `
+    <tr>
+      <td>${p.number}</td>
+      <td>${esc(p.label)}</td>
+      <td dir="ltr">${p.startTime||'-'}</td>
+      <td dir="ltr">${p.endTime||'-'}</td>
+      <td><span class="badge ${p.active?'badge-approved':'badge-cancelled'}">${p.active?'فعالة':'معطلة'}</span></td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="openEditPeriod(${p.id})"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-red btn-sm" onclick="deletePeriod(${p.id})"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--muted)">لا توجد حصص بعد</td></tr>';
+}
+
+async function addPeriod() {
+  const number = document.getElementById('pNumber').value;
+  if (!number) { showToast('رقم الحصة مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-period', {
+    number, label: document.getElementById('pLabel').value.trim(),
+    startTime: document.getElementById('pStart').value,
+    endTime: document.getElementById('pEnd').value,
+  });
+  if (data.success) {
+    document.getElementById('pNumber').value = '';
+    document.getElementById('pLabel').value = '';
+    document.getElementById('pStart').value = '';
+    document.getElementById('pEnd').value = '';
+    showToast('تمت الإضافة'); renderPeriodsTable();
+  } else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function openEditPeriod(id) {
+  const p = PERIODS.find(x => x.id === id);
+  if (!p) return;
+  const label = prompt('اسم الحصة:', p.label);
+  if (label === null) return;
+  const startTime = prompt('من الساعة (HH:MM أو فارغ):', p.startTime || '');
+  if (startTime === null) return;
+  const endTime = prompt('إلى الساعة (HH:MM أو فارغ):', p.endTime || '');
+  if (endTime === null) return;
+  const data = await api('/admin/api/update-period', {id, label, startTime, endTime, active: p.active});
+  if (data.success) { showToast('تم الحفظ ✓'); renderPeriodsTable(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+async function deletePeriod(id) {
+  if (!confirm('حذف هذه الحصة؟')) return;
+  const data = await api('/admin/api/delete-period', {id});
+  if (data.success) { showToast('تم الحذف'); renderPeriodsTable(); }
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 
 // ── Blocked ────────────────────────────────────────────────────
 async function loadBlocked() {
   const data = await fetch('/admin/api/blocked').then(r => r.json());
-  document.getElementById('blockedTable').innerHTML = data.map(b => `
+  document.getElementById('blockedTable').innerHTML = data.map(b => {
+    const stage = STRUCTURE.find(s => s.trolleyCode === b.hall);
+    return `
     <tr>
       <td>${b.s}</td><td>${b.e}</td>
-      <td>${esc(b.hall||'كل القاعات')}</td>
+      <td>${esc(b.hall ? (stage ? stage.nameAr : b.hall) : 'كل المراحل')}</td>
       <td dir="ltr">${b.fromT||'-'}</td><td dir="ltr">${b.toT||'-'}</td>
       <td>${esc(b.r)}</td>
       <td><button class="btn btn-red btn-sm" onclick="deleteBlocked(${b.id})"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">لا توجد فترات محظورة</td></tr>';
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">لا توجد فترات محظورة</td></tr>';
 }
 
 async function addBlocked() {
@@ -1045,7 +1156,7 @@ function runReport() {
   const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
   for (const r of rows) {
     let key = '';
-    if (dim === 'hall')   key = r.hall || 'غير محدد';
+    if (dim === 'hall')   key = r.stage || 'غير محدد';
     else if (dim === 'person') key = r.name || 'غير محدد';
     else if (dim === 'month')  key = (r.date||'').substring(0, 7);
     else if (dim === 'dow') {
@@ -1057,13 +1168,7 @@ function runReport() {
     groups[key].count++;
     if (r.status === 'approved') groups[key].approved++;
     if (r.status === 'pending')  groups[key].pending++;
-    if (r.fullDay) {
-      groups[key].hours += 8;
-    } else if (r.startTime && r.endTime) {
-      const [sh, sm] = r.startTime.split(':').map(Number);
-      const [eh, em] = r.endTime.split(':').map(Number);
-      groups[key].hours += Math.max(0, (eh*60+em - sh*60-sm) / 60);
-    }
+    groups[key].hours++; // one period = one booking
   }
 
   let arr = Object.entries(groups).map(([key, data]) => ({key, data}));
@@ -1084,7 +1189,7 @@ function runReport() {
 
   document.getElementById('anaTable').innerHTML = `
     <table class="period-table">
-      <thead><tr><th>العنصر</th><th>الحجوزات</th><th>معتمدة</th><th>قيد المراجعة</th><th>الساعات (تقريباً)</th></tr></thead>
+      <thead><tr><th>العنصر</th><th>الحجوزات</th><th>معتمدة</th><th>قيد المراجعة</th><th>عدد الحصص</th></tr></thead>
       <tbody>${arr.map(({key,data}) => `
         <tr>
           <td style="font-weight:700">${esc(key)}</td>
@@ -1096,7 +1201,7 @@ function runReport() {
       </tbody>
     </table>`;
 
-  const dimLabels = {hall:'القاعات',person:'الأشخاص',month:'الأشهر',dow:'أيام الأسبوع'};
+  const dimLabels = {hall:'المراحل',person:'الأشخاص',month:'الأشهر',dow:'أيام الأسبوع'};
   document.getElementById('reportTitle').innerHTML = `<i class="fas fa-chart-bar"></i> نتائج: ${dimLabels[dim]||dim}`;
   document.getElementById('reportResult').style.display = 'block';
 }
@@ -1130,13 +1235,17 @@ async function initAdminCal() {
   const res = await fetch('/admin/api/bookings?filter=all');
   allBookingsForCal = await res.json();
 
-  // Populate hall filter
-  const halls = [...new Set(allBookingsForCal.map(b => b.hall).filter(Boolean))];
+  // Populate stage filter (by trolley code)
+  const seen = new Set();
   const sel = document.getElementById('calHallFilter');
-  halls.forEach(h => {
-    const o = document.createElement('option');
-    o.value = h; o.textContent = h;
-    sel.appendChild(o);
+  sel.innerHTML = '<option value="">كل المراحل</option>';
+  allBookingsForCal.forEach(b => {
+    if (b.trolleyCode && !seen.has(b.trolleyCode)) {
+      seen.add(b.trolleyCode);
+      const o = document.createElement('option');
+      o.value = b.trolleyCode; o.textContent = b.stage || b.trolleyCode;
+      sel.appendChild(o);
+    }
   });
 
   renderCal();
@@ -1145,15 +1254,13 @@ async function initAdminCal() {
 function renderCal() {
   const filter = document.getElementById('calHallFilter').value;
   const events = allBookingsForCal
-    .filter(b => !filter || b.hall === filter)
+    .filter(b => !filter || b.trolleyCode === filter)
     .map(b => ({
       id: b.id,
-      title: `${b.hall} — ${b.name}`,
+      title: `${b.stage||''} — ${[b.grade,b.section].filter(Boolean).join(' ')} — ${b.name}`,
       start: b.date,
-      end: b.endDate || b.date,
-      allDay: b.fullDay,
-      startTime: b.fullDay ? undefined : b.startTime,
-      endTime: b.fullDay ? undefined : b.endTime,
+      end: b.date,
+      allDay: true,
       color: b.status === 'approved' ? '#27ae60'
            : b.status === 'pending'  ? '#e67e22'
            : '#c0392b',
@@ -1178,7 +1285,7 @@ function renderCal() {
     events: events,
     eventClick: function(info) {
       const b = info.event.extendedProps;
-      openEditModal(b.id);
+      openEdit(b.reqId);
     },
     height: 'auto'
   });
@@ -1196,29 +1303,21 @@ async function loadReportStats() {
   const cancelled = data.filter(b => b.status === 'cancelled').length;
 
   const hallCount = {};
-  data.forEach(b => { if (b.hall) hallCount[b.hall] = (hallCount[b.hall]||0) + 1; });
+  data.forEach(b => { if (b.stage) hallCount[b.stage] = (hallCount[b.stage]||0) + 1; });
   const topHall = Object.entries(hallCount).sort((a,b)=>b[1]-a[1])[0];
 
   const monthCount = {};
   data.forEach(b => { if (b.date) { const m = b.date.substring(0,7); monthCount[m] = (monthCount[m]||0)+1; } });
   const topMonth = Object.entries(monthCount).sort((a,b)=>b[1]-a[1])[0];
 
-  let hours = 0;
-  data.forEach(b => {
-    if (b.fullDay) hours += 8;
-    else if (b.startTime && b.endTime) {
-      const [sh,sm] = b.startTime.split(':').map(Number);
-      const [eh,em] = b.endTime.split(':').map(Number);
-      hours += Math.max(0,(eh*60+em - sh*60-sm)/60);
-    }
-  });
+  const totalPeriods = data.length;
 
   document.getElementById('rs-approved').textContent = approved;
   document.getElementById('rs-pending').textContent  = pending;
   document.getElementById('rs-rejected').textContent = rejected + cancelled;
   document.getElementById('rs-halls').textContent    = topHall ? topHall[0] : '-';
   document.getElementById('rs-month').textContent    = topMonth ? topMonth[0].replace('-',' / ') : '-';
-  document.getElementById('rs-hours').textContent    = hours.toFixed(0) + 'س';
+  document.getElementById('rs-hours').textContent    = totalPeriods;
 
   if (!data.length) return;
 
@@ -1367,13 +1466,13 @@ function drawHallBars(hallCount) {
 
 // ── Export CSV ──
 function exportCSV() {
-  const rows = [['رقم الطلب','الاسم','البريد','الجوال','المناسبة','القاعة','التاريخ','وقت البداية','وقت النهاية','الحالة','ملاحظات','تاريخ الطلب']];
+  const rows = [['رقم الطلب','الاسم','البريد','الجوال','الموضوع','المرحلة','الصف','الشعبة','الحصة','التاريخ','الحالة','ملاحظات','تاريخ الطلب']];
   const statusLbl = {pending:'قيد المراجعة', approved:'معتمد', rejected:'مرفوض', cancelled:'ملغي'};
   const filtered = allBookings;
   filtered.forEach(b => {
-    rows.push([b.reqId, b.name, b.email, b.phone||'', b.title||'', b.hall||'',
-      b.date||'', b.fullDay?'يوم كامل':b.startTime||'', b.fullDay?'':b.endTime||'',
-      statusLbl[b.status]||b.status, b.notes||'', b.createdAt||'']);
+    rows.push([b.reqId, b.name, b.email, b.phone||'', b.title||'', b.stage||'', b.grade||'', b.section||'',
+      b.periodNumber ? ('الحصة '+b.periodNumber) : '',
+      b.date||'', statusLbl[b.status]||b.status, b.notes||'', b.createdAt||'']);
   });
   const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
@@ -1388,11 +1487,11 @@ function exportCSV() {
 function exportPrint() {
   const statusLbl = {pending:'قيد المراجعة', approved:'معتمد', rejected:'مرفوض', cancelled:'ملغي'};
   const rows = allBookings.map(b => [
-    b.reqId, b.name, b.hall||'', b.date||'',
-    b.fullDay?'يوم كامل':(b.startTime+' - '+b.endTime),
+    b.reqId, b.name, b.stage||'', b.grade||'', b.section||'',
+    b.periodNumber ? ('الحصة '+b.periodNumber) : '', b.date||'',
     statusLbl[b.status]||b.status, b.notes||''
   ].map(c => '<td>'+String(c).replace(/</g,'&lt;')+'</td>').join('')).map(r => '<tr>'+r+'</tr>').join('');
-  
+
   const html = [
     '<!DOCTYPE html><html dir="rtl" lang="ar"><head>',
     '<meta charset="UTF-8"><title>تقرير الحجوزات</title>',
@@ -1404,10 +1503,10 @@ function exportPrint() {
     '<h2>تقرير الحجوزات</h2>',
     '<p>إجمالي: '+allBookings.length+' حجز — '+new Date().toLocaleDateString('ar-SA')+'</p>',
     '<button onclick="window.print()" style="background:#247680;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">طباعة</button>',
-    '<table><thead><tr><th>رقم الطلب</th><th>الاسم</th><th>القاعة</th><th>التاريخ</th><th>الوقت</th><th>الحالة</th><th>ملاحظات</th></tr></thead>',
+    '<table><thead><tr><th>رقم الطلب</th><th>الاسم</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>الحصة</th><th>التاريخ</th><th>الحالة</th><th>ملاحظات</th></tr></thead>',
     '<tbody>'+rows+'</tbody></table></body></html>'
   ].join('');
-  
+
   const win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();
@@ -1416,6 +1515,7 @@ function exportPrint() {
 // ── Init ──────────────────────────────────────────────────────
 loadBookings();
 loadHalls();
+loadPeriods();
 </script>
 
 <nav class="mobile-nav">
@@ -1425,7 +1525,7 @@ loadHalls();
       <span class="m-badge" id="mBadge" style="display:none">0</span>
     </button>
     <button class="mobile-nav-item" onclick="showTab('halls',this)">
-      <i class="fas fa-door-open"></i><span>القاعات</span>
+      <i class="fas fa-laptop"></i><span>المراحل</span>
     </button>
     <button class="mobile-nav-item" onclick="showTab('blocked',this)">
       <i class="fas fa-ban"></i><span>محظور</span>
