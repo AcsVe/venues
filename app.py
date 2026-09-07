@@ -1,52 +1,103 @@
+"""ARS Applied Reservation System — Web v4"""
 import os
-import sqlite3
-from flask import Flask
-from models import db, init_db
-from blueprints.public import public_bp
-from blueprints.admin import admin_bp
+from flask import Flask, g
+from flask_login import LoginManager
+from models.database import get_engine, User, seed_database
+from sqlalchemy.orm import sessionmaker, joinedload
 
 def create_app():
     app = Flask(__name__)
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY','ars-dev-secret-2026')
+    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-    app.secret_key = os.environ.get('SECRET_KEY', 'acs-dev-secret-change-in-prod')
+    engine  = get_engine()
+    Session = sessionmaker(bind=engine, expire_on_commit=False)
+    app.config['DB_SESSION_FACTORY'] = Session
 
-    if os.path.isdir('/data'):
-        db_path = '/data/acs_booking.db'
-        upload_dir = '/data/uploads'
-    else:
-        db_path = os.path.join(os.path.dirname(__file__), 'acs_booking.db')
-        upload_dir = os.path.join(os.path.dirname(__file__), 'uploads')
+    try:
+        s = Session(); seed_database(s); s.close()
+    except Exception as e:
+        print(f'⚠️ Seed: {e}')
 
-    os.makedirs(upload_dir, exist_ok=True)
+    # ── DB session per request ────────────────────────────────────────────────
+    @app.before_request
+    def open_db():
+        if 'db' not in g:
+            g.db = Session()
 
-    database_url = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
-    if database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['UPLOAD_FOLDER'] = upload_dir
-    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+    @app.teardown_appcontext
+    def close_db(exception):
+        db = g.pop('db', None)
+        if db is not None:
+            if exception:
+                db.rollback()
+            db.close()
 
-    app.config['ADMIN_USER']    = os.environ.get('ADMIN_USER', 'admin')
-    app.config['ADMIN_PASS']    = os.environ.get('ADMIN_PASS', 'acs2024')
-    app.config['ORG_AR']        = os.environ.get('ORG_AR', 'الجمعية الثقافية العربية')
-    app.config['ORG_EN']        = os.environ.get('ORG_EN', 'Arab Cultural Society')
-    app.config['LOGO_URL']      = os.environ.get('LOGO_URL', 'https://i.postimg.cc/S2W2hXZ6/acs.png')
-    app.config['ACCENT_COLOR']  = os.environ.get('ACCENT_COLOR', '#EBB37B')
-    app.config['BREVO_API_KEY'] = os.environ.get('BREVO_API_KEY', '')
-    app.config['SENDER_EMAIL']  = os.environ.get('SENDER_EMAIL', 'acsvenues@gmail.com')
-    app.config['SENDER_NAME']   = os.environ.get('SENDER_NAME', 'ACS Booking')
+    # ── Login manager ─────────────────────────────────────────────────────────
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+    login_manager.login_message = 'يرجى تسجيل الدخول'
+    login_manager.login_message_category = 'warning'
 
-    db.init_app(app)
-    with app.app_context():
-        init_db(app)
+    @login_manager.user_loader
+    def load_user(uid):
+        try:
+            db = g.get('db') or Session()
+            return (db.query(User)
+                      .options(joinedload(User.role_ref))
+                      .filter(User.id == int(uid))
+                      .first())
+        except Exception:
+            return None
 
-    app.register_blueprint(public_bp)
-    app.register_blueprint(admin_bp, url_prefix='/admin')
+    # ── Register all blueprints ───────────────────────────────────────────────
+    from routes.auth          import auth_bp
+    from routes.reservations  import reservations_bp
+    from routes.venues        import venues_bp
+    from routes.admin         import admin_bp
+    from routes.api           import api_bp
+    from routes.locations     import locations_bp, venues_mgmt_bp
+    from routes.users         import users_bp
+    from routes.reports       import reports_bp
+    from routes.contacts      import contacts_bp
+    from routes.checklists    import checklists_bp
+    from routes.blocked       import blocked_bp
+    from routes.ratings       import ratings_bp
+    from routes.calendar_view import calendar_bp
+    from routes.settings      import settings_bp
+
+    for bp in [auth_bp, reservations_bp, venues_bp, admin_bp, api_bp,
+               locations_bp, venues_mgmt_bp, users_bp, reports_bp,
+               contacts_bp, checklists_bp, blocked_bp, ratings_bp,
+               calendar_bp, settings_bp]:
+        app.register_blueprint(bp)
+
+    # Jinja filters
+    from utils.helpers import status_label, status_class
+    app.jinja_env.filters['status_label'] = status_label
+    app.jinja_env.filters['status_class'] = status_class
+
+    @app.context_processor
+    def inject_globals():
+        from flask_login import current_user
+        from utils.helpers import get_permissions
+        return {
+            'app_name': 'ARS — نظام إدارة الحجوزات',
+            'current_user': current_user,
+            'perms': get_permissions(),
+        }
 
     return app
 
-app = create_app()
+
+try:
+    app = create_app()
+    print('✅ ARS App ready')
+except Exception as e:
+    import traceback; traceback.print_exc(); raise
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port,
+            debug=os.environ.get('FLASK_ENV','production') == 'development')
