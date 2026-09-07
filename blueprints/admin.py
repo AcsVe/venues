@@ -43,17 +43,15 @@ def login_required(f):
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
-    lang = request.args.get('lang') or request.form.get('lang', 'ar')
     if request.method == 'POST':
         u = request.form.get('username', '')
         p = request.form.get('password', '')
         if (u == current_app.config['ADMIN_USER'] and
                 p == current_app.config['ADMIN_PASS']):
             session['admin_logged_in'] = True
-            session['admin_lang'] = lang
             return redirect(url_for('admin.dashboard'))
-        error = 'بيانات خاطئة' if lang == 'ar' else 'Invalid credentials'
-    return render_template('admin/login.html', error=error, lang=lang)
+        error = 'بيانات خاطئة'
+    return render_template('admin/login.html', error=error)
 
 
 @admin_bp.route('/logout')
@@ -65,8 +63,7 @@ def logout():
 @admin_bp.route('/')
 @login_required
 def dashboard():
-    lang = session.get('admin_lang', 'ar')
-    return render_template('admin/dashboard.html', lang=lang)
+    return render_template('admin/dashboard.html')
 
 
 # ── Bookings API ──────────────────────────────────────────────────────────

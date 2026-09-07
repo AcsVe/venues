@@ -1,0 +1,125 @@
+{% extends 'base_public.html' %}
+{% block title %}نموذج تسليم الأجهزة{% endblock %}
+
+{% block extra_head %}
+<style>
+  .checkout-header {
+    background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 20px;
+  }
+  .checkout-header h2 { font-size: 1.15rem; font-weight: 800; margin-bottom: 10px; }
+  .checkout-meta { display: flex; flex-wrap: wrap; gap: 10px 24px; font-size: .85rem; }
+  .checkout-meta b { font-weight: 700; }
+  table.co-table { width: 100%; border-collapse: collapse; }
+  table.co-table th {
+    background: var(--bg); padding: 10px; text-align: right; font-size: .82rem;
+    border-bottom: 2px solid var(--border);
+  }
+  table.co-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: .9rem; }
+  table.co-table select {
+    padding: 6px 8px; border: 1.5px solid var(--border); border-radius: 8px;
+    font-family: inherit; font-size: .85rem; min-width: 110px;
+  }
+  .seq-col { width: 40px; color: var(--muted); font-weight: 700; }
+  .no-students { text-align: center; padding: 30px; color: var(--muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="checkout-header">
+  <h2><i class="fas fa-laptop"></i> نموذج تسليم أجهزة الحاسوب</h2>
+  <div class="checkout-meta">
+    <span><b>رقم الحجز:</b> {{ b.req_id }}</span>
+    <span><b>المعلم/ة:</b> {{ b.name }}</span>
+    <span><b>المرحلة:</b> {{ b.stage_name }}</span>
+    <span><b>الصف:</b> {{ b.grade_name }}</span>
+    <span><b>الشعبة:</b> {{ b.section_name }}</span>
+    <span><b>الحصة:</b> {{ 'الحصة ' ~ b.period_number if b.period_number else '' }}</span>
+    <span><b>التاريخ:</b> {{ b.booking_date }}</span>
+  </div>
+</div>
+
+<div class="card">
+  <div id="alertBox"></div>
+  {% if students %}
+  <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">
+    اختر رقم اللابتوب لكل طالب استلم جهازاً. اترك الحقل فارغاً للطالب الغائب أو الذي لم يستلم جهازاً — التعبئة غير مشروطة بالعدد.
+  </p>
+  <div style="overflow-x:auto">
+  <table class="co-table">
+    <thead>
+      <tr><th class="seq-col">#</th><th>اسم الطالب</th><th>رقم اللابتوب</th></tr>
+    </thead>
+    <tbody>
+      {% for s in students %}
+      <tr>
+        <td class="seq-col">{{ loop.index }}</td>
+        <td>{{ s.name }}</td>
+        <td>
+          <select data-student-id="{{ s.id }}">
+            <option value="">-- لم يُسلَّم --</option>
+            {% for n in range(1, laptop_count + 1) %}
+            <option value="{{ n }}" {% if existing_map.get(s.id) == n %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:18px" onclick="submitCheckout()" id="submitBtn">
+    <i class="fas fa-paper-plane"></i> إرسال
+  </button>
+  {% else %}
+  <div class="no-students">
+    <i class="fas fa-users-slash" style="font-size:2rem;margin-bottom:10px;display:block"></i>
+    لا يوجد طلاب مسجّلون في هذه الشعبة بعد. يُرجى التواصل مع الإدارة لإضافة أسماء الطلاب.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const REQ_ID = {{ b.req_id|tojson }};
+
+function showAlert(msg, type) {
+  document.getElementById('alertBox').innerHTML =
+    `<div class="alert alert-${type}"><i class="fas fa-${type==='error'?'exclamation-circle':'check-circle'}"></i> ${msg}</div>`;
+}
+
+async function submitCheckout() {
+  const btn = document.getElementById('submitBtn');
+  const rows = document.querySelectorAll('select[data-student-id]');
+  const entries = Array.from(rows).map(sel => ({
+    studentId: sel.dataset.studentId,
+    laptopNumber: sel.value || null,
+  }));
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> جاري الإرسال...';
+
+  try {
+    const res = await fetch('/api/submit-checkout', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ reqId: REQ_ID, entries })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showAlert('تم إرسال قائمة تسليم الأجهزة بنجاح ✓', 'success');
+    } else {
+      showAlert(data.error || 'حدث خطأ', 'error');
+    }
+  } catch (e) {
+    showAlert('خطأ في الاتصال', 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال';
+}
+</script>
+{% endblock %}

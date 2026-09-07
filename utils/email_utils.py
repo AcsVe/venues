@@ -9,7 +9,7 @@ def _send(to_email, to_name, subject, html_body, bcc_list=None):
         return False
 
     sender_email = current_app.config.get('SENDER_EMAIL', '')
-    sender_name  = current_app.config.get('SENDER_NAME', 'مدرسة الرائد العربي')
+    sender_name  = current_app.config.get('SENDER_NAME', 'ACS Booking')
     org_ar       = current_app.config.get('ORG_AR', '')
 
     payload = {
@@ -51,7 +51,7 @@ def _class_label(data):
 
 def _base_html(content, color='#247680'):
     logo = current_app.config.get('LOGO_URL', '')
-    org  = current_app.config.get('ORG_AR', 'مدرسة الرائد العربي')
+    org  = current_app.config.get('ORG_AR', 'Arab Cultural Society')
     return f"""
 <div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
   <div style="background:{color};padding:20px 24px;text-align:center">
@@ -87,7 +87,7 @@ def send_confirm(data):
     <p style="color:#555">سيتم إشعارك بقرار الإدارة في أقرب وقت ممكن. احتفظ برقم الطلب للاستعلام والتعديل.</p>
     """
     return _send(data['email'], data['name'],
-                 f"[الرائد العربي] تم استلام طلب الحجز #{data['reqId']}",
+                 f"[ACS] تم استلام طلب الحجز #{data['reqId']}",
                  _base_html(content))
 
 
@@ -101,7 +101,7 @@ def send_approve(data):
     <p style="color:#555">نتمنى لكم حصة مفيدة. في حال الحاجة لأي تعديل يُرجى التواصل معنا.</p>
     """
     return _send(data['email'], data['name'],
-                 f"[الرائد العربي] ✅ تمت الموافقة على حجزك #{data['reqId']}",
+                 f"[ACS] ✅ تمت الموافقة على حجزك #{data['reqId']}",
                  _base_html(content, '#27ae60'),
                  bcc_list=data.get('bcc', []))
 
@@ -118,7 +118,7 @@ def send_reject(data):
     <p style="color:#555">يمكنك تقديم طلب جديد باختيار تاريخ أو حصة أخرى. نعتذر عن الإزعاج.</p>
     """
     return _send(data['email'], data['name'],
-                 f"[الرائد العربي] بخصوص طلب الحجز #{data['reqId']}",
+                 f"[ACS] بخصوص طلب الحجز #{data['reqId']}",
                  _base_html(content, '#c0392b'))
 
 
@@ -133,7 +133,7 @@ def send_cancel(data):
     </table>
     """
     return _send(data['email'], data['name'],
-                 f"[الرائد العربي] إلغاء الحجز #{data['reqId']}",
+                 f"[ACS] إلغاء الحجز #{data['reqId']}",
                  _base_html(content, '#e67e22'))
 
 
@@ -147,7 +147,7 @@ def send_update(data):
     <p style="color:#555">إذا تم التعديل على حجز معتمد، سيُعاد الحجز إلى قيد المراجعة وسيتم إخطارك بالقرار.</p>
     """
     return _send(data['email'], data['name'],
-                 f"[الرائد العربي] تعديل الحجز #{data['reqId']}",
+                 f"[ACS] تعديل الحجز #{data['reqId']}",
                  _base_html(content),
                  bcc_list=data.get('bcc', []))
 
@@ -161,7 +161,7 @@ def send_pending(data):
     </table>
     """
     return _send(data['email'], data['name'],
-                 f"[الرائد العربي] إعادة مراجعة طلب الحجز #{data['reqId']}",
+                 f"[ACS] إعادة مراجعة طلب الحجز #{data['reqId']}",
                  _base_html(content, '#e67e22'),
                  bcc_list=data.get('bcc', []))
 

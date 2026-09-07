@@ -9,19 +9,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #FF5733; --primary-dark: #C43D1F; --primary-light: #FF8563;
-      --secondary: #1B3358; --secondary-dark: #0D1B2A; --secondary-light: #3D5A80;
-      --accent: #EBB37B;
+      --primary: #247680; --primary-dark: #1a5c64; --accent: #EBB37B;
       --bg: #f0f4f5; --white: #fff; --text: #1e2a2b; --muted: #6b7c7e;
       --border: #d4e4e6; --radius: 12px; --sidebar: 240px;
-      --shadow: 0 2px 12px rgba(255,87,51,.10);
+      --shadow: 0 2px 12px rgba(36,118,128,.10);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
     /* Sidebar */
     .sidebar {
       width: var(--sidebar); min-height: 100vh;
-      background: linear-gradient(180deg, var(--secondary-dark), var(--secondary));
+      background: linear-gradient(180deg, var(--primary-dark), var(--primary));
       color: #fff; display: flex; flex-direction: column;
       position: fixed; top: 0; right: 0; bottom: 0; z-index: 150;
       overflow-y: auto;
@@ -165,7 +163,7 @@
     .bar-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .bar-label { min-width: 120px; font-size: .82rem; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
     .bar-track { flex: 1; background: #f0f7f8; border-radius: 6px; height: 24px; overflow: hidden; }
-    .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-light)); border-radius: 6px; display: flex; align-items: center; padding-right: 6px; transition: width .5s; }
+    .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #2a8f9e); border-radius: 6px; display: flex; align-items: center; padding-right: 6px; transition: width .5s; }
     .bar-fill span { color: #fff; font-size: .75rem; font-weight: 700; }
     .period-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 14px; }
     .period-table th { background: #f0f7f8; padding: 8px 10px; font-weight: 700; color: var(--primary); }
@@ -175,7 +173,7 @@
       display: none;
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      background: linear-gradient(180deg, var(--secondary-dark), #050c14);
+      background: linear-gradient(180deg, var(--primary-dark), #143f45);
       z-index: 200;
       padding: 6px 0 8px;
       box-shadow: 0 -3px 16px rgba(0,0,0,.2);
@@ -294,8 +292,6 @@
   <div class="sidebar-footer">
     <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
     <br><br>
-    <a href="#" onclick="toggleLang();return false;"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></a>
-    <br><br>
     <a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> خروج</a>
   </div>
 </nav>
@@ -308,7 +304,6 @@
       <h1 id="pageTitle">طلبات الحجز</h1>
     </div>
     <div class="topbar-right">
-      <button class="btn btn-outline btn-sm" onclick="toggleLang()"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></button>
       <button class="btn btn-outline btn-sm" onclick="refreshAll()"><i class="fas fa-sync"></i> تحديث</button>
       <span style="font-size:.85rem;color:var(--muted)" id="clockEl"></span>
     </div>
@@ -592,224 +587,6 @@ let selectedIds = new Set();
 let STRUCTURE = [];   // stages → grades → sections
 let PERIODS = [];
 
-// ── i18n (bilingual admin panel; layout stays RTL, only text swaps) ──
-const I18N_EN = {
-  "طلبات الحجز": "Bookings",
-  "المراحل والعربات": "Stages & Trolleys",
-  "المراحل والعربات، الصفوف والشعب": "Stages, Trolleys, Grades & Sections",
-  "غير متاح": "Unavailable",
-  "الفترات المحظورة": "Blocked Periods",
-  "الفترات غير المتاحة": "Unavailable Periods",
-  "جهات الاتصال": "Contacts",
-  "التقارير": "Reports",
-  "التقويم": "Calendar",
-  "التقويم المرئي": "Visual Calendar",
-  "الروزنامة العامة": "Public Calendar",
-  "خروج": "Logout",
-  "تحديث": "Refresh",
-  "لوحة التحكم": "Admin Panel",
-  "إجمالي الطلبات": "Total Bookings",
-  "قيد المراجعة": "Pending",
-  "معتمد": "Approved",
-  "مرفوض": "Rejected",
-  "ملغي": "Cancelled",
-  "الكل": "All",
-  "بحث...": "Search...",
-  "🔍 بحث...": "🔍 Search...",
-  "حذف المحدد": "Delete Selected",
-  "طباعة": "Print",
-  "رقم الطلب": "Request ID",
-  "الاسم": "Name",
-  "الموضوع": "Subject",
-  "المرحلة": "Stage",
-  "الصف": "Grade",
-  "الشعبة": "Section",
-  "الحصة": "Period",
-  "التاريخ": "Date",
-  "الحالة": "Status",
-  "الإجراءات": "Actions",
-  "إضافة مرحلة جديدة": "Add New Stage",
-  "اسم المرحلة (عربي)": "Stage name (Arabic)",
-  "الاسم (إنجليزي)": "Name (English)",
-  "معرّف العربة (Trolley)": "Trolley ID",
-  "مرحلة فعالة": "Active stage",
-  "إضافة مرحلة": "Add Stage",
-  "الحصص (مشتركة بين المرحلتين)": "Periods (shared by both stages)",
-  "رقم الحصة": "Period number",
-  "اسم الحصة": "Period name",
-  "من الساعة (اختياري)": "From time (optional)",
-  "إلى الساعة (اختياري)": "To time (optional)",
-  "إضافة حصة": "Add Period",
-  "من": "From",
-  "إلى": "To",
-  "إضافة فترة محظورة": "Add Blocked Period",
-  "من تاريخ": "From date",
-  "إلى تاريخ": "To date",
-  "المرحلة/العربة (اتركه فارغاً لحظر الكل)": "Stage/trolley (leave blank to block all)",
-  "كل المراحل": "All Stages",
-  "السبب": "Reason",
-  "إضافة": "Add",
-  "إضافة جهة اتصال": "Add Contact",
-  "البريد الإلكتروني": "Email",
-  "الاسم (اختياري)": "Name (optional)",
-  "رفع قائمة (CSV/TXT)": "Upload list (CSV/TXT)",
-  "ملف CSV أو TXT — كل سطر:": "A CSV or TXT file — each line:",
-  "أو": "or",
-  "فقط": "only",
-  "قائمة جهات الاتصال": "Contacts List",
-  "تاريخ الإضافة": "Date Added",
-  "حذف": "Delete",
-  "أكثر مرحلة استخداماً": "Most-used stage",
-  "أكثر شهر": "Busiest month",
-  "إجمالي الحصص": "Total Periods",
-  "توزيع الحالات": "Status Distribution",
-  "الحجوزات الشهرية": "Monthly Bookings",
-  "مقارنة المراحل (العربات)": "Stage (Trolley) Comparison",
-  "مستكشف البيانات": "Data Explorer",
-  "تجميع حسب": "Group by",
-  "المراحل": "Stages",
-  "الأشخاص": "People",
-  "الأشهر": "Months",
-  "أيام الأسبوع": "Days of week",
-  "المعتمدة فقط": "Approved only",
-  "قيد المراجعة فقط": "Pending only",
-  "تحليل": "Analyze",
-  "الحجوزات": "Bookings",
-  "معتمدة": "Approved",
-  "عدد الحصص": "Number of periods",
-  "مرفوضة/ملغية": "Rejected/Cancelled",
-  "مرفوض/ملغي": "Rejected/Cancelled",
-  "تعديل الحجز": "Edit Booking",
-  "البريد": "Email",
-  "الجوال": "Phone",
-  "نيابة عن": "On behalf of",
-  "المادة / الغرض": "Subject / Purpose",
-  "المادة/الغرض": "Subject/Purpose",
-  "تاريخ الحجز": "Booking date",
-  "ملاحظات": "Notes",
-  "حفظ": "Save",
-  "إلغاء": "Cancel",
-  "سبب الرفض": "Rejection reason",
-  "رفض الحجز": "Reject Booking",
-  "المرفقات": "Attachments",
-  "اتصالات": "Contacts",
-  "محظور": "Blocked",
-  "تقارير": "Reports",
-  "إغلاق": "Close",
-  "موافقة": "Approve",
-  "رفض": "Reject",
-  "إعادة لقيد المراجعة": "Revert to Pending",
-  "تعديل": "Edit",
-  "لا توجد بيانات": "No data available",
-  "لا توجد جهات اتصال": "No contacts",
-  "لا توجد حصص بعد": "No periods yet",
-  "لا توجد شعب": "No sections",
-  "لا توجد فترات محظورة": "No blocked periods",
-  "لا توجد مراحل بعد": "No stages yet",
-  "لا توجد نتائج": "No results",
-  "مثال: TROLLEY-A": "e.g. TROLLEY-A",
-  "مثال: الحصة الأولى": "e.g. Period One",
-  "مثال: المرحلة الأساسية": "e.g. Basic Stage",
-  "فعالة": "Active",
-  "معطلة": "Disabled",
-  "غير محدد": "Unspecified",
-  "اسم شعبة جديدة": "New section name",
-  "اسم صف جديد": "New grade name",
-  "الأحد": "Sunday",
-  "الاثنين": "Monday",
-  "الثلاثاء": "Tuesday",
-  "الأربعاء": "Wednesday",
-  "الخميس": "Thursday",
-  "الجمعة": "Friday",
-  "السبت": "Saturday",
-  "اسم الحصة:": "Period name:",
-  "اسم المرحلة (عربي):": "Stage name (Arabic):",
-  "معرّف العربة (Trolley):": "Trolley ID:",
-  "من الساعة (HH:MM أو فارغ):": "From time (HH:MM or blank):",
-  "إلى الساعة (HH:MM أو فارغ):": "To time (HH:MM or blank):",
-  "أدخل سبب الرفض": "Enter rejection reason",
-  "أدخل سبب الرفض...": "Enter rejection reason...",
-  "إلغاء هذا الحجز؟": "Cancel this booking?",
-  "اسم الشعبة مطلوب": "Section name is required",
-  "اسم الصف مطلوب": "Grade name is required",
-  "اسم المرحلة ومعرّف العربة مطلوبان": "Stage name and trolley ID are required",
-  "البريد مطلوب": "Email is required",
-  "التاريخ مطلوب": "Date is required",
-  "رقم الحصة مطلوب": "Period number is required",
-  "أُعيد لقيد المراجعة": "Reverted to pending",
-  "تم الإلغاء": "Cancelled",
-  "تم التحديث": "Updated",
-  "تم الحذف": "Deleted",
-  "تم الحفظ": "Saved",
-  "تم الحفظ ✓": "Saved ✓",
-  "تم الرفض": "Rejected",
-  "✅ تمت الموافقة": "✅ Approved",
-  "تمت إضافة المرحلة": "Stage added",
-  "تمت الإضافة": "Added",
-  "خطأ": "Error",
-  "حذف جهة الاتصال هذه؟": "Delete this contact?",
-  "حذف هذا الصف؟ سيتم حذف شعبه أيضاً.": "Delete this grade? Its sections will also be deleted.",
-  "حذف هذه الحصة؟": "Delete this period?",
-  "حذف هذه الشعبة؟": "Delete this section?",
-  "حذف هذه الفترة؟": "Delete this period?",
-  "حذف هذه المرحلة؟ سيتم حذف صفوفها وشعبها أيضاً.": "Delete this stage? Its grades and sections will also be deleted.",
-  "تقرير الحجوزات": "Bookings Report",
-};
-
-let AR = (localStorage.getItem('adminLang') || '{{ lang }}') !== 'en';
-
-function t(s) { return AR ? s : (I18N_EN[s] || s); }
-
-let ORIGINAL_TEXT_NODES = null;
-function captureStaticText() {
-  ORIGINAL_TEXT_NODES = [];
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-    acceptNode(n) {
-      if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-      if (n.parentElement && n.parentElement.closest('script,style')) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    }
-  });
-  let n;
-  while (n = walker.nextNode()) ORIGINAL_TEXT_NODES.push({ node: n, original: n.nodeValue });
-}
-
-function applyStaticLang() {
-  if (!ORIGINAL_TEXT_NODES) return;
-  document.documentElement.lang = AR ? 'ar' : 'en';
-  ORIGINAL_TEXT_NODES.forEach(({ node, original }) => {
-    const trimmed = original.trim();
-    node.nodeValue = AR ? original : original.replace(trimmed, I18N_EN[trimmed] || trimmed);
-  });
-  document.querySelectorAll('[placeholder]').forEach(el => {
-    if (!el.dataset.origPlaceholder) el.dataset.origPlaceholder = el.getAttribute('placeholder');
-    const orig = el.dataset.origPlaceholder;
-    el.setAttribute('placeholder', AR ? orig : (I18N_EN[orig] || orig));
-  });
-  document.querySelectorAll('.lang-btn').forEach(b => b.textContent = AR ? 'EN' : 'AR');
-  const activeTab = document.querySelector('.tab-panel.active');
-  if (activeTab) {
-    const id = activeTab.id.replace('tab-', '');
-    if (id === 'bookings') renderTable();
-    if (id === 'halls') { renderStagesTree(); renderPeriodsTable(); }
-    if (id === 'blocked') loadBlocked();
-    if (id === 'contacts') loadContacts();
-    if (id === 'reports') loadReportStats();
-    if (id === 'calview') renderCal();
-  }
-}
-
-function toggleLang() {
-  AR = !AR;
-  localStorage.setItem('adminLang', AR ? 'ar' : 'en');
-  applyStaticLang();
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  captureStaticText();
-  applyStaticLang();
-});
-
 async function loadStructure() {
   STRUCTURE = await fetch('/admin/api/halls').then(r => r.json());
 }
@@ -829,7 +606,7 @@ function showTab(name) {
       n.classList.add('active');
     }
   });
-  const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), reports:t('التقارير'), calview:t('التقويم المرئي')};
+  const titles = {bookings:'طلبات الحجز', halls:'المراحل والعربات', blocked:'الفترات غير المتاحة', contacts:'جهات الاتصال', reports:'التقارير', calview:'التقويم المرئي'};
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
   if (name === 'calview')  initAdminCal();
@@ -847,14 +624,13 @@ function updateClock() {
 setInterval(updateClock, 1000); updateClock();
 
 // ── Toast ──
-function showToast(msg, color = '#FF5733') {
-  const toastEl = document.getElementById('toast');
-  toastEl.textContent = t(msg);
-  toastEl.style.background = color;
-  toastEl.classList.add('show');
-  setTimeout(() => toastEl.classList.remove('show'), 3000);
+function showToast(msg, color = '#247680') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = color;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
 }
-function confirmT(msg) { return confirm(t(msg)); }
 
 // ── API helpers ──
 async function api(url, body) {
@@ -904,7 +680,7 @@ function renderTable() {
   if (curSearch) rows = rows.filter(b =>
     (b.reqId + b.name + (b.title||'') + (b.stage||'') + (b.grade||'') + (b.section||'') + b.email).toLowerCase().includes(curSearch)
   );
-  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
+  const sLabels = {approved:'معتمد',pending:'قيد المراجعة',rejected:'مرفوض',cancelled:'ملغي'};
   tbody.innerHTML = rows.map(b => `
     <tr>
       <td><input type="checkbox" ${selectedIds.has(b.reqId)?'checked':''} onchange="toggleSel('${b.reqId}',this)"></td>
@@ -914,7 +690,7 @@ function renderTable() {
       <td>${esc(b.stage||'')}</td>
       <td>${esc(b.grade||'')}</td>
       <td>${esc(b.section||'')}</td>
-      <td>${b.periodNumber ? t('الحصة')+' '+b.periodNumber : ''}</td>
+      <td>${b.periodNumber ? 'الحصة '+b.periodNumber : ''}</td>
       <td>${b.date}</td>
       <td><span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span></td>
       <td>
@@ -925,7 +701,7 @@ function renderTable() {
           ${b.status!=='cancelled'&&b.status!=='rejected'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')"><i class="fas fa-ban"></i></button>`:''}
         </div>
       </td>
-    </tr>`).join('') || `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">${t('لا توجد نتائج')}</td></tr>`;
+    </tr>`).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">لا توجد نتائج</td></tr>';
   document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
 }
 
@@ -943,7 +719,7 @@ function toggleAll(cb) {
 }
 
 async function bulkDelete() {
-  if (!selectedIds.size || !confirm((AR ? `حذف ${selectedIds.size} حجز نهائياً؟` : `Permanently delete ${selectedIds.size} booking(s)?`))) return;
+  if (!selectedIds.size || !confirm(`حذف ${selectedIds.size} حجز نهائياً؟`)) return;
   const data = await api('/admin/api/bulk-delete', {ids: [...selectedIds]});
   if (data.success) { showToast('تم الحذف'); selectedIds.clear(); loadBookings(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -955,7 +731,7 @@ async function quickApprove(reqId) {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 async function quickCancel(reqId) {
-  if (!confirmT('إلغاء هذا الحجز؟')) return;
+  if (!confirm('إلغاء هذا الحجز؟')) return;
   const data = await api('/admin/api/cancel', {reqId});
   if (data.success) { showToast('تم الإلغاء'); loadBookings(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -980,8 +756,8 @@ function openDetail(reqId) {
   if (!b) return;
   document.getElementById('bkModalAlert').innerHTML = '';
   document.getElementById('bkModalTitle').innerHTML = `<i class="fas fa-calendar-check"></i> ${b.reqId}`;
-  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
-  const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
+  const sLabels = {approved:'معتمد',pending:'قيد المراجعة',rejected:'مرفوض',cancelled:'ملغي'};
+  const periodStr = b.periodNumber ? ('الحصة ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
   document.getElementById('bkModalBody').innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:.88rem">
       ${drow('رقم الطلب', `<strong style="color:var(--primary)">${b.reqId}</strong>`)}
@@ -1020,7 +796,7 @@ async function quickSetPending(reqId) {
 }
 
 function drow(label, val) {
-  return `<tr><td style="padding:7px 10px;font-weight:700;background:#f0f7f8;width:36%">${t(label)}</td><td style="padding:7px 10px;border-bottom:1px solid var(--border)">${val}</td></tr>`;
+  return `<tr><td style="padding:7px 10px;font-weight:700;background:#f0f7f8;width:36%">${label}</td><td style="padding:7px 10px;border-bottom:1px solid var(--border)">${val}</td></tr>`;
 }
 
 function editPopulateStages(selectedStageId) {
@@ -1096,7 +872,7 @@ async function loadHalls() {
   hallsList = STRUCTURE;
   // Update blocked-period stage select too
   const blkSel = document.getElementById('blkHall');
-  blkSel.innerHTML = `<option value="">-- ${t('كل المراحل')} --</option>` +
+  blkSel.innerHTML = '<option value="">-- كل المراحل --</option>' +
     STRUCTURE.map(s => `<option value="${s.trolleyCode}">${esc(s.nameAr)}</option>`).join('');
 
   renderStagesTree();
@@ -1105,7 +881,7 @@ async function loadHalls() {
 function renderStagesTree() {
   const el = document.getElementById('stagesTree');
   if (!el) return;
-  if (!STRUCTURE.length) { el.innerHTML = `<p style="color:var(--muted);text-align:center">${t('لا توجد مراحل بعد')}</p>`; return; }
+  if (!STRUCTURE.length) { el.innerHTML = '<p style="color:var(--muted);text-align:center">لا توجد مراحل بعد</p>'; return; }
 
   el.innerHTML = STRUCTURE.map(s => `
     <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
@@ -1113,11 +889,11 @@ function renderStagesTree() {
         <div>
           <strong style="font-size:1.02rem;color:var(--primary)"><i class="fas fa-laptop"></i> ${esc(s.nameAr)}</strong>
           <span style="color:var(--muted);font-size:.82rem"> — عربة: <span dir="ltr" style="font-weight:700">${esc(s.trolleyCode)}</span></span>
-          <span class="badge ${s.active?'badge-approved':'badge-cancelled'}" style="margin-right:8px">${t(s.active?'فعالة':'معطلة')}</span>
+          <span class="badge ${s.active?'badge-approved':'badge-cancelled'}" style="margin-right:8px">${s.active?'فعالة':'معطلة'}</span>
         </div>
         <div class="action-btns">
           <button class="btn btn-sm btn-outline" onclick="openEditStage(${s.id})"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${s.id},${s.active?'false':'true'})">${s.active?'<i class="fas fa-toggle-off"></i> '+t('تعطيل'):'<i class="fas fa-toggle-on"></i> '+t('تفعيل')}</button>
+          <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${s.id},${s.active?'false':'true'})">${s.active?'<i class="fas fa-toggle-off"></i> تعطيل':'<i class="fas fa-toggle-on"></i> تفعيل'}</button>
           <button class="btn btn-red btn-sm" onclick="deleteHall(${s.id})"><i class="fas fa-trash"></i></button>
         </div>
       </div>
@@ -1134,7 +910,7 @@ function renderStagesTree() {
                 <span style="background:#e8f4f5;border-radius:12px;padding:2px 10px;font-size:.78rem;display:inline-flex;align-items:center;gap:5px">
                   ${esc(sec.nameAr)}
                   <button onclick="deleteSection(${sec.id})" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:.8rem">✕</button>
-                </span>`).join('') || `<span style="color:var(--muted);font-size:.78rem">${t('لا توجد شعب')}</span>`}
+                </span>`).join('') || '<span style="color:var(--muted);font-size:.78rem">لا توجد شعب</span>'}
             </div>
             <div style="display:flex;gap:4px">
               <input type="text" placeholder="اسم شعبة جديدة" id="newSec_${g.id}" style="flex:1;font-size:.78rem;padding:4px 6px;border:1px solid var(--border);border-radius:6px">
@@ -1170,9 +946,9 @@ async function addHall() {
 async function openEditStage(id) {
   const s = STRUCTURE.find(x => x.id === id);
   if (!s) return;
-  const nameAr = prompt(t('اسم المرحلة (عربي):'), s.nameAr);
+  const nameAr = prompt('اسم المرحلة (عربي):', s.nameAr);
   if (nameAr === null) return;
-  const trolleyCode = prompt(t('معرّف العربة (Trolley):'), s.trolleyCode);
+  const trolleyCode = prompt('معرّف العربة (Trolley):', s.trolleyCode);
   if (trolleyCode === null) return;
   const data = await api('/admin/api/update-hall', {id, nameAr, trolleyCode, nameEn: s.nameEn, active: s.active});
   if (data.success) { showToast('تم الحفظ ✓'); loadHalls(); }
@@ -1180,7 +956,7 @@ async function openEditStage(id) {
 }
 
 async function deleteHall(id) {
-  if (!confirmT('حذف هذه المرحلة؟ سيتم حذف صفوفها وشعبها أيضاً.')) return;
+  if (!confirm('حذف هذه المرحلة؟ سيتم حذف صفوفها وشعبها أيضاً.')) return;
   const data = await api('/admin/api/delete-hall', {id});
   if (data.success) { showToast('تم الحذف'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -1203,7 +979,7 @@ async function addGrade(stageId) {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 async function deleteGrade(id) {
-  if (!confirmT('حذف هذا الصف؟ سيتم حذف شعبه أيضاً.')) return;
+  if (!confirm('حذف هذا الصف؟ سيتم حذف شعبه أيضاً.')) return;
   const data = await api('/admin/api/delete-grade', {id});
   if (data.success) { showToast('تم الحذف'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -1218,7 +994,7 @@ async function addSection(gradeId) {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 async function deleteSection(id) {
-  if (!confirmT('حذف هذه الشعبة؟')) return;
+  if (!confirm('حذف هذه الشعبة؟')) return;
   const data = await api('/admin/api/delete-section', {id});
   if (data.success) { showToast('تم الحذف'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -1233,12 +1009,12 @@ async function renderPeriodsTable() {
       <td>${esc(p.label)}</td>
       <td dir="ltr">${p.startTime||'-'}</td>
       <td dir="ltr">${p.endTime||'-'}</td>
-      <td><span class="badge ${p.active?'badge-approved':'badge-cancelled'}">${t(p.active?'فعالة':'معطلة')}</span></td>
+      <td><span class="badge ${p.active?'badge-approved':'badge-cancelled'}">${p.active?'فعالة':'معطلة'}</span></td>
       <td>
         <button class="btn btn-sm btn-outline" onclick="openEditPeriod(${p.id})"><i class="fas fa-edit"></i></button>
         <button class="btn btn-red btn-sm" onclick="deletePeriod(${p.id})"><i class="fas fa-trash"></i></button>
       </td>
-    </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--muted)">${t('لا توجد حصص بعد')}</td></tr>`;
+    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--muted)">لا توجد حصص بعد</td></tr>';
 }
 
 async function addPeriod() {
@@ -1261,18 +1037,18 @@ async function addPeriod() {
 async function openEditPeriod(id) {
   const p = PERIODS.find(x => x.id === id);
   if (!p) return;
-  const label = prompt(t('اسم الحصة:'), p.label);
+  const label = prompt('اسم الحصة:', p.label);
   if (label === null) return;
-  const startTime = prompt(t('من الساعة (HH:MM أو فارغ):'), p.startTime || '');
+  const startTime = prompt('من الساعة (HH:MM أو فارغ):', p.startTime || '');
   if (startTime === null) return;
-  const endTime = prompt(t('إلى الساعة (HH:MM أو فارغ):'), p.endTime || '');
+  const endTime = prompt('إلى الساعة (HH:MM أو فارغ):', p.endTime || '');
   if (endTime === null) return;
   const data = await api('/admin/api/update-period', {id, label, startTime, endTime, active: p.active});
   if (data.success) { showToast('تم الحفظ ✓'); renderPeriodsTable(); }
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 async function deletePeriod(id) {
-  if (!confirmT('حذف هذه الحصة؟')) return;
+  if (!confirm('حذف هذه الحصة؟')) return;
   const data = await api('/admin/api/delete-period', {id});
   if (data.success) { showToast('تم الحذف'); renderPeriodsTable(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -1286,12 +1062,12 @@ async function loadBlocked() {
     return `
     <tr>
       <td>${b.s}</td><td>${b.e}</td>
-      <td>${esc(b.hall ? (stage ? stage.nameAr : b.hall) : t('كل المراحل'))}</td>
+      <td>${esc(b.hall ? (stage ? stage.nameAr : b.hall) : 'كل المراحل')}</td>
       <td dir="ltr">${b.fromT||'-'}</td><td dir="ltr">${b.toT||'-'}</td>
       <td>${esc(b.r)}</td>
       <td><button class="btn btn-red btn-sm" onclick="deleteBlocked(${b.id})"><i class="fas fa-trash"></i></button></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted)">${t('لا توجد فترات محظورة')}</td></tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">لا توجد فترات محظورة</td></tr>';
 }
 
 async function addBlocked() {
@@ -1310,7 +1086,7 @@ async function addBlocked() {
 }
 
 async function deleteBlocked(id) {
-  if (!confirmT('حذف هذه الفترة؟')) return;
+  if (!confirm('حذف هذه الفترة؟')) return;
   const data = await api('/admin/api/delete-blocked', {id});
   if (data.success) { showToast('تم الحذف'); loadBlocked(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -1325,7 +1101,7 @@ async function loadContacts() {
       <td>${esc(c.name||'-')}</td>
       <td>${c.date}</td>
       <td><button class="btn btn-red btn-sm" onclick="deleteContact(${c.id})"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${t('لا توجد جهات اتصال')}</td></tr>`;
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted)">لا توجد جهات اتصال</td></tr>';
 }
 
 async function addContact() {
@@ -1338,7 +1114,7 @@ async function addContact() {
 }
 
 async function deleteContact(id) {
-  if (!confirmT('حذف جهة الاتصال هذه؟')) return;
+  if (!confirm('حذف جهة الاتصال هذه؟')) return;
   const data = await api('/admin/api/delete-contact', {id});
   if (data.success) { showToast('تم الحذف'); loadContacts(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -1354,7 +1130,7 @@ async function uploadContacts(input) {
     return {email: (parts[0]||'').trim(), name: (parts[1]||'').trim()};
   }).filter(x => x.email && x.email.includes('@'));
   const data = await api('/admin/api/add-contacts', {list});
-  showToast(data.success ? `${t('تمت الإضافة')}: ${data.count}` : (data.error||t('خطأ')), data.success ? '#FF5733' : '#c0392b');
+  showToast(data.success ? `تمت الإضافة: ${data.count}` : (data.error||'خطأ'), data.success ? '#247680' : '#c0392b');
   if (data.success) loadContacts();
   input.value = '';
 }
@@ -1377,11 +1153,11 @@ function runReport() {
   if (toD)   rows = rows.filter(r => r.date <= toD);
 
   const groups = {};
-  const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'].map(t);
+  const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
   for (const r of rows) {
     let key = '';
-    if (dim === 'hall')   key = r.stage || t('غير محدد');
-    else if (dim === 'person') key = r.name || t('غير محدد');
+    if (dim === 'hall')   key = r.stage || 'غير محدد';
+    else if (dim === 'person') key = r.name || 'غير محدد';
     else if (dim === 'month')  key = (r.date||'').substring(0, 7);
     else if (dim === 'dow') {
       const d = new Date((r.date||'') + 'T00:00:00');
@@ -1400,7 +1176,7 @@ function runReport() {
   else arr.sort((a,b) => b.data.count - a.data.count);
 
   const chart = document.getElementById('anaChart');
-  if (!arr.length) { chart.innerHTML = `<p style="color:var(--muted);text-align:center">${t('لا توجد بيانات')}</p>`; document.getElementById('anaTable').innerHTML = ''; document.getElementById('reportResult').style.display='block'; return; }
+  if (!arr.length) { chart.innerHTML = '<p style="color:var(--muted);text-align:center">لا توجد بيانات</p>'; document.getElementById('anaTable').innerHTML = ''; document.getElementById('reportResult').style.display='block'; return; }
 
   const mx = arr[0].data.count;
   chart.innerHTML = arr.slice(0,12).map(({key, data}) => {
@@ -1425,8 +1201,8 @@ function runReport() {
       </tbody>
     </table>`;
 
-  const dimLabels = {hall:t('المراحل'),person:t('الأشخاص'),month:t('الأشهر'),dow:t('أيام الأسبوع')};
-  document.getElementById('reportTitle').innerHTML = `<i class="fas fa-chart-bar"></i> ${AR?'نتائج':'Results'}: ${dimLabels[dim]||dim}`;
+  const dimLabels = {hall:'المراحل',person:'الأشخاص',month:'الأشهر',dow:'أيام الأسبوع'};
+  document.getElementById('reportTitle').innerHTML = `<i class="fas fa-chart-bar"></i> نتائج: ${dimLabels[dim]||dim}`;
   document.getElementById('reportResult').style.display = 'block';
 }
 
@@ -1462,7 +1238,7 @@ async function initAdminCal() {
   // Populate stage filter (by trolley code)
   const seen = new Set();
   const sel = document.getElementById('calHallFilter');
-  sel.innerHTML = `<option value="">${t('كل المراحل')}</option>`;
+  sel.innerHTML = '<option value="">كل المراحل</option>';
   allBookingsForCal.forEach(b => {
     if (b.trolleyCode && !seen.has(b.trolleyCode)) {
       seen.add(b.trolleyCode);
@@ -1495,7 +1271,7 @@ function renderCal() {
   if (adminCalInstance) { adminCalInstance.destroy(); }
 
   adminCalInstance = new FullCalendar.Calendar(el, {
-    locale: AR ? 'ar' : 'en',
+    locale: 'ar',
     direction: 'rtl',
     initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
     headerToolbar: {
@@ -1635,7 +1411,7 @@ function drawMonthChart(sortedMonths) {
 
   // Line
   ctx.beginPath();
-  ctx.strokeStyle = '#FF5733'; ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#247680'; ctx.lineWidth = 2.5;
   sortedMonths.forEach(([m,v],i) => {
     const x = pad.left + i*step;
     const y = pad.top + ch - (v/mx)*ch;
@@ -1662,7 +1438,7 @@ function drawMonthChart(sortedMonths) {
     const y = pad.top + ch - (v/mx)*ch;
     ctx.beginPath();
     ctx.arc(x,y,4,0,Math.PI*2);
-    ctx.fillStyle = '#FF5733'; ctx.fill();
+    ctx.fillStyle = '#247680'; ctx.fill();
     ctx.fillStyle = '#1e2a2b'; ctx.font = '10px Tajawal';
     ctx.textAlign = 'center';
     ctx.fillText(v, x, y-10);
@@ -1675,9 +1451,9 @@ function drawHallBars(hallCount) {
   const el = document.getElementById('hallBars');
   if (!el) return;
   const sorted = Object.entries(hallCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
-  if (!sorted.length) { el.innerHTML=`<p style="color:var(--muted);text-align:center">${t('لا توجد بيانات')}</p>`; return; }
+  if (!sorted.length) { el.innerHTML='<p style="color:var(--muted);text-align:center">لا توجد بيانات</p>'; return; }
   const mx = sorted[0][1];
-  const colors = ['#FF5733','#1B3358','#27ae60','#e67e22','#c0392b','#8e44ad'];
+  const colors = ['#247680','#2d9aa8','#27ae60','#e67e22','#c0392b','#8e44ad'];
   el.innerHTML = sorted.map(([hall,count],i) => {
     const pct = Math.round(count/mx*100);
     return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
@@ -1690,49 +1466,44 @@ function drawHallBars(hallCount) {
 
 // ── Export CSV ──
 function exportCSV() {
-  const rows = [[t('رقم الطلب'),t('الاسم'),t('البريد'),t('الجوال'),t('الموضوع'),t('المرحلة'),t('الصف'),t('الشعبة'),t('الحصة'),t('التاريخ'),t('الحالة'),t('ملاحظات'),t('تاريخ الطلب')]];
-  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), rejected:t('مرفوض'), cancelled:t('ملغي')};
+  const rows = [['رقم الطلب','الاسم','البريد','الجوال','الموضوع','المرحلة','الصف','الشعبة','الحصة','التاريخ','الحالة','ملاحظات','تاريخ الطلب']];
+  const statusLbl = {pending:'قيد المراجعة', approved:'معتمد', rejected:'مرفوض', cancelled:'ملغي'};
   const filtered = allBookings;
   filtered.forEach(b => {
     rows.push([b.reqId, b.name, b.email, b.phone||'', b.title||'', b.stage||'', b.grade||'', b.section||'',
-      b.periodNumber ? (t('الحصة')+' '+b.periodNumber) : '',
+      b.periodNumber ? ('الحصة '+b.periodNumber) : '',
       b.date||'', statusLbl[b.status]||b.status, b.notes||'', b.createdAt||'']);
   });
   const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${AR?'حجوزات':'bookings'}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `حجوزات_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
-  showToast(AR ? 'تم تصدير الملف ✓' : 'File exported ✓');
+  showToast('تم تصدير الملف ✓');
 }
 
 // ── Export Print ──
 function exportPrint() {
-  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), rejected:t('مرفوض'), cancelled:t('ملغي')};
+  const statusLbl = {pending:'قيد المراجعة', approved:'معتمد', rejected:'مرفوض', cancelled:'ملغي'};
   const rows = allBookings.map(b => [
     b.reqId, b.name, b.stage||'', b.grade||'', b.section||'',
-    b.periodNumber ? (t('الحصة')+' '+b.periodNumber) : '', b.date||'',
+    b.periodNumber ? ('الحصة '+b.periodNumber) : '', b.date||'',
     statusLbl[b.status]||b.status, b.notes||''
   ].map(c => '<td>'+String(c).replace(/</g,'&lt;')+'</td>').join('')).map(r => '<tr>'+r+'</tr>').join('');
 
-  const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
-  const reportTitle = AR ? 'تقرير الحجوزات' : 'Bookings Report';
-  const totalLine = AR
-    ? `إجمالي: ${allBookings.length} حجز — ${new Date().toLocaleDateString('ar-SA')}`
-    : `Total: ${allBookings.length} booking(s) — ${new Date().toLocaleDateString('en-US')}`;
   const html = [
-    `<!DOCTYPE html><html ${dirAttr}><head>`,
-    `<meta charset="UTF-8"><title>${reportTitle}</title>`,
+    '<!DOCTYPE html><html dir="rtl" lang="ar"><head>',
+    '<meta charset="UTF-8"><title>تقرير الحجوزات</title>',
     '<style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}',
-    'h2{color:#FF5733}table{width:100%;border-collapse:collapse}',
-    `th{background:#FF5733;color:#fff;padding:8px;text-align:${AR?'right':'left'}}`,
+    'h2{color:#247680}table{width:100%;border-collapse:collapse}',
+    'th{background:#247680;color:#fff;padding:8px;text-align:right}',
     'td{padding:7px;border-bottom:1px solid #ddd}',
     '@media print{button{display:none}}</style></head><body>',
-    `<h2>${reportTitle}</h2>`,
-    `<p>${totalLine}</p>`,
-    `<button onclick="window.print()" style="background:#FF5733;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">${t('طباعة')}</button>`,
-    `<table><thead><tr><th>${t('رقم الطلب')}</th><th>${t('الاسم')}</th><th>${t('المرحلة')}</th><th>${t('الصف')}</th><th>${t('الشعبة')}</th><th>${t('الحصة')}</th><th>${t('التاريخ')}</th><th>${t('الحالة')}</th><th>${t('ملاحظات')}</th></tr></thead>`,
+    '<h2>تقرير الحجوزات</h2>',
+    '<p>إجمالي: '+allBookings.length+' حجز — '+new Date().toLocaleDateString('ar-SA')+'</p>',
+    '<button onclick="window.print()" style="background:#247680;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">طباعة</button>',
+    '<table><thead><tr><th>رقم الطلب</th><th>الاسم</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>الحصة</th><th>التاريخ</th><th>الحالة</th><th>ملاحظات</th></tr></thead>',
     '<tbody>'+rows+'</tbody></table></body></html>'
   ].join('');
 

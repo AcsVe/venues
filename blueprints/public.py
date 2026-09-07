@@ -119,8 +119,7 @@ def book():
     if pre_date:
         blk = check_blocked(pre_date, '', '', '')
         if blk['blocked'] and blk.get('fullBlock'):
-            msg = (f'هذا اليوم غير متاح بالكامل: {blk["reason"]}' if lang == 'ar'
-                   else f'This day is fully unavailable: {blk["reason"]}')
+            msg = f'هذا اليوم غير متاح بالكامل: {blk["reason"]}'
             return render_template('error.html', msg=msg, lang=lang)
 
     stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
