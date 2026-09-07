@@ -3,14 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}ACS Booking{% endblock %}</title>
+  <title>{% block title %}مدرسة الرائد العربي{% endblock %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #247680;
-      --primary-dark: #1a5c64;
-      --primary-light: #2d8f9b;
+      --primary: #FF5733;
+      --primary-dark: #C43D1F;
+      --primary-light: #FF8563;
+      --secondary: #1B3358;
+      --secondary-dark: #0D1B2A;
+      --secondary-light: #3D5A80;
       --accent: {{ config.ACCENT_COLOR }};
       --bg: #eef3f5;
       --white: #fff;
@@ -18,8 +21,8 @@
       --muted: #6b7c7e;
       --border: #cfe0e3;
       --radius: 14px;
-      --shadow: 0 4px 20px rgba(36,118,128,.12);
-      --shadow-sm: 0 2px 8px rgba(36,118,128,.08);
+      --shadow: 0 4px 20px rgba(255,87,51,.12);
+      --shadow-sm: 0 2px 8px rgba(255,87,51,.08);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { font-size: 15px; }
@@ -32,7 +35,7 @@
 
     /* ── Topbar ── */
     .topbar {
-      background: linear-gradient(135deg, #1a5c64 0%, #247680 50%, #2d9aa8 100%);
+      background: linear-gradient(135deg, var(--secondary-dark) 0%, var(--secondary) 50%, var(--secondary-light) 100%);
       color: #fff;
       padding: 0 20px;
       display: flex;

@@ -1,21 +1,27 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="{{ lang }}" dir="{{ 'rtl' if lang == 'ar' else 'ltr' }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>تسجيل الدخول — لوحة التحكم</title>
+  <title>{{ 'تسجيل الدخول — لوحة التحكم' if lang == 'ar' else 'Login — Admin Panel' }}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Tajawal', sans-serif;
-      background: linear-gradient(135deg, #1a5c64, #247680, #2a8f9e);
+      font-family: {% if lang == 'ar' %}'Tajawal'{% else %}'Inter'{% endif %}, sans-serif;
+      background: linear-gradient(135deg, #0D1B2A, #1B3358, #3D5A80);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
+    }
+    .lang-switch {
+      position: fixed; top: 16px; {{ 'left' if lang == 'ar' else 'right' }}: 16px;
+      background: rgba(255,255,255,.15); color: #fff; text-decoration: none;
+      padding: 7px 14px; border-radius: 20px; font-size: .82rem; font-weight: 700;
+      display: inline-flex; align-items: center; gap: 6px;
     }
     .login-card {
       background: #fff;
@@ -33,32 +39,32 @@
       margin: 0 auto 16px;
       object-fit: contain;
     }
-    h1 { font-size: 1.4rem; font-weight: 800; color: #1a5c64; margin-bottom: 4px; }
+    h1 { font-size: 1.4rem; font-weight: 800; color: #1B3358; margin-bottom: 4px; }
     .subtitle { font-size: .85rem; color: #6b7c7e; margin-bottom: 28px; }
-    .form-group { margin-bottom: 16px; text-align: right; }
+    .form-group { margin-bottom: 16px; text-align: {{ 'right' if lang == 'ar' else 'left' }}; }
     .form-group label { display: block; font-weight: 700; margin-bottom: 6px; font-size: .9rem; }
     .input-wrap { position: relative; }
     .input-wrap i {
       position: absolute;
-      right: 12px;
+      {{ 'right' if lang == 'ar' else 'left' }}: 12px;
       top: 50%;
       transform: translateY(-50%);
       color: #6b7c7e;
     }
     input {
       width: 100%;
-      padding: 11px 40px 11px 12px;
-      border: 1.5px solid #d4e4e6;
+      padding: {{ '11px 40px 11px 12px' if lang == 'ar' else '11px 12px 11px 40px' }};
+      border: 1.5px solid #d7dee6;
       border-radius: 10px;
       font-family: inherit;
       font-size: .95rem;
       transition: border-color .2s;
-      text-align: right;
+      text-align: {{ 'right' if lang == 'ar' else 'left' }};
     }
-    input:focus { outline: none; border-color: #247680; box-shadow: 0 0 0 3px rgba(36,118,128,.12); }
+    input:focus { outline: none; border-color: #FF5733; box-shadow: 0 0 0 3px rgba(255,87,51,.12); }
     .btn-login {
       width: 100%;
-      background: linear-gradient(135deg, #247680, #1a5c64);
+      background: linear-gradient(135deg, #FF5733, #C43D1F);
       color: #fff;
       border: none;
       border-radius: 10px;
@@ -81,44 +87,48 @@
       font-weight: 600;
     }
     .back-link { margin-top: 16px; font-size: .85rem; }
-    .back-link a { color: #247680; text-decoration: none; font-weight: 600; }
+    .back-link a { color: #1B3358; text-decoration: none; font-weight: 600; }
   </style>
 </head>
 <body>
+  <a class="lang-switch" href="?lang={{ 'en' if lang == 'ar' else 'ar' }}">
+    <i class="fas fa-globe"></i> {{ 'EN' if lang == 'ar' else 'عربي' }}
+  </a>
   <div class="login-card">
     {% if config.LOGO_URL %}
     <img src="{{ config.LOGO_URL }}" class="login-logo" alt="Logo">
     {% else %}
-    <div style="font-size:3rem;margin-bottom:12px">🏛️</div>
+    <div style="font-size:3rem;margin-bottom:12px">🏫</div>
     {% endif %}
-    <h1>{{ config.ORG_AR }}</h1>
-    <div class="subtitle">لوحة تحكم — نظام الحجز</div>
+    <h1>{{ config.ORG_AR if lang == 'ar' else config.ORG_EN }}</h1>
+    <div class="subtitle">{{ 'لوحة تحكم — نظام الحجز' if lang == 'ar' else 'Admin Panel — Booking System' }}</div>
 
     {% if error %}
     <div class="error-msg"><i class="fas fa-exclamation-circle"></i> {{ error }}</div>
     {% endif %}
 
     <form method="POST">
+      <input type="hidden" name="lang" value="{{ lang }}">
       <div class="form-group">
-        <label>اسم المستخدم</label>
+        <label>{{ 'اسم المستخدم' if lang == 'ar' else 'Username' }}</label>
         <div class="input-wrap">
           <i class="fas fa-user"></i>
           <input type="text" name="username" required autocomplete="username">
         </div>
       </div>
       <div class="form-group">
-        <label>كلمة المرور</label>
+        <label>{{ 'كلمة المرور' if lang == 'ar' else 'Password' }}</label>
         <div class="input-wrap">
           <i class="fas fa-lock"></i>
           <input type="password" name="password" required autocomplete="current-password">
         </div>
       </div>
       <button type="submit" class="btn-login">
-        <i class="fas fa-sign-in-alt"></i> دخول
+        <i class="fas fa-sign-in-alt"></i> {{ 'دخول' if lang == 'ar' else 'Login' }}
       </button>
     </form>
     <div class="back-link">
-      <a href="/calendar">← الروزنامة العامة</a>
+      <a href="/calendar?lang={{ lang }}">{{ '← الروزنامة العامة' if lang == 'ar' else '← Public Calendar' }}</a>
     </div>
   </div>
 </body>
