@@ -3,14 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}ACS Booking{% endblock %}</title>
+  <title>{% block title %}مدرسة الرائد العربي{% endblock %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #247680;
-      --primary-dark: #1a5c64;
-      --primary-light: #2d8f9b;
+      --primary: #FF5733;
+      --primary-dark: #C43D1F;
+      --primary-light: #FF8563;
+      --secondary: #2E4E7A;
+      --secondary-dark: #1B3358;
+      --secondary-light: #5A7CA8;
       --accent: {{ config.ACCENT_COLOR }};
       --bg: #eef3f5;
       --white: #fff;
@@ -18,8 +21,8 @@
       --muted: #6b7c7e;
       --border: #cfe0e3;
       --radius: 14px;
-      --shadow: 0 4px 20px rgba(36,118,128,.12);
-      --shadow-sm: 0 2px 8px rgba(36,118,128,.08);
+      --shadow: 0 4px 20px rgba(255,87,51,.12);
+      --shadow-sm: 0 2px 8px rgba(255,87,51,.08);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { font-size: 15px; }
@@ -32,7 +35,7 @@
 
     /* ── Topbar ── */
     .topbar {
-      background: linear-gradient(135deg, #1a5c64 0%, #247680 50%, #2d9aa8 100%);
+      background: linear-gradient(135deg, var(--secondary-dark) 0%, var(--secondary) 50%, var(--secondary-light) 100%);
       color: #fff;
       padding: 0 20px;
       display: flex;
@@ -51,26 +54,25 @@
       height: 2px;
       background: linear-gradient(90deg, transparent, var(--accent), transparent);
     }
-    .topbar img {
-      height: 42px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    .topbar-logo-chip {
+      background: #fff;
+      border-radius: 10px;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
       flex-shrink: 0;
     }
-    .topbar-titles { flex: 1; min-width: 0; }
-    .topbar-titles h1 {
-      font-size: 1.1rem;
-      font-weight: 800;
-      line-height: 1.2;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .topbar img {
+      height: 44px;
+      display: block;
     }
-    .topbar-titles span { font-size: .78rem; opacity: .75; }
+    .topbar-titles { flex: 1; min-width: 0; }
+    .topbar-titles span { font-size: .85rem; opacity: .85; font-weight: 600; }
     .topbar-nav { display: flex; gap: 6px; flex-shrink: 0; }
     .topbar-nav a {
       color: #fff;
-      background: rgba(255,255,255,.12);
+      background: rgba(255,255,255,.20);
       padding: 7px 13px;
       border-radius: 9px;
       text-decoration: none;
@@ -78,10 +80,10 @@
       font-weight: 600;
       transition: all .2s;
       white-space: nowrap;
-      border: 1px solid rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.22);
       backdrop-filter: blur(4px);
     }
-    .topbar-nav a:hover { background: rgba(255,255,255,.25); border-color: rgba(255,255,255,.3); }
+    .topbar-nav a:hover { background: rgba(255,255,255,.32); border-color: rgba(255,255,255,.4); }
     .topbar-nav a.active {
       background: var(--accent);
       color: #1e2a2b;
@@ -98,7 +100,7 @@
       box-shadow: var(--shadow);
       padding: 24px;
       margin-bottom: 20px;
-      border: 1px solid rgba(36,118,128,.08);
+      border: 1px solid rgba(255,87,51,.08);
     }
     .card-title {
       font-size: 1.05rem;
@@ -130,11 +132,11 @@
     .btn-primary {
       background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       color: #fff;
-      box-shadow: 0 3px 10px rgba(36,118,128,.3);
+      box-shadow: 0 3px 10px rgba(255,87,51,.3);
     }
     .btn-primary:hover {
       background: linear-gradient(135deg, var(--primary-light), var(--primary));
-      box-shadow: 0 4px 14px rgba(36,118,128,.4);
+      box-shadow: 0 4px 14px rgba(255,87,51,.4);
       transform: translateY(-1px);
     }
     .btn-accent  { background: var(--accent); color: #1e2a2b; box-shadow: 0 3px 10px rgba(235,179,123,.3); }
@@ -160,7 +162,7 @@
     input:focus, select:focus, textarea:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(36,118,128,.12);
+      box-shadow: 0 0 0 3px rgba(255,87,51,.12);
     }
     textarea { resize: vertical; min-height: 80px; }
 
@@ -213,7 +215,6 @@
         gap: 8px;
       }
       .topbar img { height: 34px; }
-      .topbar-titles h1 { font-size: .9rem; }
       .topbar-titles span { font-size: .7rem; }
       .topbar-nav {
         width: 100%;
@@ -238,11 +239,12 @@
 <body>
   <div class="topbar">
     {% if config.LOGO_URL %}
-    <img src="{{ config.LOGO_URL }}" alt="logo">
+    <div class="topbar-logo-chip">
+      <img src="{{ config.LOGO_URL }}" alt="logo">
+    </div>
     {% endif %}
     <div class="topbar-titles">
-      <h1>{{ config.ORG_AR if lang == 'ar' else config.ORG_EN }}</h1>
-      <span>{{ 'نظام حجز القاعات' if lang == 'ar' else 'Venue Booking System' }}</span>
+      <span>{{ 'نظام حجز عربات الحواسيب' if lang == 'ar' else 'Laptop Trolleys Booking System' }}</span>
     </div>
     <nav class="topbar-nav">
       <a href="/calendar?lang={{ lang }}" class="{% if request.endpoint == 'public.calendar' %}active{% endif %}">
