@@ -83,47 +83,15 @@ def _send_via_graph(to_email, to_name, subject, html_body, bcc_list=None):
         return False
 
 
-def _send_via_brevo(to_email, to_name, subject, html_body, bcc_list=None):
-    api_key = current_app.config.get('BREVO_API_KEY', '')
-    if not api_key:
-        return False
-
-    sender_email = current_app.config.get('SENDER_EMAIL', '')
-    sender_name  = current_app.config.get('SENDER_NAME', 'مدرسة الرائد العربي')
-
-    payload = {
-        'sender': {'name': sender_name, 'email': sender_email},
-        'to': [{'email': to_email, 'name': to_name or to_email}],
-        'subject': subject,
-        'htmlContent': html_body,
-    }
-    if bcc_list:
-        unique_bcc = list({e.lower(): e for e in bcc_list if e and '@' in e}.values())
-        if unique_bcc:
-            payload['bcc'] = [{'email': e} for e in unique_bcc[:50]]
-
-    try:
-        r = requests.post(
-            'https://api.brevo.com/v3/smtp/email',
-            headers={'api-key': api_key, 'Content-Type': 'application/json'},
-            json=payload,
-            timeout=15,
-        )
-        if r.status_code not in (200, 201, 202):
-            print(f'[email] Brevo send failed: HTTP {r.status_code} — {r.text[:500]} (to={to_email})', flush=True)
-            return False
-        print(f'[email] sent successfully via Brevo (to={to_email}, subject={subject[:60]})', flush=True)
-        return True
-    except Exception:
-        return False
-
-
 def _send(to_email, to_name, subject, html_body, bcc_list=None):
-    """Send an email. Uses Microsoft 365 (Graph API) when configured,
-    otherwise falls back to Brevo."""
-    if current_app.config.get('MS_CLIENT_SECRET'):
-        return _send_via_graph(to_email, to_name, subject, html_body, bcc_list)
-    return _send_via_brevo(to_email, to_name, subject, html_body, bcc_list)
+    """Send an email via Microsoft 365 (Graph API). Brevo has been removed —
+    this system uses Graph exclusively."""
+    ms_secret = current_app.config.get('MS_CLIENT_SECRET')
+    if not ms_secret:
+        print(f"[email] DEBUG: MS_CLIENT_SECRET is NOT set — cannot send (to={to_email})", flush=True)
+        return False
+    print(f"[email] DEBUG: sending via Graph (to={to_email})", flush=True)
+    return _send_via_graph(to_email, to_name, subject, html_body, bcc_list)
 
 
 def _date_label(date_str, start_time='', end_time=''):
