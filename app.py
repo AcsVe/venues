@@ -33,10 +33,13 @@ def create_app():
     app.config['ORG_EN']        = os.environ.get('ORG_EN', 'Al-Raed Al-Arabi School')
     app.config['LOGO_URL']      = os.environ.get('LOGO_URL', '/static/logo.jpg')
     app.config['ACCENT_COLOR']  = os.environ.get('ACCENT_COLOR', '#3D5A80')
-    app.config['BREVO_API_KEY'] = os.environ.get('BREVO_API_KEY', '')
-    app.config['SENDER_EMAIL']  = os.environ.get('SENDER_EMAIL', 'acsvenues@gmail.com')
-    app.config['SENDER_NAME']   = os.environ.get('SENDER_NAME', 'مدرسة الرائد العربي')
     app.config['BASE_URL']      = os.environ.get('BASE_URL', os.environ.get('RENDER_EXTERNAL_URL', '')).rstrip('/')
+
+    # Microsoft 365 (Graph API) — sole email provider
+    app.config['MS_TENANT_ID']     = os.environ.get('MS_TENANT_ID', '')
+    app.config['MS_CLIENT_ID']     = os.environ.get('MS_CLIENT_ID', '')
+    app.config['MS_CLIENT_SECRET'] = os.environ.get('MS_CLIENT_SECRET', '')
+    app.config['MS_SENDER_EMAIL']  = os.environ.get('MS_SENDER_EMAIL', '')
 
     db.init_app(app)
     with app.app_context():
