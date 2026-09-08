@@ -1,545 +1,2197 @@
-import os
-from datetime import date, datetime
-from flask import (Blueprint, render_template, request, jsonify,
-                   redirect, url_for, send_from_directory, current_app)
-from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod,
-                    Student, Teacher, BookingCheckout, CheckoutLine)
-from utils.helpers import (gen_req_id, check_conflict, check_blocked,
-                            save_upload, get_all_contact_emails,
-                            get_blocked_for_date, is_valid_email, sanitize_email)
-from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification
-
-public_bp = Blueprint('public', __name__)
-
-
-# ── Serve uploaded files ──────────────────────────────────────────────────
-@public_bp.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
-
-
-# ── Calendar ──────────────────────────────────────────────────────────────
-@public_bp.route('/')
-def index():
-    return redirect(url_for('public.calendar'))
-
-
-# ── Academic structure (stages → grades → sections) + periods ────────────
-@public_bp.route('/api/structure')
-def api_structure():
-    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
-    return jsonify([s.to_dict(with_grades=True) for s in stages])
-
-
-@public_bp.route('/api/stages-list')
-def api_stages_list():
-    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
-    return jsonify([s.to_dict() for s in stages])
-
-
-@public_bp.route('/api/periods')
-def api_periods():
-    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
-    return jsonify([p.to_dict() for p in periods])
-
-
-@public_bp.route('/calendar')
-def calendar():
-    lang = request.args.get('lang', 'ar')
-    return render_template('calendar.html', lang=lang)
-
-
-@public_bp.route('/api/month-data')
-def month_data():
-    try:
-        y = int(request.args.get('y', date.today().year))
-        m = int(request.args.get('m', date.today().month))
-    except (ValueError, TypeError):
-        return jsonify({'error': 'invalid params'}), 400
-
-    month_start = f'{y:04d}-{m:02d}-01'
-    if m == 12:
-        month_end = f'{y+1:04d}-01-01'
-    else:
-        month_end = f'{y:04d}-{m+1:02d}-01'
-
-    bookings = Booking.query.filter(
-        Booking.status.notin_(['rejected', 'cancelled']),
-        Booking.booking_date >= month_start,
-        Booking.booking_date < month_end,
-    ).all()
-
-    blocked_map = {}
-    for blk in BlockedPeriod.query.all():
-        cur = blk.from_date
-        while cur <= blk.to_date:
-            if month_start <= cur < month_end:
-                blocked_map.setdefault(cur, []).append({
-                    'reason': blk.reason or 'غير متاح',
-                    'fromTime': blk.from_time or '',
-                    'toTime': blk.to_time or '',
-                    'hall': blk.hall or '',
-                })
-            parts = cur.split('-')
-            d_obj = date(int(parts[0]), int(parts[1]), int(parts[2]))
-            from datetime import timedelta
-            d_obj += timedelta(days=1)
-            cur = d_obj.strftime('%Y-%m-%d')
-            if cur > blk.to_date:
-                break
-
-    # Public view: hide sensitive details for privacy
-    public_bookings = []
-    for b in bookings:
-        public_bookings.append({
-            'date': b.booking_date,
-            'hall': b.trolley_code or b.hall or '',
-            'stage': b.stage_name or '',
-            'startTime': b.start_time or '',
-            'endTime': b.end_time or '',
-            'periodNumber': b.period_number,
-            'status': b.status,
-        })
-    return jsonify({
-        'bookings': public_bookings,
-        'blocked': blocked_map,
-    })
-
-
-# ── Booking form ──────────────────────────────────────────────────────────
-@public_bp.route('/book')
-def book():
-    lang = request.args.get('lang', 'ar')
-    pre_date = request.args.get('date', '')
-    today = date.today().strftime('%Y-%m-%d')
-
-    if pre_date and pre_date < today:
-        msg = 'لا يمكن الحجز بتاريخ سابق' if lang == 'ar' else 'Cannot book a past date'
-        return render_template('error.html', msg=msg, lang=lang)
-
-    if pre_date:
-        blk = check_blocked(pre_date, '', '', '')
-        if blk['blocked'] and blk.get('fullBlock'):
-            msg = (f'هذا اليوم غير متاح بالكامل: {blk["reason"]}' if lang == 'ar'
-                   else f'This day is fully unavailable: {blk["reason"]}')
-            return render_template('error.html', msg=msg, lang=lang)
-
-    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
-    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
-    return render_template('book.html', lang=lang, pre_date=pre_date,
-                           stages=stages, periods=periods, today=today)
-
-
-def _resolve_selection(data):
-    """Look up Stage/Grade/Section/Period objects from posted ids.
-    Returns (stage, grade, section, period, error)."""
-    try:
-        stage_id  = int(data.get('stageId'))
-        grade_id  = int(data.get('gradeId'))
-        section_id = int(data.get('sectionId'))
-        period_id  = int(data.get('periodId'))
-    except (TypeError, ValueError):
-        return None, None, None, None, 'يرجى اختيار المرحلة والصف والشعبة والحصة'
-
-    stage = Stage.query.get(stage_id)
-    grade = Grade.query.get(grade_id)
-    section = Section.query.get(section_id)
-    period = Period.query.get(period_id)
-    if not (stage and grade and section and period):
-        return None, None, None, None, 'اختيار غير صحيح للمرحلة/الصف/الشعبة/الحصة'
-    if grade.stage_id != stage.id or section.grade_id != grade.id:
-        return None, None, None, None, 'اختيار غير متطابق للمرحلة/الصف/الشعبة'
-    return stage, grade, section, period, None
-
-
-@public_bp.route('/api/check-slot', methods=['POST'])
-def check_slot():
-    data = request.get_json(silent=True) or {}
-    bdate = data.get('date', '')
-    exclude = data.get('excludeReqId')
-
-    if not bdate:
-        return jsonify({'ok': False, 'error': 'بيانات ناقصة'})
-
-    stage, grade, section, period, err = _resolve_selection(data)
-    if err:
-        return jsonify({'ok': False, 'error': err})
-
-    blk = check_blocked(bdate, period.start_time or '', period.end_time or '', stage.trolley_code)
-    if blk['blocked']:
-        msg = f'التاريخ غير متاح: {blk["reason"]}'
-        if blk.get('blkFromT'):
-            msg += f' ({blk["blkFromT"]} - {blk["blkToT"]})'
-        return jsonify({'ok': False, 'error': msg})
-
-    conflict = check_conflict(stage.trolley_code, bdate, period.number, exclude)
-    if conflict:
-        return jsonify({'ok': False, 'error': conflict})
-
-    return jsonify({'ok': True})
-
-
-@public_bp.route('/api/submit-booking', methods=['POST'])
-def submit_booking():
-    today = date.today().strftime('%Y-%m-%d')
-
-    if request.content_type and ('multipart' in request.content_type or
-                                  'form' in request.content_type):
-        f = request.form
-        files = request.files.getlist('attachments')
-    else:
-        f = request.get_json(silent=True) or {}
-        files = []
-
-    required = ['fullName', 'email', 'bookingDate', 'stageId', 'gradeId', 'sectionId', 'periodId']
-    for field in required:
-        if not f.get(field):
-            return jsonify({'success': False, 'error': f'الحقل {field} مطلوب'}), 400
-
-    booking_date = f.get('bookingDate')
-    if booking_date < today:
-        return jsonify({'success': False, 'error': 'لا يمكن الحجز بتاريخ سابق'}), 400
-
-    stage, grade, section, period, err = _resolve_selection(f)
-    if err:
-        return jsonify({'success': False, 'error': err}), 400
-
-    blk = check_blocked(booking_date, period.start_time or '', period.end_time or '', stage.trolley_code)
-    if blk['blocked']:
-        msg = f'التاريخ غير متاح: {blk["reason"]}'
-        if blk.get('blkFromT'):
-            msg += f' ({blk["blkFromT"]} - {blk["blkToT"]})'
-        return jsonify({'success': False, 'error': msg}), 400
-
-    conflict = check_conflict(stage.trolley_code, booking_date, period.number)
-    if conflict:
-        return jsonify({'success': False, 'error': conflict}), 400
-
-    att_urls = []
-    for file_obj in files:
-        if file_obj and file_obj.filename:
-            url = save_upload(file_obj)
-            if url:
-                att_urls.append(url)
-
-    req_id = gen_req_id()
-    booking = Booking(
-        req_id        = req_id,
-        name          = f.get('fullName'),
-        email         = sanitize_email(f.get('email')),
-        phone         = f.get('phone', ''),
-        on_behalf     = f.get('onBehalf', ''),
-        event_title   = f.get('eventTitle', ''),
-        booking_date  = booking_date,
-        stage_id      = stage.id,
-        grade_id      = grade.id,
-        section_id    = section.id,
-        period_id     = period.id,
-        trolley_code  = stage.trolley_code,
-        stage_name    = stage.name_ar,
-        grade_name    = grade.name_ar,
-        section_name  = section.name_ar,
-        period_number = period.number,
-        start_time    = period.start_time or '',
-        end_time      = period.end_time or '',
-        notes         = f.get('notes', ''),
-        attachments   = ','.join(att_urls),
-        status        = 'pending',
-    )
-    db.session.add(booking)
-    db.session.commit()
-
-    email_ctx = {
-        'reqId': req_id, 'name': booking.name, 'email': booking.email,
-        'title': booking.event_title, 'stage': stage.name_ar, 'grade': grade.name_ar,
-        'section': section.name_ar, 'periodLabel': period.label_ar or f'الحصة {period.number}',
-        'date': booking_date, 'startTime': booking.start_time, 'endTime': booking.end_time,
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>لوحة التحكم — {{ config.ORG_AR }}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #FF5733; --primary-dark: #C43D1F; --primary-light: #FF8563;
+      --secondary: #2E4E7A; --secondary-dark: #1B3358; --secondary-light: #5A7CA8;
+      --accent: #EBB37B;
+      --bg: #f0f4f5; --white: #fff; --text: #1e2a2b; --muted: #6b7c7e;
+      --border: #d4e4e6; --radius: 12px; --sidebar: 240px;
+      --shadow: 0 2px 12px rgba(255,87,51,.10);
     }
-    try:
-        contacts = [{'email': e} for e in get_all_contact_emails(stage.id)]
-        send_staff_notification('new', email_ctx, contacts)
-    except Exception as e:
-        print(f"[email] notification failed: {e}", flush=True)
-    try:
-        send_confirm(email_ctx)
-    except Exception as e:
-        print(f"[email] notification failed: {e}", flush=True)
-
-    return jsonify({'success': True, 'reqId': req_id})
-
-
-# ── Booking lookup / cancel / amend (public) ─────────────────────────────
-@public_bp.route('/lookup')
-def lookup():
-    lang = request.args.get('lang', 'ar')
-    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
-    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
-    return render_template('lookup.html', lang=lang, stages=stages, periods=periods)
-
-
-@public_bp.route('/api/lookup-booking', methods=['POST'])
-def api_lookup():
-    data = request.get_json(silent=True) or {}
-    req_id = data.get('reqId', '').strip()
-    email  = sanitize_email(data.get('email', ''))
-
-    b = Booking.query.filter_by(req_id=req_id).first()
-    if not b or b.email.lower() != email.lower():
-        return jsonify({'success': False, 'error': 'لم يتم العثور على الحجز أو البريد غير مطابق'}), 404
-    if b.status == 'cancelled':
-        return jsonify({'success': False, 'error': 'هذا الحجز ملغي بالفعل'}), 400
-
-    return jsonify({'success': True, 'booking': b.to_dict()})
-
-
-@public_bp.route('/api/cancel-booking', methods=['POST'])
-def api_cancel_by_user():
-    data = request.get_json(silent=True) or {}
-    req_id = data.get('reqId', '').strip()
-    email  = sanitize_email(data.get('email', ''))
-
-    b = Booking.query.filter_by(req_id=req_id).first()
-    if not b or b.email.lower() != email.lower():
-        return jsonify({'success': False, 'error': 'غير موجود أو البريد غير مطابق'}), 404
-    if b.status == 'cancelled':
-        return jsonify({'success': False, 'error': 'الحجز ملغي بالفعل'}), 400
-
-    b.status      = 'cancelled'
-    b.action_date = datetime.utcnow()
-    db.session.commit()
-
-    email_ctx = {'reqId': req_id, 'name': b.name, 'email': b.email,
-                 'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
-                 'section': b.section_name}
-    try:
-        send_cancel(email_ctx)
-    except Exception as e:
-        print(f"[email] notification failed: {e}", flush=True)
-    try:
-        contacts = [{'email': e} for e in get_all_contact_emails(b.stage_id)]
-        send_staff_notification('cancel', email_ctx, contacts)
-    except Exception as e:
-        print(f"[email] notification failed: {e}", flush=True)
-
-    return jsonify({'success': True})
-
-
-@public_bp.route('/api/amend-booking', methods=['POST'])
-def api_amend_by_user():
-    if request.content_type and ('multipart' in request.content_type or
-                                  'form' in request.content_type):
-        f = request.form
-        files = request.files.getlist('attachments')
-    else:
-        f = request.get_json(silent=True) or {}
-        files = []
-
-    req_id = f.get('reqId', '').strip()
-    email  = sanitize_email(f.get('email', ''))
-
-    b = Booking.query.filter_by(req_id=req_id).first()
-    if not b or b.email.lower() != email.lower():
-        return jsonify({'success': False, 'error': 'غير موجود'}), 404
-    if b.status == 'cancelled':
-        return jsonify({'success': False, 'error': 'الحجز ملغي'}), 400
-
-    booking_date = f.get('bookingDate', b.booking_date)
-
-    if f.get('stageId') or f.get('gradeId') or f.get('sectionId') or f.get('periodId'):
-        stage, grade, section, period, err = _resolve_selection({
-            'stageId': f.get('stageId') or b.stage_id,
-            'gradeId': f.get('gradeId') or b.grade_id,
-            'sectionId': f.get('sectionId') or b.section_id,
-            'periodId': f.get('periodId') or b.period_id,
-        })
-        if err:
-            return jsonify({'success': False, 'error': err}), 400
-    else:
-        stage = Stage.query.get(b.stage_id)
-        grade = Grade.query.get(b.grade_id)
-        section = Section.query.get(b.section_id)
-        period = Period.query.get(b.period_id)
-        if not (stage and grade and section and period):
-            return jsonify({'success': False, 'error': 'تعذر إيجاد بيانات الحجز الأصلية'}), 400
-
-    conflict = check_conflict(stage.trolley_code, booking_date, period.number, req_id)
-    if conflict:
-        return jsonify({'success': False, 'error': conflict}), 400
-
-    was_approved = b.status == 'approved'
-    b.name          = f.get('fullName', b.name)
-    b.phone         = f.get('phone', b.phone or '')
-    b.on_behalf     = f.get('onBehalf', b.on_behalf or '')
-    b.event_title   = f.get('eventTitle', b.event_title or '')
-    b.booking_date  = booking_date
-    b.stage_id      = stage.id
-    b.grade_id      = grade.id
-    b.section_id    = section.id
-    b.period_id     = period.id
-    b.trolley_code  = stage.trolley_code
-    b.stage_name    = stage.name_ar
-    b.grade_name    = grade.name_ar
-    b.section_name  = section.name_ar
-    b.period_number = period.number
-    b.start_time    = period.start_time or ''
-    b.end_time      = period.end_time or ''
-    b.notes         = f.get('notes', b.notes or '')
-    b.action_date   = datetime.utcnow()
-    if was_approved:
-        b.status = 'pending'
-
-    for file_obj in files:
-        if file_obj and file_obj.filename:
-            url = save_upload(file_obj)
-            if url:
-                b.attachments = (b.attachments or '') + ',' + url
-
-    db.session.commit()
-
-    email_ctx = {'reqId': req_id, 'name': b.name, 'email': b.email,
-                 'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
-                 'section': b.section_name,
-                 'periodLabel': period.label_ar or f'الحصة {period.number}',
-                 'date': booking_date, 'startTime': b.start_time, 'endTime': b.end_time}
-    try:
-        send_update(email_ctx)
-    except Exception as e:
-        print(f"[email] notification failed: {e}", flush=True)
-    try:
-        contacts = [{'email': e} for e in get_all_contact_emails(b.stage_id)]
-        send_staff_notification('update', email_ctx, contacts)
-    except Exception as e:
-        print(f"[email] notification failed: {e}", flush=True)
-
-    return jsonify({'success': True})
-
-
-# ── Teacher name autocomplete (for the booking form) ──────────────────────
-@public_bp.route('/api/teacher-names')
-def api_teacher_names():
-    names = [t.name for t in Teacher.query.order_by(Teacher.name).all()]
-    return jsonify(names)
-
-
-# ── Laptop handover / checkout form (per approved booking) ────────────────
-LAPTOP_COUNT = 25
-
-@public_bp.route('/checkout/<req_id>')
-def checkout_form(req_id):
-    lang = request.args.get('lang', 'ar')
-    b = Booking.query.filter_by(req_id=req_id).first()
-    if not b:
-        msg = 'رقم الحجز غير موجود' if lang == 'ar' else 'Booking number not found'
-        return render_template('error.html', msg=msg, lang=lang)
-    if b.status != 'approved':
-        msg = ('نموذج تسليم الأجهزة متاح فقط بعد اعتماد الحجز من الإدارة' if lang == 'ar'
-               else 'The device handover form is only available after the booking is approved')
-        return render_template('error.html', msg=msg, lang=lang)
-
-    students = (Student.query.filter_by(section_id=b.section_id)
-                .order_by(Student.name).all())
-
-    existing = BookingCheckout.query.filter_by(booking_id=b.id).first()
-    existing_map = {}
-    if existing:
-        for line in existing.lines:
-            existing_map[line.student_id] = line.laptop_number
-
-    return render_template('checkout.html', b=b, students=students, lang=lang,
-                           existing_map=existing_map, laptop_count=LAPTOP_COUNT)
-
-
-@public_bp.route('/api/submit-checkout', methods=['POST'])
-def api_submit_checkout():
-    data = request.get_json(silent=True) or {}
-    req_id = data.get('reqId', '')
-    entries = data.get('entries', [])  # [{studentId, laptopNumber}]
-
-    b = Booking.query.filter_by(req_id=req_id).first()
-    if not b:
-        return jsonify({'success': False, 'error': 'الحجز غير موجود'}), 404
-    if b.status != 'approved':
-        return jsonify({'success': False, 'error': 'الحجز غير معتمد بعد'}), 400
-
-    # Validate laptop numbers: within range, and no duplicate assignment
-    seen_numbers = {}
-    clean_entries = []
-    for e in entries:
-        try:
-            student_id = int(e.get('studentId'))
-        except (TypeError, ValueError):
-            continue
-        laptop_number = e.get('laptopNumber')
-        if laptop_number in (None, '', 'null'):
-            clean_entries.append((student_id, None))
-            continue
-        try:
-            laptop_number = int(laptop_number)
-        except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'رقم لابتوب غير صحيح'}), 400
-        if not (1 <= laptop_number <= LAPTOP_COUNT):
-            return jsonify({'success': False, 'error': f'رقم اللابتوب يجب أن يكون بين 1 و {LAPTOP_COUNT}'}), 400
-        if laptop_number in seen_numbers:
-            return jsonify({'success': False,
-                            'error': f'رقم اللابتوب {laptop_number} مستخدم لأكثر من طالب'}), 400
-        seen_numbers[laptop_number] = student_id
-        clean_entries.append((student_id, laptop_number))
-
-    checkout = BookingCheckout.query.filter_by(booking_id=b.id).first()
-    if checkout:
-        CheckoutLine.query.filter_by(checkout_id=checkout.id).delete()
-    else:
-        checkout = BookingCheckout(booking_id=b.id)
-        db.session.add(checkout)
-        db.session.flush()
-    checkout.submitted_at = datetime.utcnow()
-
-    students_map = {s.id: s.name for s in Student.query.filter(
-        Student.id.in_([sid for sid, _ in clean_entries])).all()}
-
-    for i, (student_id, laptop_number) in enumerate(clean_entries, start=1):
-        db.session.add(CheckoutLine(
-            checkout_id=checkout.id, seq=i, student_id=student_id,
-            student_name=students_map.get(student_id, ''),
-            laptop_number=laptop_number,
-        ))
-
-    db.session.commit()
-    return jsonify({'success': True})
-
-
-# ── Available periods for a given stage + date (avoid failed submissions) ──
-@public_bp.route('/api/available-periods')
-def api_available_periods():
-    stage_id = request.args.get('stageId')
-    booking_date = request.args.get('date', '')
-
-    if not stage_id or not booking_date:
-        return jsonify({'error': 'بيانات ناقصة'}), 400
-
-    stage = Stage.query.get(stage_id)
-    if not stage:
-        return jsonify({'error': 'المرحلة غير موجودة'}), 400
-
-    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
-
-    booked_numbers = {
-        b.period_number for b in Booking.query.filter(
-            Booking.trolley_code == stage.trolley_code,
-            Booking.booking_date == booking_date,
-            Booking.status.notin_(['rejected', 'cancelled'])
-        ).all()
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar); min-height: 100vh;
+      background: linear-gradient(180deg, var(--secondary-dark), var(--secondary));
+      color: #fff; display: flex; flex-direction: column;
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 150;
+      overflow-y: auto;
     }
+    .sidebar-logo {
+      padding: 18px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.15);
+      display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+    }
+    .sidebar-logo-chip {
+      background: #fff; border-radius: 8px; padding: 6px 10px;
+      display: flex; align-items: center; width: 100%; box-sizing: border-box;
+    }
+    .sidebar-logo-chip img { height: 34px; max-width: 100%; object-fit: contain; display: block; }
+    .sidebar-logo-text { font-size: .8rem; font-weight: 600; opacity: .8; }
+    .sidebar-nav { flex: 1; padding: 12px 0; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 18px; cursor: pointer;
+      font-size: .92rem; font-weight: 600; color: rgba(255,255,255,.8);
+      transition: all .2s; border: none; background: none;
+      width: 100%; text-align: right; font-family: inherit;
+    }
+    .nav-item:hover, .nav-item.active {
+      background: rgba(255,255,255,.15); color: #fff;
+    }
+    .nav-item i { width: 20px; text-align: center; }
+    .nav-badge {
+      margin-right: auto; background: var(--accent); color: #1e2a2b;
+      border-radius: 10px; padding: 1px 8px; font-size: .72rem; font-weight: 800;
+    }
+    .sidebar-footer { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.15); }
+    .sidebar-footer a {
+      display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.7);
+      text-decoration: none; font-size: .85rem; font-weight: 600;
+    }
+    .sidebar-footer a:hover { color: #fff; }
+    /* Main */
+    .main { margin-right: var(--sidebar); display: flex; flex-direction: column; min-height: 100vh; width: calc(100% - var(--sidebar)); }
+    .topbar {
+      background: #fff; padding: 14px 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .topbar h1 { font-size: 1.1rem; font-weight: 800; color: var(--primary); }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .hamburger { display: none; background: none; border: none; cursor: pointer; color: var(--primary); font-size: 1.4rem; padding: 4px 8px; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 140; }
+    .sidebar-overlay.open { display: block; }
+    .content { flex: 1; padding: 24px; }
+    /* Tabs */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .stat-card {
+      background: #fff; border-radius: var(--radius);
+      padding: 18px; text-align: center;
+      box-shadow: var(--shadow); border-top: 4px solid var(--primary);
+    }
+    .stat-card.accent  { border-top-color: var(--accent); }
+    .stat-card.green   { border-top-color: #27ae60; }
+    .stat-card.red     { border-top-color: #c0392b; }
+    .stat-card.orange  { border-top-color: #e67e22; }
+    .stat-val { font-size: 2rem; font-weight: 800; color: var(--primary); }
+    .stat-card.accent .stat-val  { color: #a06020; }
+    .stat-card.green  .stat-val  { color: #27ae60; }
+    .stat-card.red    .stat-val  { color: #c0392b; }
+    .stat-card.orange .stat-val  { color: #e67e22; }
+    .stat-label { font-size: .8rem; color: var(--muted); font-weight: 600; margin-top: 4px; }
+    /* Cards */
+    .card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 18px; }
+    .card-title { font-size: 1rem; font-weight: 700; color: var(--primary); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    /* Filters */
+    .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+    .filter-btn {
+      padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+      background: #fff; cursor: pointer; font-family: inherit; font-size: .82rem;
+      font-weight: 600; color: var(--muted); transition: all .2s;
+    }
+    .filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .search-input {
+      padding: 7px 12px; border-radius: 8px; border: 1.5px solid var(--border);
+      font-family: inherit; font-size: .88rem; min-width: 200px;
+    }
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th { background: #f0f7f8; color: var(--primary); font-weight: 700; padding: 10px 12px; text-align: right; white-space: nowrap; }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:hover td { background: #fafefe; }
+    .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px; border-radius: 20px; font-size: .75rem; font-weight: 700; }
+    .badge-pending   { background: #fff3cd; color: #856404; }
+    .badge-approved  { background: #d1e7dd; color: #0a6640; }
+    .badge-rejected  { background: #f8d7da; color: #842029; }
+    .badge-cancelled { background: #e2e3e5; color: #41464b; }
+    /* Actions */
+    .action-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 7px; border: none; cursor: pointer; font-family: inherit; font-size: .8rem; font-weight: 600; text-decoration: none; transition: all .2s; white-space: nowrap; }
+    .btn-green   { background: #d1e7dd; color: #0a6640; }
+    .btn-red     { background: #f8d7da; color: #842029; }
+    .btn-orange  { background: #fff3cd; color: #856404; }
+    .btn-blue    { background: #cff4fc; color: #055160; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+    .btn-sm { padding: 5px 10px; font-size: .78rem; }
+    .btn:hover { filter: brightness(.93); }
+    /* Forms */
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-weight: 700; margin-bottom: 5px; font-size: .88rem; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-grid.quad { grid-template-columns: repeat(4, 1fr); }
+    input[type=text], input[type=email], input[type=tel], input[type=date], input[type=time],
+    select, textarea {
+      width: 100%; padding: 8px 11px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-family: inherit; font-size: .88rem;
+      background: #fff; color: var(--text); transition: border-color .2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(255,87,51,.1);
+    }
+    textarea { resize: vertical; min-height: 70px; }
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 200; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 600px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 12px 50px rgba(0,0,0,.22); }
+    .modal-title { font-size: 1.05rem; font-weight: 800; color: var(--primary); margin-bottom: 18px; }
+    .modal-footer { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+    /* Alert */
+    .alert { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: .88rem; font-weight: 600; }
+    .alert-success { background: #d1e7dd; color: #0a6640; }
+    .alert-error   { background: #f8d7da; color: #842029; }
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; left: 24px; z-index: 9999;
+      background: #1e2a2b; color: #fff; padding: 12px 20px;
+      border-radius: 10px; font-size: .9rem; font-weight: 600;
+      box-shadow: 0 4px 20px rgba(0,0,0,.25);
+      transform: translateY(100px); opacity: 0; transition: all .3s;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    /* Checkbox */
+    input[type=checkbox] { width: auto; accent-color: var(--primary); }
+    /* Reports */
+    .bar-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .bar-label { min-width: 120px; font-size: .82rem; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+    .bar-track { flex: 1; background: #f0f7f8; border-radius: 6px; height: 24px; overflow: hidden; }
+    .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-light)); border-radius: 6px; display: flex; align-items: center; padding-right: 6px; transition: width .5s; }
+    .bar-fill span { color: #fff; font-size: .75rem; font-weight: 700; }
+    .period-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 14px; }
+    .period-table th { background: #f0f7f8; padding: 8px 10px; font-weight: 700; color: var(--primary); }
+    .period-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+    /* Mobile Bottom Nav */
+    .mobile-nav {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: linear-gradient(180deg, var(--secondary-dark), #0D1B2A);
+      z-index: 200;
+      padding: 6px 0 8px;
+      box-shadow: 0 -3px 16px rgba(0,0,0,.2);
+    }
+    .mobile-nav-items { display: flex; justify-content: space-around; align-items: center; }
+    .mobile-nav-item {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      color: rgba(255,255,255,.65); font-size: .65rem; font-weight: 700;
+      cursor: pointer; background: none; border: none; font-family: inherit;
+      padding: 4px 8px; border-radius: 8px; transition: all .2s; position: relative;
+    }
+    .mobile-nav-item i { font-size: 1.1rem; }
+    .mobile-nav-item.active { color: var(--accent); }
+    .mobile-nav-item .m-badge {
+      position: absolute; top: 0; right: 2px;
+      background: #e74c3c; color: #fff; border-radius: 10px;
+      font-size: .6rem; padding: 1px 5px; font-weight: 800;
+    }
+    #chartsRow { grid-template-columns: 1fr !important; }
+    @media (max-width: 600px) {
+      #chartsRow { grid-template-columns: 1fr !important; }
+    }
+    @media (max-width: 768px) {
+      :root { --sidebar: 0px; }
+      .sidebar {
+        position: fixed !important;
+        top: 0; right: 0; bottom: 0;
+        width: 82vw !important;
+        max-width: 300px;
+        transform: translateX(105%) !important;
+        transition: transform .28s cubic-bezier(.4,0,.2,1);
+        z-index: 300;
+        min-height: 100vh;
+      }
+      .sidebar.open { transform: translateX(0) !important; }
+      .main {
+        margin-right: 0 !important;
+        width: 100% !important;
+        max-width: 100vw;
+      }
+      .mobile-nav { display: none !important; }
+      .hamburger { display: inline-flex !important; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+      .form-grid { grid-template-columns: 1fr !important; }
+      .content { padding: 12px !important; }
+      .topbar { padding: 10px 14px !important; }
+      .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .table-wrap table { min-width: 480px; font-size: .8rem; }
+      .stat-card { padding: 14px 10px; }
+      .stat-val { font-size: 1.6rem; }
+    }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 140; }
+    .sidebar-overlay.open { display: block; }
+      .topbar { padding: 10px 14px; }
+      .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .table-wrap table { min-width: 500px; font-size: .8rem; }
+      .hamburger { display: inline-flex !important; }
+      .stat-card { padding: 12px; }
+      .stat-val { font-size: 1.6rem; }
+    }
+    .sidebar-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.5); z-index: 140;
+    }
+    .sidebar-overlay.open { display: block; }
+    .hamburger { display: inline-flex !important; }
+      .stat-card { padding: 12px; }
+      .stat-val { font-size: 1.6rem; }
+    }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2.5px solid rgba(255,87,51,.3); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(110%); transition: transform .28s ease; width: 82vw !important; max-width: 290px; }
+      .sidebar.open { transform: translateX(0); }
+      .main { margin-right: 0 !important; width: 100% !important; }
+      .hamburger { display: inline-flex !important; }
+      .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+      .form-grid { grid-template-columns: 1fr !important; }
+      .content { padding: 12px !important; }
+      .topbar { padding: 10px 14px !important; }
+      .table-wrap { -webkit-overflow-scrolling: touch; }
+      .stat-card { padding: 12px 8px; }
+      .stat-val { font-size: 1.5rem; }
+      .search-input { min-width: unset; width: 100%; }
+      .mobile-nav { display: none !important; }
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* FullCalendar mobile fix */
+    @media (max-width: 768px) {
+      #adminCal .fc-toolbar { flex-wrap: wrap; gap: 6px; }
+      #adminCal .fc-toolbar-chunk { display: flex; gap: 4px; flex-wrap: wrap; }
+      #adminCal .fc-button { padding: 4px 8px !important; font-size: .75rem !important; }
+      #adminCal .fc-col-header-cell-cushion { font-size: .7rem; padding: 4px 2px; }
+      #adminCal .fc-daygrid-day-number { font-size: .75rem; }
+      #adminCal .fc-scrollgrid { font-size: .75rem; }
+      #adminCal .fc-event-title { font-size: .7rem; overflow: hidden; }
+      #adminCal { overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    {% if config.LOGO_URL %}
+    <div class="sidebar-logo-chip"><img src="{{ config.LOGO_URL }}" alt="logo"></div>
+    {% endif %}
+    <div class="sidebar-logo-text">لوحة التحكم</div>
+  </div>
+  <div class="sidebar-nav">
+    <button class="nav-item active" onclick="showTab('bookings')"><i class="fas fa-calendar-check"></i> طلبات الحجز <span class="nav-badge" id="nbPending">0</span></button>
+    <button class="nav-item" onclick="showTab('halls')"><i class="fas fa-laptop"></i> المراحل والعربات</button>
+    <button class="nav-item" onclick="showTab('blocked')"><i class="fas fa-ban"></i> غير متاح</button>
+    <button class="nav-item" onclick="showTab('contacts')"><i class="fas fa-address-book"></i> جهات الاتصال</button>
+    <button class="nav-item" onclick="showTab('teachers')"><i class="fas fa-chalkboard-teacher"></i> المعلمون</button>
+    <button class="nav-item" onclick="showTab('students')"><i class="fas fa-user-graduate"></i> الطلاب</button>
+    <button class="nav-item" onclick="showTab('reports')"><i class="fas fa-chart-bar"></i> التقارير</button>
+    <button class="nav-item" onclick="showTab('calview')"><i class="fas fa-calendar-alt"></i> التقويم</button>
+  </div>
+  <div class="sidebar-footer">
+    <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
+    <br><br>
+    <a href="#" onclick="toggleLang();return false;"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></a>
+    <br><br>
+    <a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> خروج</a>
+  </div>
+</nav>
 
-    result = []
-    for p in periods:
-        blk = check_blocked(booking_date, p.start_time or '', p.end_time or '', stage.trolley_code)
-        available = (p.number not in booked_numbers) and not blk['blocked']
-        result.append({
-            'id': p.id, 'number': p.number,
-            'label': p.label_ar or f'الحصة {p.number}',
-            'startTime': p.start_time or '', 'endTime': p.end_time or '',
-            'available': available,
-        })
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <h1 id="pageTitle">طلبات الحجز</h1>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-outline btn-sm" onclick="toggleLang()"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></button>
+      <button class="btn btn-outline btn-sm" onclick="refreshAll()"><i class="fas fa-sync"></i> تحديث</button>
+      <span style="font-size:.85rem;color:var(--muted)" id="clockEl"></span>
+    </div>
+  </div>
+  <div class="content">
 
-    return jsonify(result)
+    <!-- ── BOOKINGS TAB ── -->
+    <div class="tab-panel active" id="tab-bookings">
+      <div class="stats-grid">
+        <div class="stat-card" onclick="filterByStat('all')" style="cursor:pointer" title="عرض كل الطلبات"><div class="stat-val" id="stTotal">-</div><div class="stat-label">إجمالي الطلبات</div></div>
+        <div class="stat-card accent" onclick="filterByStat('pending')" style="cursor:pointer" title="عرض قيد المراجعة"><div class="stat-val" id="stPending">-</div><div class="stat-label">قيد المراجعة</div></div>
+        <div class="stat-card green" onclick="filterByStat('approved')" style="cursor:pointer" title="عرض المعتمدة"><div class="stat-val" id="stApproved">-</div><div class="stat-label">معتمد</div></div>
+        <div class="stat-card red" onclick="filterByStat('rejected')" style="cursor:pointer" title="عرض المرفوضة"><div class="stat-val" id="stRejected">-</div><div class="stat-label">مرفوض</div></div>
+        <div class="stat-card orange" onclick="filterByStat('cancelled')" style="cursor:pointer" title="عرض الملغية"><div class="stat-val" id="stCancelled">-</div><div class="stat-label">ملغي</div></div>
+      </div>
+      <div class="card">
+        <div class="filter-bar">
+          <button class="filter-btn active" data-filter="all" onclick="filterBk('all',this)">الكل</button>
+          <button class="filter-btn" data-filter="pending" onclick="filterBk('pending',this)">قيد المراجعة</button>
+          <button class="filter-btn" data-filter="approved" onclick="filterBk('approved',this)">معتمد</button>
+          <button class="filter-btn" data-filter="rejected" onclick="filterBk('rejected',this)">مرفوض</button>
+          <button class="filter-btn" data-filter="cancelled" onclick="filterBk('cancelled',this)">ملغي</button>
+          <input class="search-input" type="text" placeholder="🔍 بحث..." oninput="searchBk(this.value)">
+          <button class="btn btn-red btn-sm" onclick="bulkDelete()" id="bulkBtn" style="display:none"><i class="fas fa-trash"></i> حذف المحدد</button>
+          <button class="btn btn-outline btn-sm" onclick="exportCSV()"><i class="fas fa-file-excel"></i> Excel</button>
+          <button class="btn btn-outline btn-sm" onclick="exportPrint()"><i class="fas fa-print"></i> طباعة</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
+                <th>رقم الطلب</th>
+                <th>الاسم</th>
+                <th>الموضوع</th>
+                <th>المرحلة</th>
+                <th>الصف</th>
+                <th>الشعبة</th>
+                <th>الحصة</th>
+                <th>التاريخ</th>
+                <th>الحالة</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="bkTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── STAGES / GRADES / SECTIONS / PERIODS TAB ── -->
+    <div class="tab-panel" id="tab-halls">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-plus"></i> إضافة مرحلة جديدة</div>
+        <div class="form-grid">
+          <div class="form-group"><label>اسم المرحلة (عربي) <span style="color:#c0392b">*</span></label><input type="text" id="hNameAr" placeholder="مثال: المرحلة الأساسية"></div>
+          <div class="form-group"><label>الاسم (إنجليزي)</label><input type="text" id="hNameEn" dir="ltr"></div>
+          <div class="form-group"><label>معرّف العربة (Trolley) <span style="color:#c0392b">*</span></label><input type="text" id="hTrolleyCode" dir="ltr" placeholder="مثال: TROLLEY-A"></div>
+        </div>
+        <div style="display:flex;gap:16px;align-items:center;margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" id="hActive" checked> مرحلة فعالة</label>
+        </div>
+        <button class="btn btn-primary" onclick="addHall()"><i class="fas fa-plus"></i> إضافة مرحلة</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fas fa-list"></i> المراحل والعربات، الصفوف والشعب</div>
+        <div id="stagesTree"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fas fa-clock"></i> الحصص (مشتركة بين المرحلتين)</div>
+        <div class="form-grid">
+          <div class="form-group"><label>رقم الحصة <span style="color:#c0392b">*</span></label><input type="number" min="1" id="pNumber"></div>
+          <div class="form-group"><label>اسم الحصة</label><input type="text" id="pLabel" placeholder="مثال: الحصة الأولى"></div>
+          <div class="form-group"><label>من الساعة (اختياري)</label><input type="time" id="pStart"></div>
+          <div class="form-group"><label>إلى الساعة (اختياري)</label><input type="time" id="pEnd"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addPeriod()"><i class="fas fa-plus"></i> إضافة حصة</button>
+        <div class="table-wrap" style="margin-top:14px">
+          <table>
+            <thead><tr><th>رقم الحصة</th><th>الاسم</th><th>من</th><th>إلى</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+            <tbody id="periodsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BLOCKED TAB ── -->
+    <div class="tab-panel" id="tab-blocked">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-plus"></i> إضافة فترة محظورة</div>
+        <div class="form-grid">
+          <div class="form-group"><label>من تاريخ <span style="color:#c0392b">*</span></label><input type="date" id="blkFrom"></div>
+          <div class="form-group"><label>إلى تاريخ <span style="color:#c0392b">*</span></label><input type="date" id="blkTo"></div>
+          <div class="form-group"><label>المرحلة/العربة (اتركه فارغاً لحظر الكل)</label>
+            <select id="blkHall"><option value="">-- كل المراحل --</option></select>
+          </div>
+          <div class="form-group"><label>السبب</label><input type="text" id="blkReason"></div>
+          <div class="form-group"><label>من الساعة (اختياري)</label><input type="time" id="blkFromT"></div>
+          <div class="form-group"><label>إلى الساعة (اختياري)</label><input type="time" id="blkToT"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addBlocked()"><i class="fas fa-plus"></i> إضافة</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-list"></i> الفترات المحظورة</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>من تاريخ</th><th>إلى تاريخ</th><th>المرحلة</th><th>من الساعة</th><th>إلى الساعة</th><th>السبب</th><th>حذف</th></tr></thead>
+            <tbody id="blockedTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CONTACTS TAB ── -->
+    <div class="tab-panel" id="tab-contacts">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-user-plus"></i> إضافة جهة اتصال</div>
+        <div class="form-grid">
+          <div class="form-group"><label>البريد الإلكتروني <span style="color:#c0392b">*</span></label><input type="email" id="ctEmail" dir="ltr"></div>
+          <div class="form-group"><label>الاسم (اختياري)</label><input type="text" id="ctName"></div>
+          <div class="form-group"><label>المرحلة (اتركه فارغاً لتصل إشعارات كل المراحل)</label>
+            <select id="ctStage"><option value="">-- كل المراحل --</option></select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addContact()"><i class="fas fa-plus"></i> إضافة</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-upload"></i> رفع قائمة (CSV/TXT)</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">ملف CSV أو TXT — كل سطر: <code>email,name</code> أو <code>email</code> فقط</p>
+        <div class="form-group"><label>المرحلة لهذه القائمة (اتركه فارغاً لكل المراحل)</label>
+          <select id="ctUpStage"><option value="">-- كل المراحل --</option></select>
+        </div>
+        <input type="file" id="ctFile" accept=".csv,.txt" onchange="uploadContacts(this)">
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-list"></i> قائمة جهات الاتصال</div>
+        <div style="margin-bottom:10px">
+          <select id="ctFilterStage" onchange="loadContacts()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+            <option value="">كل المراحل</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>البريد الإلكتروني</th><th>الاسم</th><th>المرحلة</th><th>تاريخ الإضافة</th><th>حذف</th></tr></thead>
+            <tbody id="contactsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TEACHERS TAB ── -->
+    <div class="tab-panel" id="tab-teachers">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-chalkboard-teacher"></i> إضافة معلم/ة</div>
+        <div class="form-grid">
+          <div class="form-group"><label>الاسم <span style="color:#c0392b">*</span></label><input type="text" id="tcName"></div>
+          <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="tcEmail" dir="ltr"></div>
+          <div class="form-group"><label>الجوال</label><input type="tel" id="tcPhone" dir="ltr"></div>
+          <div class="form-group"><label>المرحلة (اختياري)</label><select id="tcStage"><option value="">--</option></select></div>
+        </div>
+        <button class="btn btn-primary" onclick="addTeacher()"><i class="fas fa-plus"></i> إضافة</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-upload"></i> رفع قائمة (CSV/TXT)</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">ملف CSV أو TXT — كل سطر: <code>name,email,phone</code></p>
+        <input type="file" id="tcFile" accept=".csv,.txt" onchange="uploadTeachers(this)">
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-list"></i> قائمة المعلمين</div>
+        <div style="margin-bottom:10px">
+          <select id="tcFilterStage" onchange="loadTeachers()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+            <option value="">كل المراحل</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>الاسم</th><th>البريد</th><th>الجوال</th><th>المرحلة</th><th>حذف</th></tr></thead>
+            <tbody id="teachersTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── STUDENTS TAB ── -->
+    <div class="tab-panel" id="tab-students">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-user-graduate"></i> إضافة طالب/ة</div>
+        <div class="form-grid quad">
+          <div class="form-group"><label>الاسم <span style="color:#c0392b">*</span></label><input type="text" id="stuName"></div>
+          <div class="form-group"><label>المرحلة</label><select id="stuStage" onchange="onStuStageChange()"><option value="">--</option></select></div>
+          <div class="form-group"><label>الصف</label><select id="stuGrade" onchange="onStuGradeChange()"><option value="">--</option></select></div>
+          <div class="form-group"><label>الشعبة</label><select id="stuSection"><option value="">--</option></select></div>
+        </div>
+        <button class="btn btn-primary" onclick="addStudent()"><i class="fas fa-plus"></i> إضافة</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-upload"></i> رفع قائمة (CSV/TXT)</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">
+          حدّد المرحلة/الصف/الشعبة أولاً، ثم ارفع ملف فيه اسم طالب واحد بكل سطر — سيُضافوا جميعاً لنفس الشعبة.
+        </p>
+        <div class="form-grid quad" style="margin-bottom:10px">
+          <select id="stuUpStage" onchange="onStuUpStageChange()"><option value="">المرحلة</option></select>
+          <select id="stuUpGrade" onchange="onStuUpGradeChange()"><option value="">الصف</option></select>
+          <select id="stuUpSection"><option value="">الشعبة</option></select>
+          <input type="file" id="stuFile" accept=".csv,.txt" onchange="uploadStudents(this)">
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-list"></i> قائمة الطلاب</div>
+        <div class="form-grid quad" style="margin-bottom:10px">
+          <select id="stuFilterStage" onchange="onStuFilterStageChange()"><option value="">كل المراحل</option></select>
+          <select id="stuFilterGrade" onchange="onStuFilterGradeChange()"><option value="">كل الصفوف</option></select>
+          <select id="stuFilterSection" onchange="loadStudents()"><option value="">كل الشعب</option></select>
+          <div></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>الاسم</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>حذف</th></tr></thead>
+            <tbody id="studentsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="tab-panel" id="tab-calview">
+  <div class="card">
+    <div class="card-title"><i class="fas fa-calendar-alt"></i> التقويم المرئي</div>
+    <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="calHallFilter" class="form-select" style="max-width:200px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.88rem" onchange="renderCal()">
+        <option value="">كل المراحل</option>
+      </select>
+      <span style="font-size:.82rem;color:var(--muted)">
+        <span style="background:#d1e7dd;padding:2px 10px;border-radius:10px;margin-left:6px">معتمد</span>
+        <span style="background:#fff3cd;padding:2px 10px;border-radius:10px;margin-left:6px">قيد المراجعة</span>
+        <span style="background:#f8d7da;padding:2px 10px;border-radius:10px">مرفوض/ملغي</span>
+      </span>
+    </div>
+    <div id="adminCal"></div>
+  </div>
+</div>
+<div class="tab-panel" id="tab-reports">
+      <!-- Stats Row -->
+      <div class="stats-grid">
+        <div class="stat-card green"><div class="stat-val" id="rs-approved">-</div><div class="stat-label">معتمدة</div></div>
+        <div class="stat-card accent"><div class="stat-val" id="rs-pending">-</div><div class="stat-label">قيد المراجعة</div></div>
+        <div class="stat-card red"><div class="stat-val" id="rs-rejected">-</div><div class="stat-label">مرفوضة/ملغية</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-halls" style="font-size:1rem">-</div><div class="stat-label">أكثر مرحلة استخداماً</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-month" style="font-size:1rem">-</div><div class="stat-label">أكثر شهر</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-hours">-</div><div class="stat-label">إجمالي الحصص</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-period" style="font-size:1rem">-</div><div class="stat-label">أكثر حصة حجزاً</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-cancelled-by" style="font-size:1rem">-</div><div class="stat-label">الأكثر إلغاءً</div></div>
+      </div>
+
+      <!-- Charts Row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px" id="chartsRow">
+        <div class="card" style="margin-bottom:0">
+          <div class="card-title"><i class="fas fa-chart-pie"></i> توزيع الحالات</div>
+          <canvas id="donutChart" width="200" height="200" style="display:block;margin:0 auto"></canvas>
+          <div id="donutLegend" style="margin-top:10px;font-size:.8rem"></div>
+        </div>
+        <div class="card" style="margin-bottom:0">
+          <div class="card-title"><i class="fas fa-chart-line"></i> الحجوزات الشهرية</div>
+          <canvas id="monthChart" width="300" height="200" style="width:100%;height:200px"></canvas>
+        </div>
+      </div>
+
+      <!-- Stage/Trolley Comparison -->
+      <div class="card">
+        <div class="card-title"><i class="fas fa-laptop"></i> مقارنة المراحل (العربات)</div>
+        <div id="hallBars"></div>
+      </div>
+
+      <!-- Explorer -->
+      <div class="card">
+        <div class="card-title"><i class="fas fa-chart-bar"></i> مستكشف البيانات</div>
+        <div class="form-grid" style="margin-bottom:12px">
+          <div class="form-group">
+            <label>تجميع حسب</label>
+            <select id="anaDim">
+              <option value="hall">المراحل</option>
+              <option value="person">المعلمون</option>
+              <option value="period">الحصص</option>
+              <option value="month">الأشهر</option>
+              <option value="dow">أيام الأسبوع</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>الحالة</label>
+            <select id="anaStatus">
+              <option value="all">الكل</option>
+              <option value="approved">المعتمدة فقط</option>
+              <option value="pending">قيد المراجعة فقط</option>
+              <option value="cancelled">الملغية فقط</option>
+              <option value="rejected">المرفوضة فقط</option>
+            </select>
+          </div>
+          <div class="form-group"><label>من تاريخ</label><input type="date" id="anaFrom"></div>
+          <div class="form-group"><label>إلى تاريخ</label><input type="date" id="anaTo"></div>
+        </div>
+        <button class="btn btn-primary" onclick="runReport()"><i class="fas fa-chart-bar"></i> تحليل</button>
+      </div>
+      <div class="card" id="reportResult" style="display:none">
+        <div class="card-title" id="reportTitle"></div>
+        <div id="anaChart"></div>
+        <div id="anaTable" style="margin-top:14px;overflow-x:auto"></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ── BOOKING DETAIL MODAL ── -->
+<div class="modal-overlay" id="bkModal">
+  <div class="modal">
+    <div class="modal-title" id="bkModalTitle"></div>
+    <div id="bkModalAlert"></div>
+    <div id="bkModalBody"></div>
+    <div class="modal-footer" id="bkModalFooter"></div>
+  </div>
+</div>
+
+<!-- ── EDIT BOOKING MODAL ── -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-title"><i class="fas fa-edit"></i> تعديل الحجز</div>
+    <div id="editAlert"></div>
+    <input type="hidden" id="editReqId">
+    <div class="form-grid">
+      <div class="form-group"><label>الاسم</label><input type="text" id="editName"></div>
+      <div class="form-group"><label>البريد</label><input type="email" id="editEmail" dir="ltr"></div>
+      <div class="form-group"><label>الجوال</label><input type="tel" id="editPhone" dir="ltr"></div>
+      <div class="form-group"><label>نيابة عن</label><input type="text" id="editBehalf"></div>
+      <div class="form-group"><label>المادة / الغرض</label><input type="text" id="editTitle"></div>
+      <div class="form-group"><label>المرحلة</label><select id="editStage" onchange="onEditStageChange()"></select></div>
+      <div class="form-group"><label>الصف</label><select id="editGrade" onchange="onEditGradeChange()"></select></div>
+      <div class="form-group"><label>الشعبة</label><select id="editSection"></select></div>
+      <div class="form-group"><label>الحصة</label><select id="editPeriod"></select></div>
+      <div class="form-group"><label>تاريخ الحجز</label><input type="date" id="editDate"></div>
+    </div>
+    <div class="form-group"><label>ملاحظات</label><textarea id="editNotes"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="saveEdit()"><i class="fas fa-save"></i> حفظ</button>
+      <button class="btn btn-outline" onclick="closeModal('editModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── REJECT MODAL ── -->
+<div class="modal-overlay" id="rejectModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title"><i class="fas fa-times-circle"></i> سبب الرفض</div>
+    <input type="hidden" id="rejectReqId">
+    <div class="form-group"><label>سبب الرفض</label><textarea id="rejectReason" placeholder="أدخل سبب الرفض..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-red" onclick="confirmReject()"><i class="fas fa-times"></i> رفض الحجز</button>
+      <button class="btn btn-outline" onclick="closeModal('rejectModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Global state ──
+let allBookings = [], hallsList = [], curFilter = 'all', curSearch = '';
+let selectedIds = new Set();
+let STRUCTURE = [];   // stages → grades → sections
+let PERIODS = [];
+
+// ── i18n (bilingual admin panel; layout stays RTL, only text swaps) ──
+const I18N_EN = {
+  "طلبات الحجز": "Bookings",
+  "المراحل والعربات": "Stages & Trolleys",
+  "المراحل والعربات، الصفوف والشعب": "Stages, Trolleys, Grades & Sections",
+  "غير متاح": "Unavailable",
+  "الفترات المحظورة": "Blocked Periods",
+  "الفترات غير المتاحة": "Unavailable Periods",
+  "جهات الاتصال": "Contacts",
+  "التقارير": "Reports",
+  "التقويم": "Calendar",
+  "التقويم المرئي": "Visual Calendar",
+  "الروزنامة العامة": "Public Calendar",
+  "خروج": "Logout",
+  "تحديث": "Refresh",
+  "لوحة التحكم": "Admin Panel",
+  "إجمالي الطلبات": "Total Bookings",
+  "قيد المراجعة": "Pending",
+  "معتمد": "Approved",
+  "مرفوض": "Rejected",
+  "ملغي": "Cancelled",
+  "الكل": "All",
+  "بحث...": "Search...",
+  "🔍 بحث...": "🔍 Search...",
+  "حذف المحدد": "Delete Selected",
+  "طباعة": "Print",
+  "رقم الطلب": "Request ID",
+  "الاسم": "Name",
+  "الموضوع": "Subject",
+  "المرحلة": "Stage",
+  "الصف": "Grade",
+  "الشعبة": "Section",
+  "الحصة": "Period",
+  "التاريخ": "Date",
+  "الحالة": "Status",
+  "الإجراءات": "Actions",
+  "إضافة مرحلة جديدة": "Add New Stage",
+  "اسم المرحلة (عربي)": "Stage name (Arabic)",
+  "الاسم (إنجليزي)": "Name (English)",
+  "معرّف العربة (Trolley)": "Trolley ID",
+  "مرحلة فعالة": "Active stage",
+  "إضافة مرحلة": "Add Stage",
+  "الحصص (مشتركة بين المرحلتين)": "Periods (shared by both stages)",
+  "رقم الحصة": "Period number",
+  "اسم الحصة": "Period name",
+  "من الساعة (اختياري)": "From time (optional)",
+  "إلى الساعة (اختياري)": "To time (optional)",
+  "إضافة حصة": "Add Period",
+  "من": "From",
+  "إلى": "To",
+  "إضافة فترة محظورة": "Add Blocked Period",
+  "من تاريخ": "From date",
+  "إلى تاريخ": "To date",
+  "المرحلة/العربة (اتركه فارغاً لحظر الكل)": "Stage/trolley (leave blank to block all)",
+  "كل المراحل": "All Stages",
+  "السبب": "Reason",
+  "إضافة": "Add",
+  "إضافة جهة اتصال": "Add Contact",
+  "البريد الإلكتروني": "Email",
+  "الاسم (اختياري)": "Name (optional)",
+  "رفع قائمة (CSV/TXT)": "Upload list (CSV/TXT)",
+  "ملف CSV أو TXT — كل سطر:": "A CSV or TXT file — each line:",
+  "أو": "or",
+  "فقط": "only",
+  "قائمة جهات الاتصال": "Contacts List",
+  "تاريخ الإضافة": "Date Added",
+  "حذف": "Delete",
+  "أكثر مرحلة استخداماً": "Most-used stage",
+  "أكثر شهر": "Busiest month",
+  "إجمالي الحصص": "Total Periods",
+  "توزيع الحالات": "Status Distribution",
+  "الحجوزات الشهرية": "Monthly Bookings",
+  "مقارنة المراحل (العربات)": "Stage (Trolley) Comparison",
+  "مستكشف البيانات": "Data Explorer",
+  "تجميع حسب": "Group by",
+  "المراحل": "Stages",
+  "الأشخاص": "People",
+  "الأشهر": "Months",
+  "أيام الأسبوع": "Days of week",
+  "المعتمدة فقط": "Approved only",
+  "قيد المراجعة فقط": "Pending only",
+  "تحليل": "Analyze",
+  "الحجوزات": "Bookings",
+  "معتمدة": "Approved",
+  "عدد الحصص": "Number of periods",
+  "مرفوضة/ملغية": "Rejected/Cancelled",
+  "مرفوض/ملغي": "Rejected/Cancelled",
+  "تعديل الحجز": "Edit Booking",
+  "البريد": "Email",
+  "الجوال": "Phone",
+  "نيابة عن": "On behalf of",
+  "المادة / الغرض": "Subject / Purpose",
+  "المادة/الغرض": "Subject/Purpose",
+  "تاريخ الحجز": "Booking date",
+  "ملاحظات": "Notes",
+  "حفظ": "Save",
+  "إلغاء": "Cancel",
+  "سبب الرفض": "Rejection reason",
+  "رفض الحجز": "Reject Booking",
+  "المرفقات": "Attachments",
+  "اتصالات": "Contacts",
+  "محظور": "Blocked",
+  "تقارير": "Reports",
+  "إغلاق": "Close",
+  "موافقة": "Approve",
+  "رفض": "Reject",
+  "إعادة لقيد المراجعة": "Revert to Pending",
+  "تعديل": "Edit",
+  "لا توجد بيانات": "No data available",
+  "لا توجد جهات اتصال": "No contacts",
+  "لا توجد حصص بعد": "No periods yet",
+  "لا توجد شعب": "No sections",
+  "لا توجد فترات محظورة": "No blocked periods",
+  "لا توجد مراحل بعد": "No stages yet",
+  "لا توجد نتائج": "No results",
+  "مثال: TROLLEY-A": "e.g. TROLLEY-A",
+  "مثال: الحصة الأولى": "e.g. Period One",
+  "مثال: المرحلة الأساسية": "e.g. Basic Stage",
+  "فعالة": "Active",
+  "معطلة": "Disabled",
+  "غير محدد": "Unspecified",
+  "اسم شعبة جديدة": "New section name",
+  "اسم صف جديد": "New grade name",
+  "الأحد": "Sunday",
+  "الاثنين": "Monday",
+  "الثلاثاء": "Tuesday",
+  "الأربعاء": "Wednesday",
+  "الخميس": "Thursday",
+  "الجمعة": "Friday",
+  "السبت": "Saturday",
+  "اسم الحصة:": "Period name:",
+  "اسم المرحلة (عربي):": "Stage name (Arabic):",
+  "الاسم (إنجليزي):": "Name (English):",
+  "معرّف العربة (Trolley):": "Trolley ID:",
+  "من الساعة (HH:MM أو فارغ):": "From time (HH:MM or blank):",
+  "إلى الساعة (HH:MM أو فارغ):": "To time (HH:MM or blank):",
+  "أدخل سبب الرفض": "Enter rejection reason",
+  "أدخل سبب الرفض...": "Enter rejection reason...",
+  "إلغاء هذا الحجز؟": "Cancel this booking?",
+  "اسم الشعبة مطلوب": "Section name is required",
+  "اسم الصف مطلوب": "Grade name is required",
+  "اسم المرحلة ومعرّف العربة مطلوبان": "Stage name and trolley ID are required",
+  "البريد مطلوب": "Email is required",
+  "التاريخ مطلوب": "Date is required",
+  "رقم الحصة مطلوب": "Period number is required",
+  "أُعيد لقيد المراجعة": "Reverted to pending",
+  "تم الإلغاء": "Cancelled",
+  "تم التحديث": "Updated",
+  "تم الحذف": "Deleted",
+  "تم الحفظ": "Saved",
+  "تم الحفظ ✓": "Saved ✓",
+  "تم الرفض": "Rejected",
+  "✅ تمت الموافقة": "✅ Approved",
+  "تمت إضافة المرحلة": "Stage added",
+  "تمت الإضافة": "Added",
+  "خطأ": "Error",
+  "حذف جهة الاتصال هذه؟": "Delete this contact?",
+  "حذف هذا الصف؟ سيتم حذف شعبه أيضاً.": "Delete this grade? Its sections will also be deleted.",
+  "حذف هذه الحصة؟": "Delete this period?",
+  "حذف هذه الشعبة؟": "Delete this section?",
+  "حذف هذه الفترة؟": "Delete this period?",
+  "حذف هذه المرحلة؟ سيتم حذف صفوفها وشعبها أيضاً.": "Delete this stage? Its grades and sections will also be deleted.",
+  "تقرير الحجوزات": "Bookings Report",
+  "المعلمون": "Teachers",
+  "الطلاب": "Students",
+  "إضافة معلم/ة": "Add Teacher",
+  "الجوال": "Phone",
+  "المرحلة (اختياري)": "Stage (optional)",
+  "قائمة المعلمين": "Teachers List",
+  "إضافة طالب/ة": "Add Student",
+  "قائمة الطلاب": "Students List",
+  "كل الصفوف": "All Grades",
+  "كل الشعب": "All Sections",
+  "اسم المعلم مطلوب": "Teacher name is required",
+  "اسم الطالب والشعبة مطلوبان": "Student name and section are required",
+  "يرجى تحديد المرحلة والصف والشعبة أولاً": "Please select stage, grade and section first",
+  "حذف هذا المعلم؟": "Delete this teacher?",
+  "حذف هذا الطالب؟": "Delete this student?",
+  "حدّد المرحلة/الصف/الشعبة أولاً، ثم ارفع ملف فيه اسم طالب واحد بكل سطر — سيُضافوا جميعاً لنفس الشعبة.":
+    "Select stage/grade/section first, then upload a file with one student name per line — they'll all be added to that section.",
+  "ملف CSV أو TXT — كل سطر: name,email,phone": "A CSV or TXT file — each line: name,email,phone",
+  "أكثر حصة حجزاً": "Most-booked period",
+  "الأكثر إلغاءً": "Most cancellations",
+  "الحصص": "Periods",
+  "الملغية فقط": "Cancelled only",
+  "المرفوضة فقط": "Rejected only",
+  "لا يوجد": "None",
+  "-- كل المراحل --": "-- All Stages --",
+  "العنصر": "Item",
+  "من الساعة": "From time",
+  "إلى الساعة": "To time",
+  "عربة": "Trolley",
+  "إضافة صف": "Add Grade",
+  "ملف": "File",
+  "المرحلة (اتركه فارغاً لتصل إشعارات كل المراحل)": "Stage (leave blank to notify for all stages)",
+  "المرحلة لهذه القائمة (اتركه فارغاً لكل المراحل)": "Stage for this list (leave blank for all stages)",
+  "عرض التفاصيل": "View Details",
+};
+
+let AR = (localStorage.getItem('adminLang') || '{{ lang }}') !== 'en';
+
+function t(s) { return AR ? s : (I18N_EN[s] || s); }
+
+let ORIGINAL_TEXT_NODES = null;
+function captureStaticText() {
+  ORIGINAL_TEXT_NODES = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode(n) {
+      if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      if (n.parentElement && n.parentElement.closest('script,style')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  let n;
+  while (n = walker.nextNode()) ORIGINAL_TEXT_NODES.push({ node: n, original: n.nodeValue });
+}
+
+function applyStaticLang() {
+  if (!ORIGINAL_TEXT_NODES) return;
+  document.documentElement.lang = AR ? 'ar' : 'en';
+  ORIGINAL_TEXT_NODES.forEach(({ node, original }) => {
+    const trimmed = original.trim();
+    node.nodeValue = AR ? original : original.replace(trimmed, I18N_EN[trimmed] || trimmed);
+  });
+  document.querySelectorAll('[placeholder]').forEach(el => {
+    if (!el.dataset.origPlaceholder) el.dataset.origPlaceholder = el.getAttribute('placeholder');
+    const orig = el.dataset.origPlaceholder;
+    el.setAttribute('placeholder', AR ? orig : (I18N_EN[orig] || orig));
+  });
+  document.querySelectorAll('.lang-btn').forEach(b => b.textContent = AR ? 'EN' : 'AR');
+  const activeTab = document.querySelector('.tab-panel.active');
+  if (activeTab) {
+    const id = activeTab.id.replace('tab-', '');
+    if (id === 'bookings') renderTable();
+    if (id === 'halls') { renderStagesTree(); renderPeriodsTable(); }
+    if (id === 'blocked') loadBlocked();
+    if (id === 'contacts') loadContactsTab();
+    if (id === 'teachers') loadTeachersTab();
+    if (id === 'students') loadStudentsTab();
+    if (id === 'reports') loadReportStats();
+    if (id === 'calview') renderCal();
+  }
+}
+
+function toggleLang() {
+  AR = !AR;
+  localStorage.setItem('adminLang', AR ? 'ar' : 'en');
+  applyStaticLang();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  captureStaticText();
+  applyStaticLang();
+});
+
+async function loadStructure() {
+  STRUCTURE = await fetch('/admin/api/halls').then(r => r.json());
+}
+async function loadPeriods() {
+  PERIODS = await fetch('/admin/api/periods').then(r => r.json());
+}
+
+// ── Tab navigation ──
+function showTab(name) {
+  closeSidebar();
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const panel = document.getElementById('tab-' + name);
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'" + name + "'")) {
+      n.classList.add('active');
+    }
+  });
+  const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), calview:t('التقويم المرئي')};
+  document.getElementById('pageTitle').textContent = titles[name] || name;
+  if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
+  if (name === 'calview')  initAdminCal();
+  if (name === 'blocked')  loadBlocked();
+  if (name === 'contacts') loadContactsTab();
+  if (name === 'teachers') loadTeachersTab();
+  if (name === 'students') loadStudentsTab();
+  if (name === 'reports')  loadReportStats();
+}
+
+// ── Clock ──
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clockEl').textContent =
+    now.toLocaleDateString('ar-SA') + ' ' + now.toLocaleTimeString('ar-SA');
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── Toast ──
+function showToast(msg, color = '#FF5733') {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = t(msg);
+  toastEl.style.background = color;
+  toastEl.classList.add('show');
+  setTimeout(() => toastEl.classList.remove('show'), 3000);
+}
+function confirmT(msg) { return confirm(t(msg)); }
+
+// ── API helpers ──
+async function api(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+// ── Bookings ──────────────────────────────────────────────────
+async function loadBookings() {
+  try {
+    const res = await fetch('/admin/api/bookings?filter=' + curFilter);
+    allBookings = await res.json();
+    renderTable();
+    loadStats();
+  } catch(e) { console.error(e); }
+}
+
+async function loadStats() {
+  try {
+    const data = await fetch('/admin/api/stats').then(r => r.json());
+    document.getElementById('stTotal').textContent    = data.total;
+    document.getElementById('stPending').textContent  = data.pending;
+    document.getElementById('stApproved').textContent = data.approved;
+    document.getElementById('stRejected').textContent = data.rejected;
+    document.getElementById('stCancelled').textContent= data.cancelled;
+    document.getElementById('nbPending').textContent  = data.pending;
+  } catch(e) {}
+}
+
+function filterBk(f, btn) {
+  curFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedIds.clear();
+  loadBookings();
+}
+
+function filterByStat(f) {
+  const btn = document.querySelector(`.filter-btn[data-filter="${f}"]`);
+  if (btn) filterBk(f, btn);
+}
+
+function searchBk(q) { curSearch = q.toLowerCase(); renderTable(); }
+
+function renderTable() {
+  const tbody = document.getElementById('bkTable');
+  let rows = allBookings;
+  if (curSearch) rows = rows.filter(b =>
+    (b.reqId + b.name + (b.title||'') + (b.stage||'') + (b.grade||'') + (b.section||'') + b.email).toLowerCase().includes(curSearch)
+  );
+  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
+  tbody.innerHTML = rows.map(b => `
+    <tr>
+      <td><input type="checkbox" ${selectedIds.has(b.reqId)?'checked':''} onchange="toggleSel('${b.reqId}',this)"></td>
+      <td><strong style="color:var(--primary)">${esc(b.reqId)}</strong></td>
+      <td>${esc(b.name)}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(b.title||'')}">${esc(b.title||'-')}</td>
+      <td>${esc(b.stage||'')}</td>
+      <td>${esc(b.grade||'')}</td>
+      <td>${esc(b.section||'')}</td>
+      <td>${b.periodNumber ? t('الحصة')+' '+b.periodNumber : ''}</td>
+      <td>${b.date}</td>
+      <td><span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span></td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-blue btn-sm" onclick="openDetail('${b.reqId}')" title="${t('عرض التفاصيل')}"><i class="fas fa-eye"></i></button>
+          ${b.status==='pending'?`<button class="btn btn-green btn-sm" onclick="quickApprove('${b.reqId}')" title="${t('موافقة')}"><i class="fas fa-check"></i></button>`:''}
+          ${b.status==='pending'?`<button class="btn btn-red btn-sm" onclick="openReject('${b.reqId}')" title="${t('رفض')}"><i class="fas fa-times"></i></button>`:''}
+          ${b.status!=='cancelled'&&b.status!=='rejected'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')" title="${t('إلغاء')}"><i class="fas fa-ban"></i></button>`:''}
+        </div>
+      </td>
+    </tr>`).join('') || `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">${t('لا توجد نتائج')}</td></tr>`;
+  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
+}
+
+function toggleSel(id, cb) {
+  if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
+}
+function toggleAll(cb) {
+  document.querySelectorAll('#bkTable input[type=checkbox]').forEach(c => {
+    c.checked = cb.checked;
+    const id = c.closest('tr').querySelector('strong')?.textContent;
+    if (id) { if (cb.checked) selectedIds.add(id); else selectedIds.delete(id); }
+  });
+  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
+}
+
+async function bulkDelete() {
+  if (!selectedIds.size || !confirm((AR ? `حذف ${selectedIds.size} حجز نهائياً؟` : `Permanently delete ${selectedIds.size} booking(s)?`))) return;
+  const data = await api('/admin/api/bulk-delete', {ids: [...selectedIds]});
+  if (data.success) { showToast('تم الحذف'); selectedIds.clear(); loadBookings(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function quickApprove(reqId) {
+  const data = await api('/admin/api/approve', {reqId});
+  if (data.success) { showToast('✅ تمت الموافقة'); loadBookings(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+async function quickCancel(reqId) {
+  if (!confirmT('إلغاء هذا الحجز؟')) return;
+  const data = await api('/admin/api/cancel', {reqId});
+  if (data.success) { showToast('تم الإلغاء'); loadBookings(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+function openReject(reqId) {
+  document.getElementById('rejectReqId').value = reqId;
+  document.getElementById('rejectReason').value = '';
+  openModal('rejectModal');
+}
+async function confirmReject() {
+  const reqId  = document.getElementById('rejectReqId').value;
+  const reason = document.getElementById('rejectReason').value.trim();
+  if (!reason) { alert('أدخل سبب الرفض'); return; }
+  const data = await api('/admin/api/reject', {reqId, reason});
+  if (data.success) { showToast('تم الرفض', '#c0392b'); closeModal('rejectModal'); loadBookings(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+function openDetail(reqId) {
+  const b = allBookings.find(x => x.reqId === reqId);
+  if (!b) return;
+  document.getElementById('bkModalAlert').innerHTML = '';
+  document.getElementById('bkModalTitle').innerHTML = `<i class="fas fa-calendar-check"></i> ${b.reqId}`;
+  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
+  const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
+  document.getElementById('bkModalBody').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      ${drow('رقم الطلب', `<strong style="color:var(--primary)">${b.reqId}</strong>`)}
+      ${drow('الحالة', `<span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span>`)}
+      ${drow('الاسم', b.name)} ${drow('البريد', b.email)}
+      ${drow('الجوال', b.phone||'-')} ${drow('المادة/الغرض', b.title||'-')}
+      ${drow('المرحلة', b.stage||'-')} ${drow('الصف', b.grade||'-')}
+      ${drow('الشعبة', b.section||'-')} ${drow('الحصة', periodStr)}
+      ${drow('التاريخ', b.date)}
+      ${drow('ملاحظات', b.notes||'-')}
+      ${b.rejectReason ? drow('سبب الرفض', `<span style="color:#c0392b">${esc(b.rejectReason)}</span>`) : ''}
+      ${b.att&&b.att.length ? drow('المرفقات', b.att.map(u=>`<a href="${u}" target="_blank" style="color:var(--primary)"><i class="fas fa-paperclip"></i> ${t('ملف')}</a>`).join(' ')) : ''}
+    </table>
+    ${b.status === 'approved' ? `<div id="checkoutSection" style="margin-top:14px"><div style="color:var(--muted);font-size:.85rem">${AR?'جاري تحميل قائمة تسليم الأجهزة...':'Loading device handover list...'}</div></div>` : ''}`;
+
+  if (b.status === 'approved') {
+    fetch(`/admin/api/checkout/${b.reqId}`).then(r => r.json()).then(data => {
+      const el = document.getElementById('checkoutSection');
+      if (!el) return;
+      if (!data.success || !data.checkout) {
+        el.innerHTML = `<div style="background:#fff3cd;border-radius:8px;padding:10px 14px;font-size:.85rem">${AR?'لم يقم المعلم بتعبئة نموذج تسليم الأجهزة بعد':'Teacher has not filled the device handover form yet'}</div>`;
+        return;
+      }
+      const rows = data.checkout.lines.map(l => `
+        <tr><td style="padding:5px 8px">${l.seq}</td><td style="padding:5px 8px">${esc(l.studentName||'')}</td>
+        <td style="padding:5px 8px">${l.laptopNumber ?? (AR?'—':'—')}</td></tr>`).join('');
+      el.innerHTML = `
+        <div style="font-weight:700;color:var(--primary);margin:10px 0 6px;font-size:.9rem"><i class="fas fa-laptop"></i> ${AR?'قائمة تسليم الأجهزة':'Device Handover List'}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+          <thead><tr style="background:#f0f7f8"><th style="padding:5px 8px;text-align:${AR?'right':'left'}">#</th><th style="padding:5px 8px;text-align:${AR?'right':'left'}">${AR?'الطالب':'Student'}</th><th style="padding:5px 8px;text-align:${AR?'right':'left'}">${AR?'اللابتوب':'Laptop'}</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }).catch(() => {});
+  }
+
+  let footer = '';
+  if (b.status === 'pending') {
+    footer += `<button class="btn btn-green" onclick="quickApprove('${b.reqId}');closeModal('bkModal')"><i class="fas fa-check"></i> موافقة</button>`;
+    footer += `<button class="btn btn-red" onclick="closeModal('bkModal');openReject('${b.reqId}')"><i class="fas fa-times"></i> رفض</button>`;
+  }
+  if (b.status !== 'cancelled' && b.status !== 'rejected') {
+    footer += `<button class="btn btn-orange" onclick="quickCancel('${b.reqId}');closeModal('bkModal')"><i class="fas fa-ban"></i> إلغاء</button>`;
+  }
+  if (b.status !== 'pending') {
+    footer += `<button class="btn btn-blue" onclick="quickSetPending('${b.reqId}')"><i class="fas fa-undo"></i> إعادة لقيد المراجعة</button>`;
+  }
+  footer += `<button class="btn btn-outline" onclick="openEdit('${b.reqId}');closeModal('bkModal')"><i class="fas fa-edit"></i> تعديل</button>`;
+  footer += `<button class="btn btn-outline" onclick="printBooking('${b.reqId}')" title="${t('طباعة')}"><i class="fas fa-print"></i> ${t('طباعة')}</button>`;
+  footer += `<button class="btn btn-outline" onclick="closeModal('bkModal')">إغلاق</button>`;
+  document.getElementById('bkModalFooter').innerHTML = footer;
+  openModal('bkModal');
+}
+
+function printBooking(reqId) {
+  const b = allBookings.find(x => x.reqId === reqId);
+  if (!b) return;
+  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
+  const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
+  const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
+  const rows = [
+    [t('رقم الطلب'), b.reqId], [t('الحالة'), sLabels[b.status]||b.status],
+    [t('الاسم'), b.name], [t('البريد'), b.email], [t('الجوال'), b.phone||'-'],
+    [t('المادة/الغرض'), b.title||'-'], [t('المرحلة'), b.stage||'-'], [t('الصف'), b.grade||'-'],
+    [t('الشعبة'), b.section||'-'], [t('الحصة'), periodStr], [t('التاريخ'), b.date],
+    [t('ملاحظات'), b.notes||'-'],
+  ].map(([k,v]) => `<tr><td style="padding:8px;background:#f0f7f8;font-weight:700;width:35%">${k}</td><td style="padding:8px;border-bottom:1px solid #eee">${String(v).replace(/</g,'&lt;')}</td></tr>`).join('');
+
+  const html = `<!DOCTYPE html><html ${dirAttr}><head><meta charset="UTF-8"><title>${b.reqId}</title>
+    <style>body{font-family:Arial,sans-serif;padding:24px}h2{color:#FF5733}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    @media print{button{display:none}}</style></head><body>
+    <h2>${AR?'تفاصيل الحجز':'Booking Details'}</h2>
+    <button onclick="window.print()" style="background:#FF5733;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">${AR?'طباعة':'Print'}</button>
+    <table>${rows}</table></body></html>`;
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+}
+
+async function quickSetPending(reqId) {
+  const data = await api('/admin/api/set-pending', {reqId});
+  if (data.success) { showToast('أُعيد لقيد المراجعة'); closeModal('bkModal'); loadBookings(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+function drow(label, val) {
+  return `<tr><td style="padding:7px 10px;font-weight:700;background:#f0f7f8;width:36%">${t(label)}</td><td style="padding:7px 10px;border-bottom:1px solid var(--border)">${val}</td></tr>`;
+}
+
+function editPopulateStages(selectedStageId) {
+  const sel = document.getElementById('editStage');
+  sel.innerHTML = STRUCTURE.map(s => `<option value="${s.id}">${esc(s.nameAr)}</option>`).join('');
+  if (selectedStageId) sel.value = selectedStageId;
+}
+function onEditStageChange(selectedGradeId) {
+  const stage = STRUCTURE.find(s => String(s.id) === document.getElementById('editStage').value);
+  const gradeSel = document.getElementById('editGrade');
+  gradeSel.innerHTML = stage ? stage.grades.map(g => `<option value="${g.id}">${esc(g.nameAr)}</option>`).join('') : '';
+  if (selectedGradeId) gradeSel.value = selectedGradeId;
+  onEditGradeChange();
+}
+function onEditGradeChange(selectedSectionId) {
+  const stage = STRUCTURE.find(s => String(s.id) === document.getElementById('editStage').value);
+  const grade = stage ? stage.grades.find(g => String(g.id) === document.getElementById('editGrade').value) : null;
+  const sectionSel = document.getElementById('editSection');
+  sectionSel.innerHTML = grade ? grade.sections.map(s => `<option value="${s.id}">${esc(s.nameAr)}</option>`).join('') : '';
+  if (selectedSectionId) sectionSel.value = selectedSectionId;
+}
+function editPopulatePeriods(selectedPeriodId) {
+  const sel = document.getElementById('editPeriod');
+  sel.innerHTML = PERIODS.map(p => `<option value="${p.id}">${esc(p.label)}</option>`).join('');
+  if (selectedPeriodId) sel.value = selectedPeriodId;
+}
+
+function openEdit(reqId) {
+  const b = allBookings.find(x => x.reqId === reqId);
+  if (!b) return;
+  document.getElementById('editReqId').value = reqId;
+  document.getElementById('editName').value  = b.name;
+  document.getElementById('editEmail').value = b.email;
+  document.getElementById('editPhone').value = b.phone;
+  document.getElementById('editBehalf').value= b.behalf;
+  document.getElementById('editTitle').value = b.title;
+  document.getElementById('editDate').value  = b.date;
+  editPopulateStages(b.stageId);
+  onEditStageChange(b.gradeId);
+  onEditGradeChange(b.sectionId);
+  editPopulatePeriods(b.periodId);
+  document.getElementById('editNotes').value = b.notes;
+  document.getElementById('editAlert').innerHTML = '';
+  openModal('editModal');
+}
+
+async function saveEdit() {
+  const data = await api('/admin/api/update-booking', {
+    reqId:    document.getElementById('editReqId').value,
+    name:     document.getElementById('editName').value.trim(),
+    email:    document.getElementById('editEmail').value.trim(),
+    phone:    document.getElementById('editPhone').value.trim(),
+    behalf:   document.getElementById('editBehalf').value.trim(),
+    title:    document.getElementById('editTitle').value.trim(),
+    stageId:   document.getElementById('editStage').value,
+    gradeId:   document.getElementById('editGrade').value,
+    sectionId: document.getElementById('editSection').value,
+    periodId:  document.getElementById('editPeriod').value,
+    bookingDate: document.getElementById('editDate').value,
+    notes:    document.getElementById('editNotes').value.trim(),
+  });
+  if (data.success) {
+    showToast('تم الحفظ'); closeModal('editModal'); loadBookings();
+  } else {
+    document.getElementById('editAlert').innerHTML =
+      `<div class="alert alert-error">${data.error || 'خطأ'}</div>`;
+  }
+}
+
+// ── Stages / Grades / Sections ──────────────────────────────────
+async function loadHalls() {
+  await loadStructure();
+  hallsList = STRUCTURE;
+  // Update blocked-period stage select too
+  const blkSel = document.getElementById('blkHall');
+  blkSel.innerHTML = `<option value="">-- ${t('كل المراحل')} --</option>` +
+    STRUCTURE.map(s => `<option value="${s.trolleyCode}">${esc(s.nameAr)}</option>`).join('');
+
+  renderStagesTree();
+}
+
+function renderStagesTree() {
+  const el = document.getElementById('stagesTree');
+  if (!el) return;
+  if (!STRUCTURE.length) { el.innerHTML = `<p style="color:var(--muted);text-align:center">${t('لا توجد مراحل بعد')}</p>`; return; }
+
+  el.innerHTML = STRUCTURE.map(s => `
+    <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div>
+          <strong style="font-size:1.02rem;color:var(--primary)"><i class="fas fa-laptop"></i> ${esc(s.nameAr)}</strong>
+          <span style="color:var(--muted);font-size:.82rem"> — ${t("عربة")}: <span dir="ltr" style="font-weight:700">${esc(s.trolleyCode)}</span></span>
+          <span class="badge ${s.active?'badge-approved':'badge-cancelled'}" style="margin-right:8px">${t(s.active?'فعالة':'معطلة')}</span>
+        </div>
+        <div class="action-btns">
+          <button class="btn btn-sm btn-outline" onclick="openEditStage(${s.id})" title="${t('تعديل')}"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${s.id},${s.active?'false':'true'})">${s.active?'<i class="fas fa-toggle-off"></i> '+t('تعطيل'):'<i class="fas fa-toggle-on"></i> '+t('تفعيل')}</button>
+          <button class="btn btn-red btn-sm" onclick="deleteHall(${s.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        ${s.grades.map(g => `
+          <div style="background:#f7fbfb;border:1px solid var(--border);border-radius:8px;padding:10px;min-width:180px;flex:1">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <strong style="font-size:.88rem">${esc(g.nameAr)}</strong>
+              <button class="btn btn-red btn-sm" style="padding:2px 6px" onclick="deleteGrade(${g.id})" title="${t('حذف')}"><i class="fas fa-trash" style="font-size:.7rem"></i></button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
+              ${g.sections.map(sec => `
+                <span style="background:#e8f4f5;border-radius:12px;padding:2px 10px;font-size:.78rem;display:inline-flex;align-items:center;gap:5px">
+                  ${esc(sec.nameAr)}
+                  <button onclick="deleteSection(${sec.id})" title="${t('حذف')}" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:.8rem">✕</button>
+                </span>`).join('') || `<span style="color:var(--muted);font-size:.78rem">${t('لا توجد شعب')}</span>`}
+            </div>
+            <div style="display:flex;gap:4px">
+              <input type="text" placeholder="اسم شعبة جديدة" id="newSec_${g.id}" style="flex:1;font-size:.78rem;padding:4px 6px;border:1px solid var(--border);border-radius:6px">
+              <button class="btn btn-sm btn-outline" style="padding:3px 8px" onclick="addSection(${g.id})"><i class="fas fa-plus" style="font-size:.7rem"></i></button>
+            </div>
+          </div>`).join('')}
+        <div style="background:#fff;border:1.5px dashed var(--border);border-radius:8px;padding:10px;min-width:180px;flex:1;display:flex;flex-direction:column;gap:6px;justify-content:center">
+          <input type="text" placeholder="اسم صف جديد" id="newGrade_${s.id}" style="font-size:.82rem;padding:5px 8px;border:1px solid var(--border);border-radius:6px">
+          <button class="btn btn-sm btn-primary" onclick="addGrade(${s.id})"><i class="fas fa-plus"></i> ${t("إضافة صف")}</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function addHall() {
+  const nameAr = document.getElementById('hNameAr').value.trim();
+  const trolleyCode = document.getElementById('hTrolleyCode').value.trim();
+  if (!nameAr || !trolleyCode) { showToast('اسم المرحلة ومعرّف العربة مطلوبان', '#c0392b'); return; }
+  const data = await api('/admin/api/add-hall', {
+    nameAr, nameEn: document.getElementById('hNameEn').value.trim(),
+    trolleyCode,
+    active: document.getElementById('hActive').checked,
+  });
+  if (data.success) {
+    showToast('تمت إضافة المرحلة');
+    document.getElementById('hNameAr').value = '';
+    document.getElementById('hNameEn').value = '';
+    document.getElementById('hTrolleyCode').value = '';
+    loadHalls();
+  } else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function openEditStage(id) {
+  const s = STRUCTURE.find(x => x.id === id);
+  if (!s) return;
+  const nameAr = prompt(t('اسم المرحلة (عربي):'), s.nameAr);
+  if (nameAr === null) return;
+  const nameEn = prompt(t('الاسم (إنجليزي):'), s.nameEn || '');
+  if (nameEn === null) return;
+  const trolleyCode = prompt(t('معرّف العربة (Trolley):'), s.trolleyCode);
+  if (trolleyCode === null) return;
+  const data = await api('/admin/api/update-hall', {id, nameAr, nameEn, trolleyCode, active: s.active});
+  if (data.success) { showToast(t('تم الحفظ ✓')); loadHalls(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function deleteHall(id) {
+  if (!confirmT('حذف هذه المرحلة؟ سيتم حذف صفوفها وشعبها أيضاً.')) return;
+  const data = await api('/admin/api/delete-hall', {id});
+  if (data.success) { showToast('تم الحذف'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function toggleHallActive(id, active) {
+  const s = STRUCTURE.find(x => x.id === id);
+  if (!s) return;
+  const data = await api('/admin/api/update-hall', {id, active, nameAr: s.nameAr, nameEn: s.nameEn});
+  if (data.success) { showToast('تم التحديث'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function addGrade(stageId) {
+  const input = document.getElementById('newGrade_' + stageId);
+  const nameAr = input.value.trim();
+  if (!nameAr) { showToast('اسم الصف مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-grade', {stageId, nameAr});
+  if (data.success) { input.value=''; showToast('تمت الإضافة'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+async function deleteGrade(id) {
+  if (!confirmT('حذف هذا الصف؟ سيتم حذف شعبه أيضاً.')) return;
+  const data = await api('/admin/api/delete-grade', {id});
+  if (data.success) { showToast('تم الحذف'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function addSection(gradeId) {
+  const input = document.getElementById('newSec_' + gradeId);
+  const nameAr = input.value.trim();
+  if (!nameAr) { showToast('اسم الشعبة مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-section', {gradeId, nameAr});
+  if (data.success) { input.value=''; showToast('تمت الإضافة'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+async function deleteSection(id) {
+  if (!confirmT('حذف هذه الشعبة؟')) return;
+  const data = await api('/admin/api/delete-section', {id});
+  if (data.success) { showToast('تم الحذف'); loadHalls(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+// ── Periods ──────────────────────────────────────────────────────
+async function renderPeriodsTable() {
+  await loadPeriods();
+  document.getElementById('periodsTable').innerHTML = PERIODS.map(p => `
+    <tr>
+      <td>${p.number}</td>
+      <td>${esc(p.label)}</td>
+      <td dir="ltr">${p.startTime||'-'}</td>
+      <td dir="ltr">${p.endTime||'-'}</td>
+      <td><span class="badge ${p.active?'badge-approved':'badge-cancelled'}">${t(p.active?'فعالة':'معطلة')}</span></td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="openEditPeriod(${p.id})" title="${t('تعديل')}"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-red btn-sm" onclick="deletePeriod(${p.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--muted)">${t('لا توجد حصص بعد')}</td></tr>`;
+}
+
+async function addPeriod() {
+  const number = document.getElementById('pNumber').value;
+  if (!number) { showToast('رقم الحصة مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-period', {
+    number, label: document.getElementById('pLabel').value.trim(),
+    startTime: document.getElementById('pStart').value,
+    endTime: document.getElementById('pEnd').value,
+  });
+  if (data.success) {
+    document.getElementById('pNumber').value = '';
+    document.getElementById('pLabel').value = '';
+    document.getElementById('pStart').value = '';
+    document.getElementById('pEnd').value = '';
+    showToast('تمت الإضافة'); renderPeriodsTable();
+  } else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function openEditPeriod(id) {
+  const p = PERIODS.find(x => x.id === id);
+  if (!p) return;
+  const label = prompt(t('اسم الحصة:'), p.label);
+  if (label === null) return;
+  const startTime = prompt(t('من الساعة (HH:MM أو فارغ):'), p.startTime || '');
+  if (startTime === null) return;
+  const endTime = prompt(t('إلى الساعة (HH:MM أو فارغ):'), p.endTime || '');
+  if (endTime === null) return;
+  const data = await api('/admin/api/update-period', {id, label, startTime, endTime, active: p.active});
+  if (data.success) { showToast('تم الحفظ ✓'); renderPeriodsTable(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+async function deletePeriod(id) {
+  if (!confirmT('حذف هذه الحصة؟')) return;
+  const data = await api('/admin/api/delete-period', {id});
+  if (data.success) { showToast('تم الحذف'); renderPeriodsTable(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+// ── Blocked ────────────────────────────────────────────────────
+async function loadBlocked() {
+  const data = await fetch('/admin/api/blocked').then(r => r.json());
+  document.getElementById('blockedTable').innerHTML = data.map(b => {
+    const stage = STRUCTURE.find(s => s.trolleyCode === b.hall);
+    return `
+    <tr>
+      <td>${b.s}</td><td>${b.e}</td>
+      <td>${esc(b.hall ? (stage ? stage.nameAr : b.hall) : t('كل المراحل'))}</td>
+      <td dir="ltr">${b.fromT||'-'}</td><td dir="ltr">${b.toT||'-'}</td>
+      <td>${esc(b.r)}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteBlocked(${b.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted)">${t('لا توجد فترات محظورة')}</td></tr>`;
+}
+
+async function addBlocked() {
+  const from = document.getElementById('blkFrom').value;
+  const to   = document.getElementById('blkTo').value;
+  if (!from || !to) { showToast('التاريخ مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-blocked', {
+    fromDate: from, toDate: to,
+    hall:    document.getElementById('blkHall').value,
+    reason:  document.getElementById('blkReason').value.trim(),
+    fromTime:document.getElementById('blkFromT').value,
+    toTime:  document.getElementById('blkToT').value,
+  });
+  if (data.success) { showToast('تمت الإضافة'); loadBlocked(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function deleteBlocked(id) {
+  if (!confirmT('حذف هذه الفترة؟')) return;
+  const data = await api('/admin/api/delete-blocked', {id});
+  if (data.success) { showToast('تم الحذف'); loadBlocked(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+// ── Contacts ───────────────────────────────────────────────────
+async function loadContactsTab() {
+  await loadStructure();
+  populateStageSelects([
+    document.getElementById('ctStage'),
+    document.getElementById('ctUpStage'),
+    document.getElementById('ctFilterStage'),
+  ]);
+  loadContacts();
+}
+
+function stageLabelById(id) {
+  if (!id) return AR ? 'كل المراحل' : 'All stages';
+  const s = STRUCTURE.find(x => String(x.id) === String(id));
+  return s ? (AR ? s.nameAr : (s.nameEn || s.nameAr)) : '';
+}
+
+async function loadContacts() {
+  const filterStageId = document.getElementById('ctFilterStage').value;
+  const data = await fetch('/admin/api/contacts').then(r => r.json());
+  const filtered = filterStageId ? data.filter(c => String(c.stageId) === filterStageId) : data;
+  document.getElementById('contactsTable').innerHTML = filtered.map(c => `
+    <tr>
+      <td dir="ltr">${esc(c.email)}</td>
+      <td>${esc(c.name||'-')}</td>
+      <td>${esc(stageLabelById(c.stageId))}</td>
+      <td>${c.date}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteContact(${c.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
+    </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد جهات اتصال')}</td></tr>`;
+}
+
+async function addContact() {
+  const email = document.getElementById('ctEmail').value.trim();
+  const name  = document.getElementById('ctName').value.trim();
+  const stageId = document.getElementById('ctStage').value || null;
+  if (!email) { showToast('البريد مطلوب', '#c0392b'); return; }
+  const data = await api('/admin/api/add-contacts', {list: [{email, name, stageId}]});
+  if (data.success) { showToast(`تمت الإضافة (${data.count})`); document.getElementById('ctEmail').value = ''; document.getElementById('ctName').value = ''; loadContacts(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function deleteContact(id) {
+  if (!confirmT('حذف جهة الاتصال هذه؟')) return;
+  const data = await api('/admin/api/delete-contact', {id});
+  if (data.success) { showToast('تم الحذف'); loadContacts(); }
+  else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+async function uploadContacts(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const stageId = document.getElementById('ctUpStage').value || null;
+  const text = await file.text();
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const list = lines.map(l => {
+    const parts = l.split(',');
+    return {email: (parts[0]||'').trim(), name: (parts[1]||'').trim(), stageId};
+  }).filter(x => x.email && x.email.includes('@'));
+  const data = await api('/admin/api/add-contacts', {list});
+  showToast(data.success ? `${t('تمت الإضافة')}: ${data.count}` : (data.error||t('خطأ')), data.success ? '#FF5733' : '#c0392b');
+  if (data.success) loadContacts();
+  input.value = '';
+}
+
+// ── Teachers ───────────────────────────────────────────────────
+function populateStageSelects(selectEls, includeAllOption) {
+  selectEls.forEach(sel => {
+    if (!sel) return;
+    const keepFirst = sel.options[0];
+    sel.innerHTML = '';
+    if (keepFirst) sel.appendChild(keepFirst);
+    STRUCTURE.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.id; o.textContent = AR ? s.nameAr : (s.nameEn || s.nameAr);
+      sel.appendChild(o);
+    });
+  });
+}
+
+async function loadTeachersTab() {
+  await loadStructure();
+  populateStageSelects([
+    document.getElementById('tcStage'),
+    document.getElementById('tcFilterStage'),
+  ]);
+  loadTeachers();
+}
+
+async function loadTeachers() {
+  const stageId = document.getElementById('tcFilterStage').value;
+  const url = stageId ? `/admin/api/teachers?stageId=${stageId}` : '/admin/api/teachers';
+  const list = await fetch(url).then(r => r.json());
+  const stageName = id => {
+    const s = STRUCTURE.find(x => String(x.id) === String(id));
+    return s ? (AR ? s.nameAr : (s.nameEn || s.nameAr)) : '';
+  };
+  document.getElementById('teachersTable').innerHTML = list.map(tc => `
+    <tr>
+      <td>${esc(tc.name)}</td>
+      <td dir="ltr">${esc(tc.email)}</td>
+      <td dir="ltr">${esc(tc.phone)}</td>
+      <td>${esc(stageName(tc.stageId))}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteTeacher(${tc.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
+    </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+}
+
+async function addTeacher() {
+  const name = document.getElementById('tcName').value.trim();
+  if (!name) { showToast(t('اسم المعلم مطلوب'), '#c0392b'); return; }
+  const data = await api('/admin/api/add-teacher', {
+    name, email: document.getElementById('tcEmail').value.trim(),
+    phone: document.getElementById('tcPhone').value.trim(),
+    stageId: document.getElementById('tcStage').value || null,
+  });
+  if (data.success) {
+    document.getElementById('tcName').value = '';
+    document.getElementById('tcEmail').value = '';
+    document.getElementById('tcPhone').value = '';
+    showToast(t('تمت الإضافة')); loadTeachers();
+  } else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function deleteTeacher(id) {
+  if (!confirmT('حذف هذا المعلم؟')) return;
+  const data = await api('/admin/api/delete-teacher', {id});
+  if (data.success) { showToast(t('تم الحذف')); loadTeachers(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function uploadTeachers(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const stageId = document.getElementById('tcStage').value || null;
+  const text = await file.text();
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const list = lines.map(l => {
+    const parts = l.split(',');
+    return {name: (parts[0]||'').trim(), email: (parts[1]||'').trim(),
+             phone: (parts[2]||'').trim(), stageId};
+  }).filter(x => x.name);
+  const data = await api('/admin/api/bulk-add-teachers', {list});
+  showToast(data.success ? `${t('تمت الإضافة')}: ${data.count}` : (data.error||t('خطأ')), data.success ? '#FF5733' : '#c0392b');
+  if (data.success) loadTeachers();
+  input.value = '';
+}
+
+// ── Students ───────────────────────────────────────────────────
+function gradesForStage(stageId) {
+  const s = STRUCTURE.find(x => String(x.id) === String(stageId));
+  return s ? s.grades : [];
+}
+function sectionsForGrade(stageId, gradeId) {
+  const grades = gradesForStage(stageId);
+  const g = grades.find(x => String(x.id) === String(gradeId));
+  return g ? g.sections : [];
+}
+function fillGradeSelect(sel, stageId, keepFirstLabel) {
+  sel.innerHTML = `<option value="">${keepFirstLabel}</option>` +
+    gradesForStage(stageId).map(g => `<option value="${g.id}">${AR ? g.nameAr : (g.nameEn||g.nameAr)}</option>`).join('');
+}
+function fillSectionSelect(sel, stageId, gradeId, keepFirstLabel) {
+  sel.innerHTML = `<option value="">${keepFirstLabel}</option>` +
+    sectionsForGrade(stageId, gradeId).map(s => `<option value="${s.id}">${AR ? s.nameAr : (s.nameEn||s.nameAr)}</option>`).join('');
+}
+
+function onStuStageChange() {
+  fillGradeSelect(document.getElementById('stuGrade'), document.getElementById('stuStage').value, '--');
+  fillSectionSelect(document.getElementById('stuSection'), null, null, '--');
+}
+function onStuGradeChange() {
+  fillSectionSelect(document.getElementById('stuSection'), document.getElementById('stuStage').value, document.getElementById('stuGrade').value, '--');
+}
+function onStuUpStageChange() {
+  fillGradeSelect(document.getElementById('stuUpGrade'), document.getElementById('stuUpStage').value, t('الصف'));
+  fillSectionSelect(document.getElementById('stuUpSection'), null, null, t('الشعبة'));
+}
+function onStuUpGradeChange() {
+  fillSectionSelect(document.getElementById('stuUpSection'), document.getElementById('stuUpStage').value, document.getElementById('stuUpGrade').value, t('الشعبة'));
+}
+function onStuFilterStageChange() {
+  fillGradeSelect(document.getElementById('stuFilterGrade'), document.getElementById('stuFilterStage').value, t('كل الصفوف'));
+  fillSectionSelect(document.getElementById('stuFilterSection'), null, null, t('كل الشعب'));
+  loadStudents();
+}
+function onStuFilterGradeChange() {
+  fillSectionSelect(document.getElementById('stuFilterSection'), document.getElementById('stuFilterStage').value, document.getElementById('stuFilterGrade').value, t('كل الشعب'));
+  loadStudents();
+}
+
+async function loadStudentsTab() {
+  await loadStructure();
+  populateStageSelects([
+    document.getElementById('stuStage'),
+    document.getElementById('stuUpStage'),
+    document.getElementById('stuFilterStage'),
+  ]);
+  loadStudents();
+}
+
+async function loadStudents() {
+  const sectionId = document.getElementById('stuFilterSection').value;
+  const gradeId = document.getElementById('stuFilterGrade').value;
+  const stageId = document.getElementById('stuFilterStage').value;
+  let url = '/admin/api/students';
+  if (sectionId) url += `?sectionId=${sectionId}`;
+  else if (gradeId) url += `?gradeId=${gradeId}`;
+  else if (stageId) url += `?stageId=${stageId}`;
+  const list = await fetch(url).then(r => r.json());
+
+  function labelFor(kind, id) {
+    if (kind === 'stage') { const s = STRUCTURE.find(x=>x.id===id); return s ? (AR?s.nameAr:(s.nameEn||s.nameAr)) : ''; }
+    for (const s of STRUCTURE) {
+      if (kind === 'grade') { const g = s.grades.find(x=>x.id===id); if (g) return AR?g.nameAr:(g.nameEn||g.nameAr); }
+      if (kind === 'section') { for (const g of s.grades) { const sec = g.sections.find(x=>x.id===id); if (sec) return AR?sec.nameAr:(sec.nameEn||sec.nameAr); } }
+    }
+    return '';
+  }
+
+  document.getElementById('studentsTable').innerHTML = list.map(s => `
+    <tr>
+      <td>${esc(s.name)}</td>
+      <td>${esc(labelFor('stage', s.stageId))}</td>
+      <td>${esc(labelFor('grade', s.gradeId))}</td>
+      <td>${esc(labelFor('section', s.sectionId))}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteStudent(${s.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
+    </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+}
+
+async function addStudent() {
+  const name = document.getElementById('stuName').value.trim();
+  const sectionId = document.getElementById('stuSection').value;
+  if (!name || !sectionId) { showToast(AR?'اسم الطالب والشعبة مطلوبان':'Student name and section are required', '#c0392b'); return; }
+  const data = await api('/admin/api/add-student', {name, sectionId});
+  if (data.success) {
+    document.getElementById('stuName').value = '';
+    showToast(t('تمت الإضافة')); loadStudents();
+  } else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function deleteStudent(id) {
+  if (!confirmT('حذف هذا الطالب؟')) return;
+  const data = await api('/admin/api/delete-student', {id});
+  if (data.success) { showToast(t('تم الحذف')); loadStudents(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function uploadStudents(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const sectionId = document.getElementById('stuUpSection').value;
+  if (!sectionId) {
+    showToast(AR ? 'يرجى تحديد المرحلة والصف والشعبة أولاً' : 'Please select stage, grade and section first', '#c0392b');
+    input.value = '';
+    return;
+  }
+  const text = await file.text();
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const list = lines.map(l => ({name: l.split(',')[0].trim(), sectionId})).filter(x => x.name);
+  const data = await api('/admin/api/bulk-add-students', {list});
+  showToast(data.success ? `${t('تمت الإضافة')}: ${data.count}` : (data.error||t('خطأ')), data.success ? '#FF5733' : '#c0392b');
+  if (data.success) loadStudents();
+  input.value = '';
+}
+
+// ── Reports ────────────────────────────────────────────────────
+let reportData = [];
+async function loadReportData() {
+  reportData = await fetch('/admin/api/bookings?filter=all').then(r => r.json());
+}
+
+function runReport() {
+  const dim    = document.getElementById('anaDim').value;
+  const status = document.getElementById('anaStatus').value;
+  const fromD  = document.getElementById('anaFrom').value;
+  const toD    = document.getElementById('anaTo').value;
+
+  let rows = reportData;
+  if (status !== 'all') rows = rows.filter(r => r.status === status);
+  if (fromD) rows = rows.filter(r => r.date >= fromD);
+  if (toD)   rows = rows.filter(r => r.date <= toD);
+
+  const groups = {};
+  const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'].map(t);
+  for (const r of rows) {
+    let key = '';
+    if (dim === 'hall')   key = r.stage || t('غير محدد');
+    else if (dim === 'person') key = r.name || t('غير محدد');
+    else if (dim === 'period') key = r.periodNumber ? (t('الحصة') + ' ' + r.periodNumber) : t('غير محدد');
+    else if (dim === 'month')  key = (r.date||'').substring(0, 7);
+    else if (dim === 'dow') {
+      const d = new Date((r.date||'') + 'T00:00:00');
+      key = DAYS_AR[d.getDay()] || '';
+    }
+    if (!key) continue;
+    if (!groups[key]) groups[key] = {count:0, approved:0, pending:0, hours:0};
+    groups[key].count++;
+    if (r.status === 'approved') groups[key].approved++;
+    if (r.status === 'pending')  groups[key].pending++;
+    groups[key].hours++; // one period = one booking
+  }
+
+  let arr = Object.entries(groups).map(([key, data]) => ({key, data}));
+  if (dim === 'month') arr.sort((a,b) => a.key > b.key ? 1 : -1);
+  else arr.sort((a,b) => b.data.count - a.data.count);
+
+  const chart = document.getElementById('anaChart');
+  if (!arr.length) { chart.innerHTML = `<p style="color:var(--muted);text-align:center">${t('لا توجد بيانات')}</p>`; document.getElementById('anaTable').innerHTML = ''; document.getElementById('reportResult').style.display='block'; return; }
+
+  const mx = arr[0].data.count;
+  chart.innerHTML = arr.slice(0,12).map(({key, data}) => {
+    const pct = mx > 0 ? Math.round(data.count/mx*100) : 0;
+    return `<div class="bar-item">
+      <div class="bar-label" title="${esc(key)}">${esc(key)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%"><span>${data.count}</span></div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('anaTable').innerHTML = `
+    <table class="period-table">
+      <thead><tr><th>العنصر</th><th>الحجوزات</th><th>معتمدة</th><th>قيد المراجعة</th><th>عدد الحصص</th></tr></thead>
+      <tbody>${arr.map(({key,data}) => `
+        <tr>
+          <td style="font-weight:700">${esc(key)}</td>
+          <td>${data.count}</td>
+          <td style="color:#27ae60">${data.approved}</td>
+          <td style="color:var(--accent)">${data.pending}</td>
+          <td>${data.hours.toFixed(1)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  const dimLabels = {hall:t('المراحل'),person:t('المعلمون'),period:t('الحصص'),month:t('الأشهر'),dow:t('أيام الأسبوع')};
+  document.getElementById('reportTitle').innerHTML = `<i class="fas fa-chart-bar"></i> ${AR?'نتائج':'Results'}: ${dimLabels[dim]||dim}`;
+  document.getElementById('reportResult').style.display = 'block';
+}
+
+// ── Modals ────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ── Helpers ───────────────────────────────────────────────────
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function refreshAll() { loadBookings(); loadStats(); showToast('تم التحديث'); }
+
+// ── Sidebar toggle ──
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+// ── Admin Calendar ────────────────────────────────────────────
+let adminCalInstance = null;
+let allBookingsForCal = [];
+
+async function initAdminCal() {
+  const res = await fetch('/admin/api/bookings?filter=all');
+  allBookingsForCal = await res.json();
+
+  // Populate stage filter (by trolley code)
+  const seen = new Set();
+  const sel = document.getElementById('calHallFilter');
+  sel.innerHTML = `<option value="">${t('كل المراحل')}</option>`;
+  allBookingsForCal.forEach(b => {
+    if (b.trolleyCode && !seen.has(b.trolleyCode)) {
+      seen.add(b.trolleyCode);
+      const o = document.createElement('option');
+      o.value = b.trolleyCode; o.textContent = b.stage || b.trolleyCode;
+      sel.appendChild(o);
+    }
+  });
+
+  renderCal();
+}
+
+function renderCal() {
+  const filter = document.getElementById('calHallFilter').value;
+  const events = allBookingsForCal
+    .filter(b => !filter || b.trolleyCode === filter)
+    .map(b => ({
+      id: b.id,
+      title: `${b.stage||''} — ${[b.grade,b.section].filter(Boolean).join(' ')} — ${b.name}`,
+      start: b.date,
+      end: b.date,
+      allDay: true,
+      color: b.status === 'approved' ? '#27ae60'
+           : b.status === 'pending'  ? '#e67e22'
+           : '#c0392b',
+      extendedProps: b
+    }));
+
+  const el = document.getElementById('adminCal');
+  if (adminCalInstance) { adminCalInstance.destroy(); }
+
+  adminCalInstance = new FullCalendar.Calendar(el, {
+    locale: AR ? 'ar' : 'en',
+    direction: 'rtl',
+    initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
+    headerToolbar: {
+      right: 'prev,next today',
+      center: 'title',
+      left: window.innerWidth < 768 ? 'dayGridMonth,timeGridThreeDay,listWeek' : 'dayGridMonth,timeGridWeek,listWeek'
+    },
+    views: {
+      timeGridThreeDay: { type: 'timeGrid', duration: { days: 3 }, buttonText: 'week' }
+    },
+    events: events,
+    eventClick: function(info) {
+      const b = info.event.extendedProps;
+      openEdit(b.reqId);
+    },
+    height: 'auto'
+  });
+  adminCalInstance.render();
+}
+
+// ── Report Stats + Charts ──
+async function loadReportStats() {
+  const res = await fetch('/admin/api/bookings?filter=all');
+  const data = await res.json();
+
+  const approved  = data.filter(b => b.status === 'approved').length;
+  const pending   = data.filter(b => b.status === 'pending').length;
+  const rejected  = data.filter(b => b.status === 'rejected').length;
+  const cancelled = data.filter(b => b.status === 'cancelled').length;
+
+  const hallCount = {};
+  data.forEach(b => { if (b.stage) hallCount[b.stage] = (hallCount[b.stage]||0) + 1; });
+  const topHall = Object.entries(hallCount).sort((a,b)=>b[1]-a[1])[0];
+
+  const monthCount = {};
+  data.forEach(b => { if (b.date) { const m = b.date.substring(0,7); monthCount[m] = (monthCount[m]||0)+1; } });
+  const topMonth = Object.entries(monthCount).sort((a,b)=>b[1]-a[1])[0];
+
+  const totalPeriods = data.length;
+
+  const periodCount = {};
+  data.forEach(b => { if (b.periodNumber) periodCount[b.periodNumber] = (periodCount[b.periodNumber]||0) + 1; });
+  const topPeriod = Object.entries(periodCount).sort((a,b)=>b[1]-a[1])[0];
+
+  const cancelledByTeacher = {};
+  data.filter(b => b.status === 'cancelled').forEach(b => {
+    if (b.name) cancelledByTeacher[b.name] = (cancelledByTeacher[b.name]||0) + 1;
+  });
+  const topCancelled = Object.entries(cancelledByTeacher).sort((a,b)=>b[1]-a[1])[0];
+
+  document.getElementById('rs-approved').textContent = approved;
+  document.getElementById('rs-pending').textContent  = pending;
+  document.getElementById('rs-rejected').textContent = rejected + cancelled;
+  document.getElementById('rs-halls').textContent    = topHall ? topHall[0] : '-';
+  document.getElementById('rs-month').textContent    = topMonth ? topMonth[0].replace('-',' / ') : '-';
+  document.getElementById('rs-hours').textContent    = totalPeriods;
+  document.getElementById('rs-period').textContent   = topPeriod ? `${t('الحصة')} ${topPeriod[0]} (${topPeriod[1]})` : '-';
+  document.getElementById('rs-cancelled-by').textContent = topCancelled ? `${topCancelled[0]} (${topCancelled[1]})` : t('لا يوجد');
+
+  if (!data.length) return;
+
+  // ── Donut Chart ──
+  drawDonut(approved, pending, rejected + cancelled, data.length);
+
+  // ── Monthly Line Chart ──
+  const months = {};
+  data.forEach(b => {
+    if (!b.date) return;
+    const m = b.date.substring(0,7);
+    months[m] = (months[m]||0) + 1;
+  });
+  const sortedMonths = Object.entries(months).sort((a,b)=>a[0]>b[0]?1:-1).slice(-6);
+  drawMonthChart(sortedMonths);
+
+  // ── Hall Bars ──
+  drawHallBars(hallCount);
+}
+
+function drawDonut(approved, pending, rejected, total) {
+  const canvas = document.getElementById('donutChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cx = 100, cy = 100, r = 75, ri = 45;
+  ctx.clearRect(0,0,200,200);
+
+  const slices = [
+    {val: approved, color: '#27ae60', label: 'معتمد'},
+    {val: pending,  color: '#e67e22', label: 'قيد المراجعة'},
+    {val: rejected, color: '#c0392b', label: 'مرفوض/ملغي'},
+  ].filter(s => s.val > 0);
+
+  if (!slices.length) return;
+  let start = -Math.PI/2;
+  slices.forEach(s => {
+    const angle = (s.val / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, start + angle);
+    ctx.closePath();
+    ctx.fillStyle = s.color;
+    ctx.fill();
+    start += angle;
+  });
+  // inner circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, ri, 0, Math.PI*2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  // center text
+  ctx.fillStyle = '#1e2a2b';
+  ctx.font = 'bold 22px Tajawal';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(total, cx, cy-8);
+  ctx.font = '12px Tajawal';
+  ctx.fillStyle = '#6b7c7e';
+  ctx.fillText('إجمالي', cx, cy+12);
+
+  // legend
+  document.getElementById('donutLegend').innerHTML = slices.map(s =>
+    '<span style="display:inline-flex;align-items:center;gap:4px;margin-left:10px">' +
+    '<span style="width:10px;height:10px;border-radius:50%;background:'+s.color+';display:inline-block"></span>' +
+    s.label+' ('+s.val+')</span>'
+  ).join('');
+}
+
+function drawMonthChart(sortedMonths) {
+  const canvas = document.getElementById('monthChart');
+  if (!canvas || !sortedMonths.length) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.offsetWidth || 300;
+  const h = 200;
+  canvas.width = w; canvas.height = h;
+  ctx.clearRect(0,0,w,h);
+
+  const pad = {top:20, right:20, bottom:40, left:30};
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+  const vals = sortedMonths.map(m=>m[1]);
+  const mx = Math.max(...vals, 1);
+  const step = cw / (sortedMonths.length - 1 || 1);
+
+  // Grid lines
+  ctx.strokeStyle = '#e0eeef'; ctx.lineWidth = 1;
+  for (let i=0;i<=4;i++) {
+    const y = pad.top + (ch/4)*i;
+    ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(pad.left+cw,y); ctx.stroke();
+  }
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = '#FF5733'; ctx.lineWidth = 2.5;
+  sortedMonths.forEach(([m,v],i) => {
+    const x = pad.left + i*step;
+    const y = pad.top + ch - (v/mx)*ch;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // Fill area
+  ctx.beginPath();
+  sortedMonths.forEach(([m,v],i) => {
+    const x = pad.left + i*step;
+    const y = pad.top + ch - (v/mx)*ch;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.lineTo(pad.left + (sortedMonths.length-1)*step, pad.top+ch);
+  ctx.lineTo(pad.left, pad.top+ch);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,87,51,.1)';
+  ctx.fill();
+
+  // Dots + labels
+  sortedMonths.forEach(([m,v],i) => {
+    const x = pad.left + i*step;
+    const y = pad.top + ch - (v/mx)*ch;
+    ctx.beginPath();
+    ctx.arc(x,y,4,0,Math.PI*2);
+    ctx.fillStyle = '#FF5733'; ctx.fill();
+    ctx.fillStyle = '#1e2a2b'; ctx.font = '10px Tajawal';
+    ctx.textAlign = 'center';
+    ctx.fillText(v, x, y-10);
+    ctx.fillStyle = '#6b7c7e';
+    ctx.fillText(m.substring(5), x, h-10);
+  });
+}
+
+function drawHallBars(hallCount) {
+  const el = document.getElementById('hallBars');
+  if (!el) return;
+  const sorted = Object.entries(hallCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  if (!sorted.length) { el.innerHTML=`<p style="color:var(--muted);text-align:center">${t('لا توجد بيانات')}</p>`; return; }
+  const mx = sorted[0][1];
+  const colors = ['#FF5733','#1B3358','#27ae60','#e67e22','#c0392b','#8e44ad'];
+  el.innerHTML = sorted.map(([hall,count],i) => {
+    const pct = Math.round(count/mx*100);
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+      '<div style="width:120px;font-size:.82rem;font-weight:700;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+hall+'">'+hall+'</div>' +
+      '<div style="flex:1;background:#e8f0f2;border-radius:6px;height:30px;overflow:hidden">' +
+      '<div style="width:'+pct+'%;background:'+colors[i%colors.length]+';height:100%;border-radius:6px;display:flex;align-items:center;padding:0 8px;transition:width .5s">' +
+      '<span style="color:#fff;font-size:.78rem;font-weight:700">'+count+'</span></div></div></div>';
+  }).join('');
+}
+
+// ── Export CSV ──
+function exportCSV() {
+  const rows = [[t('رقم الطلب'),t('الاسم'),t('البريد'),t('الجوال'),t('الموضوع'),t('المرحلة'),t('الصف'),t('الشعبة'),t('الحصة'),t('التاريخ'),t('الحالة'),t('ملاحظات'),t('تاريخ الطلب')]];
+  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), rejected:t('مرفوض'), cancelled:t('ملغي')};
+  const filtered = allBookings;
+  filtered.forEach(b => {
+    rows.push([b.reqId, b.name, b.email, b.phone||'', b.title||'', b.stage||'', b.grade||'', b.section||'',
+      b.periodNumber ? (t('الحصة')+' '+b.periodNumber) : '',
+      b.date||'', statusLbl[b.status]||b.status, b.notes||'', b.createdAt||'']);
+  });
+  const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${AR?'حجوزات':'bookings'}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast(AR ? 'تم تصدير الملف ✓' : 'File exported ✓');
+}
+
+// ── Export Print ──
+function exportPrint() {
+  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), rejected:t('مرفوض'), cancelled:t('ملغي')};
+  const rows = allBookings.map(b => [
+    b.reqId, b.name, b.stage||'', b.grade||'', b.section||'',
+    b.periodNumber ? (t('الحصة')+' '+b.periodNumber) : '', b.date||'',
+    statusLbl[b.status]||b.status, b.notes||''
+  ].map(c => '<td>'+String(c).replace(/</g,'&lt;')+'</td>').join('')).map(r => '<tr>'+r+'</tr>').join('');
+
+  const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
+  const reportTitle = AR ? 'تقرير الحجوزات' : 'Bookings Report';
+  const totalLine = AR
+    ? `إجمالي: ${allBookings.length} حجز — ${new Date().toLocaleDateString('ar-SA')}`
+    : `Total: ${allBookings.length} booking(s) — ${new Date().toLocaleDateString('en-US')}`;
+  const html = [
+    `<!DOCTYPE html><html ${dirAttr}><head>`,
+    `<meta charset="UTF-8"><title>${reportTitle}</title>`,
+    '<style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}',
+    'h2{color:#FF5733}table{width:100%;border-collapse:collapse}',
+    `th{background:#FF5733;color:#fff;padding:8px;text-align:${AR?'right':'left'}}`,
+    'td{padding:7px;border-bottom:1px solid #ddd}',
+    '@media print{button{display:none}}</style></head><body>',
+    `<h2>${reportTitle}</h2>`,
+    `<p>${totalLine}</p>`,
+    `<button onclick="window.print()" style="background:#FF5733;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">${t('طباعة')}</button>`,
+    `<table><thead><tr><th>${t('رقم الطلب')}</th><th>${t('الاسم')}</th><th>${t('المرحلة')}</th><th>${t('الصف')}</th><th>${t('الشعبة')}</th><th>${t('الحصة')}</th><th>${t('التاريخ')}</th><th>${t('الحالة')}</th><th>${t('ملاحظات')}</th></tr></thead>`,
+    '<tbody>'+rows+'</tbody></table></body></html>'
+  ].join('');
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+}
+
+// ── Init ──────────────────────────────────────────────────────
+loadBookings();
+loadHalls();
+loadPeriods();
+</script>
+
+<nav class="mobile-nav">
+  <div class="mobile-nav-items">
+    <button class="mobile-nav-item active" onclick="showTab('bookings',this)">
+      <i class="fas fa-calendar-check"></i><span>الحجوزات</span>
+      <span class="m-badge" id="mBadge" style="display:none">0</span>
+    </button>
+    <button class="mobile-nav-item" onclick="showTab('halls',this)">
+      <i class="fas fa-laptop"></i><span>المراحل</span>
+    </button>
+    <button class="mobile-nav-item" onclick="showTab('blocked',this)">
+      <i class="fas fa-ban"></i><span>محظور</span>
+    </button>
+    <button class="mobile-nav-item" onclick="showTab('contacts',this)">
+      <i class="fas fa-address-book"></i><span>اتصالات</span>
+    </button>
+    <button class="mobile-nav-item" onclick="showTab('reports',this)">
+      <i class="fas fa-chart-bar"></i><span>تقارير</span>
+    </button>
+  </div>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+</body>
+</html>
