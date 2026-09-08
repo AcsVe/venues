@@ -327,19 +327,19 @@
     <!-- ── BOOKINGS TAB ── -->
     <div class="tab-panel active" id="tab-bookings">
       <div class="stats-grid">
-        <div class="stat-card"><div class="stat-val" id="stTotal">-</div><div class="stat-label">إجمالي الطلبات</div></div>
-        <div class="stat-card accent"><div class="stat-val" id="stPending">-</div><div class="stat-label">قيد المراجعة</div></div>
-        <div class="stat-card green"><div class="stat-val" id="stApproved">-</div><div class="stat-label">معتمد</div></div>
-        <div class="stat-card red"><div class="stat-val" id="stRejected">-</div><div class="stat-label">مرفوض</div></div>
-        <div class="stat-card orange"><div class="stat-val" id="stCancelled">-</div><div class="stat-label">ملغي</div></div>
+        <div class="stat-card" onclick="filterByStat('all')" style="cursor:pointer" title="عرض كل الطلبات"><div class="stat-val" id="stTotal">-</div><div class="stat-label">إجمالي الطلبات</div></div>
+        <div class="stat-card accent" onclick="filterByStat('pending')" style="cursor:pointer" title="عرض قيد المراجعة"><div class="stat-val" id="stPending">-</div><div class="stat-label">قيد المراجعة</div></div>
+        <div class="stat-card green" onclick="filterByStat('approved')" style="cursor:pointer" title="عرض المعتمدة"><div class="stat-val" id="stApproved">-</div><div class="stat-label">معتمد</div></div>
+        <div class="stat-card red" onclick="filterByStat('rejected')" style="cursor:pointer" title="عرض المرفوضة"><div class="stat-val" id="stRejected">-</div><div class="stat-label">مرفوض</div></div>
+        <div class="stat-card orange" onclick="filterByStat('cancelled')" style="cursor:pointer" title="عرض الملغية"><div class="stat-val" id="stCancelled">-</div><div class="stat-label">ملغي</div></div>
       </div>
       <div class="card">
         <div class="filter-bar">
-          <button class="filter-btn active" onclick="filterBk('all',this)">الكل</button>
-          <button class="filter-btn" onclick="filterBk('pending',this)">قيد المراجعة</button>
-          <button class="filter-btn" onclick="filterBk('approved',this)">معتمد</button>
-          <button class="filter-btn" onclick="filterBk('rejected',this)">مرفوض</button>
-          <button class="filter-btn" onclick="filterBk('cancelled',this)">ملغي</button>
+          <button class="filter-btn active" data-filter="all" onclick="filterBk('all',this)">الكل</button>
+          <button class="filter-btn" data-filter="pending" onclick="filterBk('pending',this)">قيد المراجعة</button>
+          <button class="filter-btn" data-filter="approved" onclick="filterBk('approved',this)">معتمد</button>
+          <button class="filter-btn" data-filter="rejected" onclick="filterBk('rejected',this)">مرفوض</button>
+          <button class="filter-btn" data-filter="cancelled" onclick="filterBk('cancelled',this)">ملغي</button>
           <input class="search-input" type="text" placeholder="🔍 بحث..." oninput="searchBk(this.value)">
           <button class="btn btn-red btn-sm" onclick="bulkDelete()" id="bulkBtn" style="display:none"><i class="fas fa-trash"></i> حذف المحدد</button>
           <button class="btn btn-outline btn-sm" onclick="exportCSV()"><i class="fas fa-file-excel"></i> Excel</button>
@@ -440,19 +440,30 @@
         <div class="form-grid">
           <div class="form-group"><label>البريد الإلكتروني <span style="color:#c0392b">*</span></label><input type="email" id="ctEmail" dir="ltr"></div>
           <div class="form-group"><label>الاسم (اختياري)</label><input type="text" id="ctName"></div>
+          <div class="form-group"><label>المرحلة (اتركه فارغاً لتصل إشعارات كل المراحل)</label>
+            <select id="ctStage"><option value="">-- كل المراحل --</option></select>
+          </div>
         </div>
         <button class="btn btn-primary" onclick="addContact()"><i class="fas fa-plus"></i> إضافة</button>
       </div>
       <div class="card">
         <div class="card-title"><i class="fas fa-upload"></i> رفع قائمة (CSV/TXT)</div>
         <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">ملف CSV أو TXT — كل سطر: <code>email,name</code> أو <code>email</code> فقط</p>
+        <div class="form-group"><label>المرحلة لهذه القائمة (اتركه فارغاً لكل المراحل)</label>
+          <select id="ctUpStage"><option value="">-- كل المراحل --</option></select>
+        </div>
         <input type="file" id="ctFile" accept=".csv,.txt" onchange="uploadContacts(this)">
       </div>
       <div class="card">
         <div class="card-title"><i class="fas fa-list"></i> قائمة جهات الاتصال</div>
+        <div style="margin-bottom:10px">
+          <select id="ctFilterStage" onchange="loadContacts()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+            <option value="">كل المراحل</option>
+          </select>
+        </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>البريد الإلكتروني</th><th>الاسم</th><th>تاريخ الإضافة</th><th>حذف</th></tr></thead>
+            <thead><tr><th>البريد الإلكتروني</th><th>الاسم</th><th>المرحلة</th><th>تاريخ الإضافة</th><th>حذف</th></tr></thead>
             <tbody id="contactsTable"></tbody>
           </table>
         </div>
@@ -872,6 +883,9 @@ const I18N_EN = {
   "عربة": "Trolley",
   "إضافة صف": "Add Grade",
   "ملف": "File",
+  "المرحلة (اتركه فارغاً لتصل إشعارات كل المراحل)": "Stage (leave blank to notify for all stages)",
+  "المرحلة لهذه القائمة (اتركه فارغاً لكل المراحل)": "Stage for this list (leave blank for all stages)",
+  "عرض التفاصيل": "View Details",
 };
 
 let AR = (localStorage.getItem('adminLang') || '{{ lang }}') !== 'en';
@@ -911,7 +925,7 @@ function applyStaticLang() {
     if (id === 'bookings') renderTable();
     if (id === 'halls') { renderStagesTree(); renderPeriodsTable(); }
     if (id === 'blocked') loadBlocked();
-    if (id === 'contacts') loadContacts();
+    if (id === 'contacts') loadContactsTab();
     if (id === 'teachers') loadTeachersTab();
     if (id === 'students') loadStudentsTab();
     if (id === 'reports') loadReportStats();
@@ -954,7 +968,7 @@ function showTab(name) {
   if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
   if (name === 'calview')  initAdminCal();
   if (name === 'blocked')  loadBlocked();
-  if (name === 'contacts') loadContacts();
+  if (name === 'contacts') loadContactsTab();
   if (name === 'teachers') loadTeachersTab();
   if (name === 'students') loadStudentsTab();
   if (name === 'reports')  loadReportStats();
@@ -1018,6 +1032,11 @@ function filterBk(f, btn) {
   loadBookings();
 }
 
+function filterByStat(f) {
+  const btn = document.querySelector(`.filter-btn[data-filter="${f}"]`);
+  if (btn) filterBk(f, btn);
+}
+
 function searchBk(q) { curSearch = q.toLowerCase(); renderTable(); }
 
 function renderTable() {
@@ -1041,10 +1060,10 @@ function renderTable() {
       <td><span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span></td>
       <td>
         <div class="action-btns">
-          <button class="btn btn-blue btn-sm" onclick="openDetail('${b.reqId}')"><i class="fas fa-eye"></i></button>
-          ${b.status==='pending'?`<button class="btn btn-green btn-sm" onclick="quickApprove('${b.reqId}')"><i class="fas fa-check"></i></button>`:''}
-          ${b.status==='pending'?`<button class="btn btn-red btn-sm" onclick="openReject('${b.reqId}')"><i class="fas fa-times"></i></button>`:''}
-          ${b.status!=='cancelled'&&b.status!=='rejected'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')"><i class="fas fa-ban"></i></button>`:''}
+          <button class="btn btn-blue btn-sm" onclick="openDetail('${b.reqId}')" title="${t('عرض التفاصيل')}"><i class="fas fa-eye"></i></button>
+          ${b.status==='pending'?`<button class="btn btn-green btn-sm" onclick="quickApprove('${b.reqId}')" title="${t('موافقة')}"><i class="fas fa-check"></i></button>`:''}
+          ${b.status==='pending'?`<button class="btn btn-red btn-sm" onclick="openReject('${b.reqId}')" title="${t('رفض')}"><i class="fas fa-times"></i></button>`:''}
+          ${b.status!=='cancelled'&&b.status!=='rejected'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')" title="${t('إلغاء')}"><i class="fas fa-ban"></i></button>`:''}
         </div>
       </td>
     </tr>`).join('') || `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">${t('لا توجد نتائج')}</td></tr>`;
@@ -1151,9 +1170,36 @@ function openDetail(reqId) {
     footer += `<button class="btn btn-blue" onclick="quickSetPending('${b.reqId}')"><i class="fas fa-undo"></i> إعادة لقيد المراجعة</button>`;
   }
   footer += `<button class="btn btn-outline" onclick="openEdit('${b.reqId}');closeModal('bkModal')"><i class="fas fa-edit"></i> تعديل</button>`;
+  footer += `<button class="btn btn-outline" onclick="printBooking('${b.reqId}')" title="${t('طباعة')}"><i class="fas fa-print"></i> ${t('طباعة')}</button>`;
   footer += `<button class="btn btn-outline" onclick="closeModal('bkModal')">إغلاق</button>`;
   document.getElementById('bkModalFooter').innerHTML = footer;
   openModal('bkModal');
+}
+
+function printBooking(reqId) {
+  const b = allBookings.find(x => x.reqId === reqId);
+  if (!b) return;
+  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
+  const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
+  const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
+  const rows = [
+    [t('رقم الطلب'), b.reqId], [t('الحالة'), sLabels[b.status]||b.status],
+    [t('الاسم'), b.name], [t('البريد'), b.email], [t('الجوال'), b.phone||'-'],
+    [t('المادة/الغرض'), b.title||'-'], [t('المرحلة'), b.stage||'-'], [t('الصف'), b.grade||'-'],
+    [t('الشعبة'), b.section||'-'], [t('الحصة'), periodStr], [t('التاريخ'), b.date],
+    [t('ملاحظات'), b.notes||'-'],
+  ].map(([k,v]) => `<tr><td style="padding:8px;background:#f0f7f8;font-weight:700;width:35%">${k}</td><td style="padding:8px;border-bottom:1px solid #eee">${String(v).replace(/</g,'&lt;')}</td></tr>`).join('');
+
+  const html = `<!DOCTYPE html><html ${dirAttr}><head><meta charset="UTF-8"><title>${b.reqId}</title>
+    <style>body{font-family:Arial,sans-serif;padding:24px}h2{color:#FF5733}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    @media print{button{display:none}}</style></head><body>
+    <h2>${AR?'تفاصيل الحجز':'Booking Details'}</h2>
+    <button onclick="window.print()" style="background:#FF5733;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">${AR?'طباعة':'Print'}</button>
+    <table>${rows}</table></body></html>`;
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
 }
 
 async function quickSetPending(reqId) {
@@ -1259,9 +1305,9 @@ function renderStagesTree() {
           <span class="badge ${s.active?'badge-approved':'badge-cancelled'}" style="margin-right:8px">${t(s.active?'فعالة':'معطلة')}</span>
         </div>
         <div class="action-btns">
-          <button class="btn btn-sm btn-outline" onclick="openEditStage(${s.id})"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-sm btn-outline" onclick="openEditStage(${s.id})" title="${t('تعديل')}"><i class="fas fa-edit"></i></button>
           <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${s.id},${s.active?'false':'true'})">${s.active?'<i class="fas fa-toggle-off"></i> '+t('تعطيل'):'<i class="fas fa-toggle-on"></i> '+t('تفعيل')}</button>
-          <button class="btn btn-red btn-sm" onclick="deleteHall(${s.id})"><i class="fas fa-trash"></i></button>
+          <button class="btn btn-red btn-sm" onclick="deleteHall(${s.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button>
         </div>
       </div>
 
@@ -1270,13 +1316,13 @@ function renderStagesTree() {
           <div style="background:#f7fbfb;border:1px solid var(--border);border-radius:8px;padding:10px;min-width:180px;flex:1">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <strong style="font-size:.88rem">${esc(g.nameAr)}</strong>
-              <button class="btn btn-red btn-sm" style="padding:2px 6px" onclick="deleteGrade(${g.id})"><i class="fas fa-trash" style="font-size:.7rem"></i></button>
+              <button class="btn btn-red btn-sm" style="padding:2px 6px" onclick="deleteGrade(${g.id})" title="${t('حذف')}"><i class="fas fa-trash" style="font-size:.7rem"></i></button>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
               ${g.sections.map(sec => `
                 <span style="background:#e8f4f5;border-radius:12px;padding:2px 10px;font-size:.78rem;display:inline-flex;align-items:center;gap:5px">
                   ${esc(sec.nameAr)}
-                  <button onclick="deleteSection(${sec.id})" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:.8rem">✕</button>
+                  <button onclick="deleteSection(${sec.id})" title="${t('حذف')}" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:.8rem">✕</button>
                 </span>`).join('') || `<span style="color:var(--muted);font-size:.78rem">${t('لا توجد شعب')}</span>`}
             </div>
             <div style="display:flex;gap:4px">
@@ -1380,8 +1426,8 @@ async function renderPeriodsTable() {
       <td dir="ltr">${p.endTime||'-'}</td>
       <td><span class="badge ${p.active?'badge-approved':'badge-cancelled'}">${t(p.active?'فعالة':'معطلة')}</span></td>
       <td>
-        <button class="btn btn-sm btn-outline" onclick="openEditPeriod(${p.id})"><i class="fas fa-edit"></i></button>
-        <button class="btn btn-red btn-sm" onclick="deletePeriod(${p.id})"><i class="fas fa-trash"></i></button>
+        <button class="btn btn-sm btn-outline" onclick="openEditPeriod(${p.id})" title="${t('تعديل')}"><i class="fas fa-edit"></i></button>
+        <button class="btn btn-red btn-sm" onclick="deletePeriod(${p.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button>
       </td>
     </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--muted)">${t('لا توجد حصص بعد')}</td></tr>`;
 }
@@ -1434,7 +1480,7 @@ async function loadBlocked() {
       <td>${esc(b.hall ? (stage ? stage.nameAr : b.hall) : t('كل المراحل'))}</td>
       <td dir="ltr">${b.fromT||'-'}</td><td dir="ltr">${b.toT||'-'}</td>
       <td>${esc(b.r)}</td>
-      <td><button class="btn btn-red btn-sm" onclick="deleteBlocked(${b.id})"><i class="fas fa-trash"></i></button></td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteBlocked(${b.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
     </tr>`;
   }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted)">${t('لا توجد فترات محظورة')}</td></tr>`;
 }
@@ -1462,22 +1508,42 @@ async function deleteBlocked(id) {
 }
 
 // ── Contacts ───────────────────────────────────────────────────
+async function loadContactsTab() {
+  await loadStructure();
+  populateStageSelects([
+    document.getElementById('ctStage'),
+    document.getElementById('ctUpStage'),
+    document.getElementById('ctFilterStage'),
+  ]);
+  loadContacts();
+}
+
+function stageLabelById(id) {
+  if (!id) return AR ? 'كل المراحل' : 'All stages';
+  const s = STRUCTURE.find(x => String(x.id) === String(id));
+  return s ? (AR ? s.nameAr : (s.nameEn || s.nameAr)) : '';
+}
+
 async function loadContacts() {
+  const filterStageId = document.getElementById('ctFilterStage').value;
   const data = await fetch('/admin/api/contacts').then(r => r.json());
-  document.getElementById('contactsTable').innerHTML = data.map(c => `
+  const filtered = filterStageId ? data.filter(c => String(c.stageId) === filterStageId) : data;
+  document.getElementById('contactsTable').innerHTML = filtered.map(c => `
     <tr>
       <td dir="ltr">${esc(c.email)}</td>
       <td>${esc(c.name||'-')}</td>
+      <td>${esc(stageLabelById(c.stageId))}</td>
       <td>${c.date}</td>
-      <td><button class="btn btn-red btn-sm" onclick="deleteContact(${c.id})"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${t('لا توجد جهات اتصال')}</td></tr>`;
+      <td><button class="btn btn-red btn-sm" onclick="deleteContact(${c.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
+    </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد جهات اتصال')}</td></tr>`;
 }
 
 async function addContact() {
   const email = document.getElementById('ctEmail').value.trim();
   const name  = document.getElementById('ctName').value.trim();
+  const stageId = document.getElementById('ctStage').value || null;
   if (!email) { showToast('البريد مطلوب', '#c0392b'); return; }
-  const data = await api('/admin/api/add-contacts', {list: [{email, name}]});
+  const data = await api('/admin/api/add-contacts', {list: [{email, name, stageId}]});
   if (data.success) { showToast(`تمت الإضافة (${data.count})`); document.getElementById('ctEmail').value = ''; document.getElementById('ctName').value = ''; loadContacts(); }
   else showToast(data.error || 'خطأ', '#c0392b');
 }
@@ -1492,11 +1558,12 @@ async function deleteContact(id) {
 async function uploadContacts(input) {
   const file = input.files[0];
   if (!file) return;
+  const stageId = document.getElementById('ctUpStage').value || null;
   const text = await file.text();
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const list = lines.map(l => {
     const parts = l.split(',');
-    return {email: (parts[0]||'').trim(), name: (parts[1]||'').trim()};
+    return {email: (parts[0]||'').trim(), name: (parts[1]||'').trim(), stageId};
   }).filter(x => x.email && x.email.includes('@'));
   const data = await api('/admin/api/add-contacts', {list});
   showToast(data.success ? `${t('تمت الإضافة')}: ${data.count}` : (data.error||t('خطأ')), data.success ? '#FF5733' : '#c0392b');
@@ -1542,7 +1609,7 @@ async function loadTeachers() {
       <td dir="ltr">${esc(tc.email)}</td>
       <td dir="ltr">${esc(tc.phone)}</td>
       <td>${esc(stageName(tc.stageId))}</td>
-      <td><button class="btn btn-red btn-sm" onclick="deleteTeacher(${tc.id})"><i class="fas fa-trash"></i></button></td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteTeacher(${tc.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
     </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
 }
 
@@ -1664,7 +1731,7 @@ async function loadStudents() {
       <td>${esc(labelFor('stage', s.stageId))}</td>
       <td>${esc(labelFor('grade', s.gradeId))}</td>
       <td>${esc(labelFor('section', s.sectionId))}</td>
-      <td><button class="btn btn-red btn-sm" onclick="deleteStudent(${s.id})"><i class="fas fa-trash"></i></button></td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteStudent(${s.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
     </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
 }
 
