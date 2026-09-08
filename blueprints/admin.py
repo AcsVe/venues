@@ -122,8 +122,8 @@ def api_approve():
     try:
         send_staff_notification('approve', _booking_email_ctx(b), _get_contacts())
         send_approve(_booking_email_ctx(b, checkoutUrl=checkout_url))
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
 
     return jsonify({'success': True})
 
@@ -148,8 +148,8 @@ def api_reject():
         send_staff_notification('reject', _booking_email_ctx(b, reason=reason), _get_contacts())
         send_reject({'reqId': req_id, 'name': b.name, 'email': b.email,
                      'title': b.event_title, 'reason': reason})
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
 
     return jsonify({'success': True})
 
@@ -173,8 +173,8 @@ def api_cancel():
     try:
         send_staff_notification('cancel', _booking_email_ctx(b), _get_contacts())
         send_cancel(_booking_email_ctx(b))
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
 
     return jsonify({'success': True})
 
@@ -197,8 +197,8 @@ def api_set_pending():
     try:
         send_staff_notification('revert', _booking_email_ctx(b), _get_contacts())
         send_pending(_booking_email_ctx(b))
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
 
     return jsonify({'success': True})
 
@@ -267,8 +267,8 @@ def api_update_booking():
     try:
         send_staff_notification('update', _booking_email_ctx(b), _get_contacts())
         send_update(_booking_email_ctx(b))
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
 
     return jsonify({'success': True})
 
