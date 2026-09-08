@@ -11,9 +11,12 @@ from utils.email_utils import (send_approve, send_reject, send_cancel,
 
 admin_bp = Blueprint('admin', __name__)
 
-def _get_contacts():
+def _get_contacts(stage_id=None):
     from models import Contact
-    return [{'email': c.email} for c in Contact.query.all()]
+    q = Contact.query
+    if stage_id is not None:
+        q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
+    return [{'email': c.email} for c in q.all()]
 
 
 def _booking_email_ctx(b, **extra):
@@ -124,7 +127,7 @@ def api_approve():
         print("[email] DEBUG: building context...", flush=True)
         ctx = _booking_email_ctx(b)
         print(f"[email] DEBUG: context built, email={ctx.get('email')}", flush=True)
-        contacts = _get_contacts()
+        contacts = _get_contacts(b.stage_id)
         print(f"[email] DEBUG: contacts fetched, count={len(contacts)}", flush=True)
         send_staff_notification('approve', ctx, contacts)
         print("[email] DEBUG: send_staff_notification returned", flush=True)
@@ -156,7 +159,7 @@ def api_reject():
     db.session.commit()
 
     try:
-        send_staff_notification('reject', _booking_email_ctx(b, reason=reason), _get_contacts())
+        send_staff_notification('reject', _booking_email_ctx(b, reason=reason), _get_contacts(b.stage_id))
         send_reject({'reqId': req_id, 'name': b.name, 'email': b.email,
                      'title': b.event_title, 'reason': reason})
     except Exception as e:
@@ -182,7 +185,7 @@ def api_cancel():
     db.session.commit()
 
     try:
-        send_staff_notification('cancel', _booking_email_ctx(b), _get_contacts())
+        send_staff_notification('cancel', _booking_email_ctx(b), _get_contacts(b.stage_id))
         send_cancel(_booking_email_ctx(b))
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
@@ -206,7 +209,7 @@ def api_set_pending():
     db.session.commit()
 
     try:
-        send_staff_notification('revert', _booking_email_ctx(b), _get_contacts())
+        send_staff_notification('revert', _booking_email_ctx(b), _get_contacts(b.stage_id))
         send_pending(_booking_email_ctx(b))
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
@@ -276,7 +279,7 @@ def api_update_booking():
     db.session.commit()
 
     try:
-        send_staff_notification('update', _booking_email_ctx(b), _get_contacts())
+        send_staff_notification('update', _booking_email_ctx(b), _get_contacts(b.stage_id))
         send_update(_booking_email_ctx(b))
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
@@ -530,9 +533,11 @@ def api_add_contacts():
     added = 0
     for item in items:
         em = sanitize_email(item.get('email', ''))
+        stage_id = item.get('stageId') or None
         if is_valid_email(em):
-            if not Contact.query.filter_by(email=em).first():
-                db.session.add(Contact(email=em, name=item.get('name', '')))
+            exists = Contact.query.filter_by(email=em, stage_id=stage_id).first()
+            if not exists:
+                db.session.add(Contact(email=em, name=item.get('name', ''), stage_id=stage_id))
                 added += 1
     db.session.commit()
     return jsonify({'success': True, 'count': added})
