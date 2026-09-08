@@ -1,5 +1,5 @@
 {% extends 'base_public.html' %}
-{% block title %}نموذج تسليم الأجهزة{% endblock %}
+{% block title %}{{ 'نموذج تسليم الأجهزة' if lang == 'ar' else 'Device Handover Form' }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -7,51 +7,52 @@
     background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
     color: #fff;
     border-radius: var(--radius);
-    padding: 20px 24px;
+    padding: 22px 26px;
     margin-bottom: 20px;
   }
-  .checkout-header h2 { font-size: 1.15rem; font-weight: 800; margin-bottom: 10px; }
-  .checkout-meta { display: flex; flex-wrap: wrap; gap: 10px 24px; font-size: .85rem; }
+  .checkout-header h2 { font-size: 1.3rem; font-weight: 800; margin-bottom: 12px; }
+  .checkout-meta { display: flex; flex-wrap: wrap; gap: 12px 28px; font-size: .95rem; }
   .checkout-meta b { font-weight: 700; }
-  table.co-table { width: 100%; border-collapse: collapse; }
+  table.co-table { width: 100%; border-collapse: collapse; font-size: 1rem; }
   table.co-table th {
-    background: var(--bg); padding: 10px; text-align: right; font-size: .82rem;
+    background: var(--bg); padding: 12px; text-align: {{ 'right' if lang == 'ar' else 'left' }}; font-size: .95rem;
     border-bottom: 2px solid var(--border);
   }
-  table.co-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: .9rem; }
+  table.co-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); font-size: 1rem; }
   table.co-table select {
-    padding: 6px 8px; border: 1.5px solid var(--border); border-radius: 8px;
-    font-family: inherit; font-size: .85rem; min-width: 110px;
+    padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px;
+    font-family: inherit; font-size: .95rem; min-width: 130px;
   }
-  .seq-col { width: 40px; color: var(--muted); font-weight: 700; }
-  .no-students { text-align: center; padding: 30px; color: var(--muted); }
+  .seq-col { width: 44px; color: var(--muted); font-weight: 700; }
+  .no-students { text-align: center; padding: 34px; color: var(--muted); font-size: 1rem; }
+  .co-hint { color: var(--muted); font-size: .92rem; margin-bottom: 16px; line-height: 1.6; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="checkout-header">
-  <h2><i class="fas fa-laptop"></i> نموذج تسليم أجهزة الحاسوب</h2>
+  <h2><i class="fas fa-laptop"></i> {{ 'نموذج تسليم أجهزة الحاسوب' if lang == 'ar' else 'Laptop Handover Form' }}</h2>
   <div class="checkout-meta">
-    <span><b>رقم الحجز:</b> {{ b.req_id }}</span>
-    <span><b>المعلم/ة:</b> {{ b.name }}</span>
-    <span><b>المرحلة:</b> {{ b.stage_name }}</span>
-    <span><b>الصف:</b> {{ b.grade_name }}</span>
-    <span><b>الشعبة:</b> {{ b.section_name }}</span>
-    <span><b>الحصة:</b> {{ 'الحصة ' ~ b.period_number if b.period_number else '' }}</span>
-    <span><b>التاريخ:</b> {{ b.booking_date }}</span>
+    <span><b>{{ 'رقم الحجز' if lang == 'ar' else 'Request ID' }}:</b> {{ b.req_id }}</span>
+    <span><b>{{ 'المعلم/ة' if lang == 'ar' else 'Teacher' }}:</b> {{ b.name }}</span>
+    <span><b>{{ 'المرحلة' if lang == 'ar' else 'Stage' }}:</b> {{ b.stage_name }}</span>
+    <span><b>{{ 'الصف' if lang == 'ar' else 'Grade' }}:</b> {{ b.grade_name }}</span>
+    <span><b>{{ 'الشعبة' if lang == 'ar' else 'Section' }}:</b> {{ b.section_name }}</span>
+    <span><b>{{ 'الحصة' if lang == 'ar' else 'Period' }}:</b> {{ (('الحصة ' if lang == 'ar' else 'Period ') ~ b.period_number) if b.period_number else '' }}</span>
+    <span><b>{{ 'التاريخ' if lang == 'ar' else 'Date' }}:</b> {{ b.booking_date }}</span>
   </div>
 </div>
 
 <div class="card">
   <div id="alertBox"></div>
   {% if students %}
-  <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px">
-    اختر رقم اللابتوب لكل طالب استلم جهازاً. اترك الحقل فارغاً للطالب الغائب أو الذي لم يستلم جهازاً — التعبئة غير مشروطة بالعدد.
+  <p class="co-hint">
+    {{ 'اختر رقم اللابتوب لكل طالب استلم جهازاً. اترك الحقل فارغاً للطالب الغائب أو الذي لم يستلم جهازاً — التعبئة غير مشروطة بالعدد.' if lang == 'ar' else 'Select the laptop number for each student who received a device. Leave it blank for an absent student or one who did not receive a device — filling every row is not required.' }}
   </p>
   <div style="overflow-x:auto">
   <table class="co-table">
     <thead>
-      <tr><th class="seq-col">#</th><th>اسم الطالب</th><th>رقم اللابتوب</th></tr>
+      <tr><th class="seq-col">#</th><th>{{ 'اسم الطالب' if lang == 'ar' else 'Student Name' }}</th><th>{{ 'رقم اللابتوب' if lang == 'ar' else 'Laptop Number' }}</th></tr>
     </thead>
     <tbody>
       {% for s in students %}
@@ -60,7 +61,7 @@
         <td>{{ s.name }}</td>
         <td>
           <select data-student-id="{{ s.id }}">
-            <option value="">-- لم يُسلَّم --</option>
+            <option value="">-- {{ 'لم يُسلَّم' if lang == 'ar' else 'Not handed out' }} --</option>
             {% for n in range(1, laptop_count + 1) %}
             <option value="{{ n }}" {% if existing_map.get(s.id) == n %}selected{% endif %}>{{ n }}</option>
             {% endfor %}
@@ -71,13 +72,16 @@
     </tbody>
   </table>
   </div>
-  <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:18px" onclick="submitCheckout()" id="submitBtn">
-    <i class="fas fa-paper-plane"></i> إرسال
+  <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:20px" onclick="submitCheckout()" id="submitBtn">
+    <i class="fas fa-paper-plane"></i> {{ 'إرسال' if lang == 'ar' else 'Submit' }}
+  </button>
+  <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:10px" onclick="window.print()">
+    <i class="fas fa-print"></i> {{ 'طباعة' if lang == 'ar' else 'Print' }}
   </button>
   {% else %}
   <div class="no-students">
-    <i class="fas fa-users-slash" style="font-size:2rem;margin-bottom:10px;display:block"></i>
-    لا يوجد طلاب مسجّلون في هذه الشعبة بعد. يُرجى التواصل مع الإدارة لإضافة أسماء الطلاب.
+    <i class="fas fa-users-slash" style="font-size:2.2rem;margin-bottom:12px;display:block"></i>
+    {{ 'لا يوجد طلاب مسجّلون في هذه الشعبة بعد. يُرجى التواصل مع الإدارة لإضافة أسماء الطلاب.' if lang == 'ar' else 'No students are registered in this section yet. Please contact the administration to add student names.' }}
   </div>
   {% endif %}
 </div>
@@ -85,6 +89,8 @@
 
 {% block extra_scripts %}
 <script>
+const LANG = '{{ lang }}';
+const AR = LANG === 'ar';
 const REQ_ID = {{ b.req_id|tojson }};
 
 function showAlert(msg, type) {
@@ -101,7 +107,7 @@ async function submitCheckout() {
   }));
 
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> جاري الإرسال...';
+  btn.innerHTML = `<span class="spinner"></span> ${AR ? 'جاري الإرسال...' : 'Submitting...'}`;
 
   try {
     const res = await fetch('/api/submit-checkout', {
@@ -111,15 +117,15 @@ async function submitCheckout() {
     });
     const data = await res.json();
     if (data.success) {
-      showAlert('تم إرسال قائمة تسليم الأجهزة بنجاح ✓', 'success');
+      showAlert(AR ? 'تم إرسال قائمة تسليم الأجهزة بنجاح ✓' : 'Handover list submitted successfully ✓', 'success');
     } else {
-      showAlert(data.error || 'حدث خطأ', 'error');
+      showAlert(data.error || (AR ? 'حدث خطأ' : 'An error occurred'), 'error');
     }
   } catch (e) {
-    showAlert('خطأ في الاتصال', 'error');
+    showAlert(AR ? 'خطأ في الاتصال' : 'Connection error', 'error');
   }
   btn.disabled = false;
-  btn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال';
+  btn.innerHTML = `<i class="fas fa-paper-plane"></i> ${AR ? 'إرسال' : 'Submit'}`;
 }
 </script>
 {% endblock %}
