@@ -258,12 +258,12 @@ def submit_booking():
     try:
         contacts = [{'email': e} for e in get_all_contact_emails()]
         send_staff_notification('new', email_ctx, contacts)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
     try:
         send_confirm(email_ctx)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
 
     return jsonify({'success': True, 'reqId': req_id})
 
@@ -313,13 +313,13 @@ def api_cancel_by_user():
                  'section': b.section_name}
     try:
         send_cancel(email_ctx)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
     try:
         contacts = [{'email': e} for e in get_all_contact_emails()]
         send_staff_notification('cancel', email_ctx, contacts)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
 
     return jsonify({'success': True})
 
@@ -403,13 +403,13 @@ def api_amend_by_user():
                  'date': booking_date, 'startTime': b.start_time, 'endTime': b.end_time}
     try:
         send_update(email_ctx)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
     try:
         contacts = [{'email': e} for e in get_all_contact_emails()]
         send_staff_notification('update', email_ctx, contacts)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
 
     return jsonify({'success': True})
 
@@ -504,3 +504,40 @@ def api_submit_checkout():
 
     db.session.commit()
     return jsonify({'success': True})
+
+
+# ── Available periods for a given stage + date (avoid failed submissions) ──
+@public_bp.route('/api/available-periods')
+def api_available_periods():
+    stage_id = request.args.get('stageId')
+    booking_date = request.args.get('date', '')
+
+    if not stage_id or not booking_date:
+        return jsonify({'error': 'بيانات ناقصة'}), 400
+
+    stage = Stage.query.get(stage_id)
+    if not stage:
+        return jsonify({'error': 'المرحلة غير موجودة'}), 400
+
+    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
+
+    booked_numbers = {
+        b.period_number for b in Booking.query.filter(
+            Booking.trolley_code == stage.trolley_code,
+            Booking.booking_date == booking_date,
+            Booking.status.notin_(['rejected', 'cancelled'])
+        ).all()
+    }
+
+    result = []
+    for p in periods:
+        blk = check_blocked(booking_date, p.start_time or '', p.end_time or '', stage.trolley_code)
+        available = (p.number not in booked_numbers) and not blk['blocked']
+        result.append({
+            'id': p.id, 'number': p.number,
+            'label': p.label_ar or f'الحصة {p.number}',
+            'startTime': p.start_time or '', 'endTime': p.end_time or '',
+            'available': available,
+        })
+
+    return jsonify(result)
