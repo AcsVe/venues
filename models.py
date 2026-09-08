@@ -260,8 +260,9 @@ class BlockedPeriod(db.Model):
 class Contact(db.Model):
     __tablename__ = 'contacts'
     id         = db.Column(db.Integer, primary_key=True)
-    email      = db.Column(db.String(200), unique=True, nullable=False)
+    email      = db.Column(db.String(200), nullable=False)
     name       = db.Column(db.String(200))
+    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'))  # null = all stages
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -269,6 +270,7 @@ class Contact(db.Model):
             'id': self.id,
             'email': self.email,
             'name': self.name or '',
+            'stageId': self.stage_id,
             'date': self.created_at.strftime('%Y-%m-%d') if self.created_at else '',
         }
 
@@ -288,6 +290,13 @@ def init_db(app):
                 ('period_number', 'INTEGER'),
             ]:
                 conn.exec_driver_sql(f"ALTER TABLE bookings ADD COLUMN IF NOT EXISTS {col} {coltype}")
+            conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS stage_id INTEGER")
+            # Contacts can now repeat the same email across different stages —
+            # drop the old single-column unique constraint if present.
+            try:
+                conn.exec_driver_sql("ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_email_key")
+            except Exception:
+                pass
             conn.commit()
     except Exception:
         pass
