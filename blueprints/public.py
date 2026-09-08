@@ -256,7 +256,7 @@ def submit_booking():
         'date': booking_date, 'startTime': booking.start_time, 'endTime': booking.end_time,
     }
     try:
-        contacts = [{'email': e} for e in get_all_contact_emails()]
+        contacts = [{'email': e} for e in get_all_contact_emails(stage.id)]
         send_staff_notification('new', email_ctx, contacts)
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
@@ -316,7 +316,7 @@ def api_cancel_by_user():
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
     try:
-        contacts = [{'email': e} for e in get_all_contact_emails()]
+        contacts = [{'email': e} for e in get_all_contact_emails(b.stage_id)]
         send_staff_notification('cancel', email_ctx, contacts)
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
@@ -406,7 +406,7 @@ def api_amend_by_user():
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
     try:
-        contacts = [{'email': e} for e in get_all_contact_emails()]
+        contacts = [{'email': e} for e in get_all_contact_emails(b.stage_id)]
         send_staff_notification('update', email_ctx, contacts)
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
@@ -426,13 +426,15 @@ LAPTOP_COUNT = 25
 
 @public_bp.route('/checkout/<req_id>')
 def checkout_form(req_id):
+    lang = request.args.get('lang', 'ar')
     b = Booking.query.filter_by(req_id=req_id).first()
     if not b:
-        return render_template('error.html', msg='رقم الحجز غير موجود', lang='ar')
+        msg = 'رقم الحجز غير موجود' if lang == 'ar' else 'Booking number not found'
+        return render_template('error.html', msg=msg, lang=lang)
     if b.status != 'approved':
-        return render_template('error.html',
-                                msg='نموذج تسليم الأجهزة متاح فقط بعد اعتماد الحجز من الإدارة',
-                                lang='ar')
+        msg = ('نموذج تسليم الأجهزة متاح فقط بعد اعتماد الحجز من الإدارة' if lang == 'ar'
+               else 'The device handover form is only available after the booking is approved')
+        return render_template('error.html', msg=msg, lang=lang)
 
     students = (Student.query.filter_by(section_id=b.section_id)
                 .order_by(Student.name).all())
@@ -443,7 +445,7 @@ def checkout_form(req_id):
         for line in existing.lines:
             existing_map[line.student_id] = line.laptop_number
 
-    return render_template('checkout.html', b=b, students=students,
+    return render_template('checkout.html', b=b, students=students, lang=lang,
                            existing_map=existing_map, laptop_count=LAPTOP_COUNT)
 
 
