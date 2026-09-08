@@ -4,6 +4,78 @@ from datetime import datetime, date
 db = SQLAlchemy()
 
 
+class Teacher(db.Model):
+    """Roster of teachers, optionally linked to a stage — used as a reference
+    list / autocomplete source for the booking form (item 2 of the request)."""
+    __tablename__ = 'teachers'
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String(200), nullable=False)
+    email      = db.Column(db.String(200))
+    phone      = db.Column(db.String(50))
+    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'name': self.name, 'email': self.email or '',
+            'phone': self.phone or '', 'stageId': self.stage_id,
+        }
+
+
+class Student(db.Model):
+    """Roster of students, organized by stage/grade/section — used as the
+    prefilled source list for the laptop-checkout form (item 3/4)."""
+    __tablename__ = 'students'
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String(200), nullable=False)
+    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'), nullable=False)
+    grade_id   = db.Column(db.Integer, db.ForeignKey('grades.id'), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'name': self.name, 'stageId': self.stage_id,
+            'gradeId': self.grade_id, 'sectionId': self.section_id,
+        }
+
+
+class BookingCheckout(db.Model):
+    """One laptop-handover manifest per booking, filled by the teacher after
+    the booking is approved. Submitting is not conditioned on filling every
+    row — a teacher can leave absent students blank."""
+    __tablename__ = 'booking_checkouts'
+    id           = db.Column(db.Integer, primary_key=True)
+    booking_id   = db.Column(db.Integer, db.ForeignKey('bookings.id'), unique=True, nullable=False)
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    lines = db.relationship('CheckoutLine', backref='checkout', cascade='all, delete-orphan',
+                             order_by='CheckoutLine.seq')
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'bookingId': self.booking_id,
+            'submittedAt': self.submitted_at.isoformat() if self.submitted_at else '',
+            'lines': [l.to_dict() for l in self.lines],
+        }
+
+
+class CheckoutLine(db.Model):
+    __tablename__ = 'checkout_lines'
+    id             = db.Column(db.Integer, primary_key=True)
+    checkout_id    = db.Column(db.Integer, db.ForeignKey('booking_checkouts.id'), nullable=False)
+    seq            = db.Column(db.Integer, nullable=False)
+    student_id     = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    student_name   = db.Column(db.String(200))   # snapshot, survives roster edits/deletes
+    laptop_number  = db.Column(db.Integer)        # 1..25, nullable = not handed out
+
+    def to_dict(self):
+        return {
+            'seq': self.seq, 'studentId': self.student_id,
+            'studentName': self.student_name, 'laptopNumber': self.laptop_number,
+        }
+
+
 class Booking(db.Model):
     __tablename__ = 'bookings'
     id            = db.Column(db.Integer, primary_key=True)
@@ -221,7 +293,7 @@ def init_db(app):
         pass
 
     if Stage.query.count() == 0:
-        basic = Stage(name_ar='المرحلة الأساسية', name_en='Basic Stage',
+        basic = Stage(name_ar='المرحلة الأساسية', name_en='Primary Stage',
                        trolley_code='TROLLEY-A', active=True, sort_order=1)
         secondary = Stage(name_ar='المرحلة الثانوية', name_en='Secondary Stage',
                            trolley_code='TROLLEY-B', active=True, sort_order=2)

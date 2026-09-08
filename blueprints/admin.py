@@ -2,7 +2,8 @@ from datetime import datetime, date
 from functools import wraps
 from flask import (Blueprint, render_template, request, jsonify,
                    session, redirect, url_for, current_app)
-from models import db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact
+from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact,
+                    Teacher, Student, BookingCheckout, CheckoutLine)
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
                             get_all_contact_emails, check_conflict, check_blocked)
 from utils.email_utils import (send_approve, send_reject, send_cancel,
@@ -43,15 +44,17 @@ def login_required(f):
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
+    lang = request.args.get('lang') or request.form.get('lang', 'ar')
     if request.method == 'POST':
         u = request.form.get('username', '')
         p = request.form.get('password', '')
         if (u == current_app.config['ADMIN_USER'] and
                 p == current_app.config['ADMIN_PASS']):
             session['admin_logged_in'] = True
+            session['admin_lang'] = lang
             return redirect(url_for('admin.dashboard'))
-        error = 'بيانات خاطئة'
-    return render_template('admin/login.html', error=error)
+        error = 'بيانات خاطئة' if lang == 'ar' else 'Invalid credentials'
+    return render_template('admin/login.html', error=error, lang=lang)
 
 
 @admin_bp.route('/logout')
@@ -63,7 +66,8 @@ def logout():
 @admin_bp.route('/')
 @login_required
 def dashboard():
-    return render_template('admin/dashboard.html')
+    lang = session.get('admin_lang', 'ar')
+    return render_template('admin/dashboard.html', lang=lang)
 
 
 # ── Bookings API ──────────────────────────────────────────────────────────
@@ -112,9 +116,12 @@ def api_approve():
     b.action_date = datetime.utcnow()
     db.session.commit()
 
+    base_url = current_app.config.get('BASE_URL', '')
+    checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url else ''
+
     try:
         send_staff_notification('approve', _booking_email_ctx(b), _get_contacts())
-        send_approve(_booking_email_ctx(b))
+        send_approve(_booking_email_ctx(b, checkoutUrl=checkout_url))
     except Exception:
         pass
 
@@ -540,3 +547,147 @@ def api_report_data():
         Booking.status.notin_(['rejected', 'cancelled'])
     ).all()
     return jsonify([b.to_dict() for b in bookings])
+
+
+# ── Teachers API ──────────────────────────────────────────────────────────
+@admin_bp.route('/api/teachers')
+@login_required
+def api_teachers():
+    stage_id = request.args.get('stageId')
+    q = Teacher.query
+    if stage_id:
+        q = q.filter_by(stage_id=stage_id)
+    teachers = q.order_by(Teacher.name).all()
+    return jsonify([t.to_dict() for t in teachers])
+
+
+@admin_bp.route('/api/add-teacher', methods=['POST'])
+@login_required
+def api_add_teacher():
+    data = request.get_json(silent=True) or {}
+    if not data.get('name'):
+        return jsonify({'success': False, 'error': 'اسم المعلم مطلوب'}), 400
+    tch = Teacher(name=data['name'], email=sanitize_email(data.get('email', '')),
+                  phone=data.get('phone', ''), stage_id=data.get('stageId') or None)
+    db.session.add(tch)
+    db.session.commit()
+    return jsonify({'success': True, 'id': tch.id})
+
+
+@admin_bp.route('/api/bulk-add-teachers', methods=['POST'])
+@login_required
+def api_bulk_add_teachers():
+    """Bulk import from a pasted/uploaded CSV-like list.
+    Each item: {name, email, phone, stageId}"""
+    data  = request.get_json(silent=True) or {}
+    items = data.get('list', [])
+    added = 0
+    for item in items:
+        name = (item.get('name') or '').strip()
+        if not name:
+            continue
+        db.session.add(Teacher(
+            name=name, email=sanitize_email(item.get('email', '')),
+            phone=(item.get('phone') or '').strip(),
+            stage_id=item.get('stageId') or None,
+        ))
+        added += 1
+    db.session.commit()
+    return jsonify({'success': True, 'count': added})
+
+
+@admin_bp.route('/api/delete-teacher', methods=['POST'])
+@login_required
+def api_delete_teacher():
+    data = request.get_json(silent=True) or {}
+    tch = Teacher.query.get(data.get('id'))
+    if not tch:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    db.session.delete(tch)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# ── Students API ──────────────────────────────────────────────────────────
+@admin_bp.route('/api/students')
+@login_required
+def api_students():
+    section_id = request.args.get('sectionId')
+    grade_id = request.args.get('gradeId')
+    stage_id = request.args.get('stageId')
+    q = Student.query
+    if section_id:
+        q = q.filter_by(section_id=section_id)
+    elif grade_id:
+        q = q.filter_by(grade_id=grade_id)
+    elif stage_id:
+        q = q.filter_by(stage_id=stage_id)
+    students = q.order_by(Student.name).all()
+    return jsonify([s.to_dict() for s in students])
+
+
+@admin_bp.route('/api/add-student', methods=['POST'])
+@login_required
+def api_add_student():
+    data = request.get_json(silent=True) or {}
+    if not data.get('name') or not data.get('sectionId'):
+        return jsonify({'success': False, 'error': 'اسم الطالب والشعبة مطلوبان'}), 400
+    section = Section.query.get(data['sectionId'])
+    if not section:
+        return jsonify({'success': False, 'error': 'الشعبة غير موجودة'}), 400
+    stu = Student(name=data['name'], stage_id=section.grade.stage_id,
+                  grade_id=section.grade_id, section_id=section.id)
+    db.session.add(stu)
+    db.session.commit()
+    return jsonify({'success': True, 'id': stu.id})
+
+
+@admin_bp.route('/api/bulk-add-students', methods=['POST'])
+@login_required
+def api_bulk_add_students():
+    """Each item: {name, sectionId}"""
+    data  = request.get_json(silent=True) or {}
+    items = data.get('list', [])
+    added = 0
+    errors = []
+    for item in items:
+        name = (item.get('name') or '').strip()
+        section_id = item.get('sectionId')
+        if not name or not section_id:
+            continue
+        section = Section.query.get(section_id)
+        if not section:
+            errors.append(name)
+            continue
+        db.session.add(Student(
+            name=name, stage_id=section.grade.stage_id,
+            grade_id=section.grade_id, section_id=section.id,
+        ))
+        added += 1
+    db.session.commit()
+    return jsonify({'success': True, 'count': added, 'errors': errors})
+
+
+@admin_bp.route('/api/delete-student', methods=['POST'])
+@login_required
+def api_delete_student():
+    data = request.get_json(silent=True) or {}
+    stu = Student.query.get(data.get('id'))
+    if not stu:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    db.session.delete(stu)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# ── Checkout (laptop handover) viewing for audit ──────────────────────────
+@admin_bp.route('/api/checkout/<req_id>')
+@login_required
+def api_get_checkout(req_id):
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    checkout = BookingCheckout.query.filter_by(booking_id=b.id).first()
+    if not checkout:
+        return jsonify({'success': True, 'checkout': None})
+    return jsonify({'success': True, 'checkout': checkout.to_dict()})

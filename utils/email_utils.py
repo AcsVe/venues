@@ -9,7 +9,7 @@ def _send(to_email, to_name, subject, html_body, bcc_list=None):
         return False
 
     sender_email = current_app.config.get('SENDER_EMAIL', '')
-    sender_name  = current_app.config.get('SENDER_NAME', 'ACS Booking')
+    sender_name  = current_app.config.get('SENDER_NAME', 'مدرسة الرائد العربي')
     org_ar       = current_app.config.get('ORG_AR', '')
 
     payload = {
@@ -51,7 +51,7 @@ def _class_label(data):
 
 def _base_html(content, color='#247680'):
     logo = current_app.config.get('LOGO_URL', '')
-    org  = current_app.config.get('ORG_AR', 'Arab Cultural Society')
+    org  = current_app.config.get('ORG_AR', 'مدرسة الرائد العربي')
     return f"""
 <div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
   <div style="background:{color};padding:20px 24px;text-align:center">
@@ -87,21 +87,35 @@ def send_confirm(data):
     <p style="color:#555">سيتم إشعارك بقرار الإدارة في أقرب وقت ممكن. احتفظ برقم الطلب للاستعلام والتعديل.</p>
     """
     return _send(data['email'], data['name'],
-                 f"[ACS] تم استلام طلب الحجز #{data['reqId']}",
+                 f"[الرائد العربي] تم استلام طلب الحجز #{data['reqId']}",
                  _base_html(content))
 
 
 def send_approve(data):
+    checkout_url = data.get('checkoutUrl', '')
+    checkout_block = f"""
+    <div style="background:#eef7f0;border:1.5px solid #cfead6;border-radius:10px;padding:14px 16px;margin:16px 0">
+      <div style="font-weight:700;color:#1f7a44;margin-bottom:6px">📋 نموذج تسليم الأجهزة</div>
+      <div style="font-size:.9rem;color:#333;margin-bottom:10px">
+        بعد استخدام العربة، يُرجى تعبئة نموذج تسليم الأجهزة لتسجيل رقم اللابتوب الذي استلمه كل طالب.
+      </div>
+      <a href="{checkout_url}" style="display:inline-block;background:#27ae60;color:#fff;padding:9px 20px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem">
+        فتح نموذج تسليم الأجهزة
+      </a>
+    </div>
+    """ if checkout_url else ''
+
     content = f"""
     <h2 style="color:#27ae60;margin-top:0">✅ تمت الموافقة على حجزك</h2>
     <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، يسعدنا إخبارك بأنه تمت الموافقة على طلب حجز العربة.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">
       {_booking_table_rows(data)}
     </table>
+    {checkout_block}
     <p style="color:#555">نتمنى لكم حصة مفيدة. في حال الحاجة لأي تعديل يُرجى التواصل معنا.</p>
     """
     return _send(data['email'], data['name'],
-                 f"[ACS] ✅ تمت الموافقة على حجزك #{data['reqId']}",
+                 f"[الرائد العربي] ✅ تمت الموافقة على حجزك #{data['reqId']}",
                  _base_html(content, '#27ae60'),
                  bcc_list=data.get('bcc', []))
 
@@ -118,7 +132,7 @@ def send_reject(data):
     <p style="color:#555">يمكنك تقديم طلب جديد باختيار تاريخ أو حصة أخرى. نعتذر عن الإزعاج.</p>
     """
     return _send(data['email'], data['name'],
-                 f"[ACS] بخصوص طلب الحجز #{data['reqId']}",
+                 f"[الرائد العربي] بخصوص طلب الحجز #{data['reqId']}",
                  _base_html(content, '#c0392b'))
 
 
@@ -133,7 +147,7 @@ def send_cancel(data):
     </table>
     """
     return _send(data['email'], data['name'],
-                 f"[ACS] إلغاء الحجز #{data['reqId']}",
+                 f"[الرائد العربي] إلغاء الحجز #{data['reqId']}",
                  _base_html(content, '#e67e22'))
 
 
@@ -147,7 +161,7 @@ def send_update(data):
     <p style="color:#555">إذا تم التعديل على حجز معتمد، سيُعاد الحجز إلى قيد المراجعة وسيتم إخطارك بالقرار.</p>
     """
     return _send(data['email'], data['name'],
-                 f"[ACS] تعديل الحجز #{data['reqId']}",
+                 f"[الرائد العربي] تعديل الحجز #{data['reqId']}",
                  _base_html(content),
                  bcc_list=data.get('bcc', []))
 
@@ -161,7 +175,7 @@ def send_pending(data):
     </table>
     """
     return _send(data['email'], data['name'],
-                 f"[ACS] إعادة مراجعة طلب الحجز #{data['reqId']}",
+                 f"[الرائد العربي] إعادة مراجعة طلب الحجز #{data['reqId']}",
                  _base_html(content, '#e67e22'),
                  bcc_list=data.get('bcc', []))
 

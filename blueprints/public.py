@@ -2,7 +2,8 @@ import os
 from datetime import date, datetime
 from flask import (Blueprint, render_template, request, jsonify,
                    redirect, url_for, send_from_directory, current_app)
-from models import db, Booking, Stage, Grade, Section, Period, BlockedPeriod
+from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod,
+                    Student, Teacher, BookingCheckout, CheckoutLine)
 from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
                             get_blocked_for_date, is_valid_email, sanitize_email)
@@ -119,7 +120,8 @@ def book():
     if pre_date:
         blk = check_blocked(pre_date, '', '', '')
         if blk['blocked'] and blk.get('fullBlock'):
-            msg = f'هذا اليوم غير متاح بالكامل: {blk["reason"]}'
+            msg = (f'هذا اليوم غير متاح بالكامل: {blk["reason"]}' if lang == 'ar'
+                   else f'This day is fully unavailable: {blk["reason"]}')
             return render_template('error.html', msg=msg, lang=lang)
 
     stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
@@ -306,10 +308,16 @@ def api_cancel_by_user():
     b.action_date = datetime.utcnow()
     db.session.commit()
 
+    email_ctx = {'reqId': req_id, 'name': b.name, 'email': b.email,
+                 'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
+                 'section': b.section_name}
     try:
-        send_cancel({'reqId': req_id, 'name': b.name, 'email': b.email,
-                     'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
-                     'section': b.section_name})
+        send_cancel(email_ctx)
+    except Exception:
+        pass
+    try:
+        contacts = [{'email': e} for e in get_all_contact_emails()]
+        send_staff_notification('cancel', email_ctx, contacts)
     except Exception:
         pass
 
@@ -388,13 +396,111 @@ def api_amend_by_user():
 
     db.session.commit()
 
+    email_ctx = {'reqId': req_id, 'name': b.name, 'email': b.email,
+                 'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
+                 'section': b.section_name,
+                 'periodLabel': period.label_ar or f'الحصة {period.number}',
+                 'date': booking_date, 'startTime': b.start_time, 'endTime': b.end_time}
     try:
-        send_update({'reqId': req_id, 'name': b.name, 'email': b.email,
-                     'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
-                     'section': b.section_name,
-                     'periodLabel': period.label_ar or f'الحصة {period.number}',
-                     'date': booking_date, 'startTime': b.start_time, 'endTime': b.end_time})
+        send_update(email_ctx)
+    except Exception:
+        pass
+    try:
+        contacts = [{'email': e} for e in get_all_contact_emails()]
+        send_staff_notification('update', email_ctx, contacts)
     except Exception:
         pass
 
+    return jsonify({'success': True})
+
+
+# ── Teacher name autocomplete (for the booking form) ──────────────────────
+@public_bp.route('/api/teacher-names')
+def api_teacher_names():
+    names = [t.name for t in Teacher.query.order_by(Teacher.name).all()]
+    return jsonify(names)
+
+
+# ── Laptop handover / checkout form (per approved booking) ────────────────
+LAPTOP_COUNT = 25
+
+@public_bp.route('/checkout/<req_id>')
+def checkout_form(req_id):
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return render_template('error.html', msg='رقم الحجز غير موجود', lang='ar')
+    if b.status != 'approved':
+        return render_template('error.html',
+                                msg='نموذج تسليم الأجهزة متاح فقط بعد اعتماد الحجز من الإدارة',
+                                lang='ar')
+
+    students = (Student.query.filter_by(section_id=b.section_id)
+                .order_by(Student.name).all())
+
+    existing = BookingCheckout.query.filter_by(booking_id=b.id).first()
+    existing_map = {}
+    if existing:
+        for line in existing.lines:
+            existing_map[line.student_id] = line.laptop_number
+
+    return render_template('checkout.html', b=b, students=students,
+                           existing_map=existing_map, laptop_count=LAPTOP_COUNT)
+
+
+@public_bp.route('/api/submit-checkout', methods=['POST'])
+def api_submit_checkout():
+    data = request.get_json(silent=True) or {}
+    req_id = data.get('reqId', '')
+    entries = data.get('entries', [])  # [{studentId, laptopNumber}]
+
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'الحجز غير موجود'}), 404
+    if b.status != 'approved':
+        return jsonify({'success': False, 'error': 'الحجز غير معتمد بعد'}), 400
+
+    # Validate laptop numbers: within range, and no duplicate assignment
+    seen_numbers = {}
+    clean_entries = []
+    for e in entries:
+        try:
+            student_id = int(e.get('studentId'))
+        except (TypeError, ValueError):
+            continue
+        laptop_number = e.get('laptopNumber')
+        if laptop_number in (None, '', 'null'):
+            clean_entries.append((student_id, None))
+            continue
+        try:
+            laptop_number = int(laptop_number)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'رقم لابتوب غير صحيح'}), 400
+        if not (1 <= laptop_number <= LAPTOP_COUNT):
+            return jsonify({'success': False, 'error': f'رقم اللابتوب يجب أن يكون بين 1 و {LAPTOP_COUNT}'}), 400
+        if laptop_number in seen_numbers:
+            return jsonify({'success': False,
+                            'error': f'رقم اللابتوب {laptop_number} مستخدم لأكثر من طالب'}), 400
+        seen_numbers[laptop_number] = student_id
+        clean_entries.append((student_id, laptop_number))
+
+    checkout = BookingCheckout.query.filter_by(booking_id=b.id).first()
+    if checkout:
+        CheckoutLine.query.filter_by(checkout_id=checkout.id).delete()
+    else:
+        checkout = BookingCheckout(booking_id=b.id)
+        db.session.add(checkout)
+        db.session.flush()
+    checkout.submitted_at = datetime.utcnow()
+
+    students_map = {s.id: s.name for s in Student.query.filter(
+        Student.id.in_([sid for sid, _ in clean_entries])).all()}
+
+    for i, (student_id, laptop_number) in enumerate(clean_entries, start=1):
+        db.session.add(CheckoutLine(
+            checkout_id=checkout.id, seq=i, student_id=student_id,
+            student_name=students_map.get(student_id, ''),
+            laptop_number=laptop_number,
+        ))
+
+    db.session.commit()
     return jsonify({'success': True})

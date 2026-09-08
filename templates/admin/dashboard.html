@@ -9,28 +9,34 @@
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #247680; --primary-dark: #1a5c64; --accent: #EBB37B;
+      --primary: #FF5733; --primary-dark: #C43D1F; --primary-light: #FF8563;
+      --secondary: #2E4E7A; --secondary-dark: #1B3358; --secondary-light: #5A7CA8;
+      --accent: #EBB37B;
       --bg: #f0f4f5; --white: #fff; --text: #1e2a2b; --muted: #6b7c7e;
       --border: #d4e4e6; --radius: 12px; --sidebar: 240px;
-      --shadow: 0 2px 12px rgba(36,118,128,.10);
+      --shadow: 0 2px 12px rgba(255,87,51,.10);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
     /* Sidebar */
     .sidebar {
       width: var(--sidebar); min-height: 100vh;
-      background: linear-gradient(180deg, var(--primary-dark), var(--primary));
+      background: linear-gradient(180deg, var(--secondary-dark), var(--secondary));
       color: #fff; display: flex; flex-direction: column;
       position: fixed; top: 0; right: 0; bottom: 0; z-index: 150;
       overflow-y: auto;
     }
     .sidebar-logo {
-      padding: 20px 16px;
+      padding: 18px 16px;
       border-bottom: 1px solid rgba(255,255,255,.15);
-      display: flex; align-items: center; gap: 10px;
+      display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
     }
-    .sidebar-logo img { height: 40px; border-radius: 8px; }
-    .sidebar-logo-text { font-size: .9rem; font-weight: 700; line-height: 1.3; }
+    .sidebar-logo-chip {
+      background: #fff; border-radius: 8px; padding: 6px 10px;
+      display: flex; align-items: center; width: 100%; box-sizing: border-box;
+    }
+    .sidebar-logo-chip img { height: 34px; max-width: 100%; object-fit: contain; display: block; }
+    .sidebar-logo-text { font-size: .8rem; font-weight: 600; opacity: .8; }
     .sidebar-nav { flex: 1; padding: 12px 0; }
     .nav-item {
       display: flex; align-items: center; gap: 10px;
@@ -127,6 +133,7 @@
     .form-group { margin-bottom: 14px; }
     .form-group label { display: block; font-weight: 700; margin-bottom: 5px; font-size: .88rem; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-grid.quad { grid-template-columns: repeat(4, 1fr); }
     input[type=text], input[type=email], input[type=tel], input[type=date], input[type=time],
     select, textarea {
       width: 100%; padding: 8px 11px; border: 1.5px solid var(--border);
@@ -135,7 +142,7 @@
     }
     input:focus, select:focus, textarea:focus {
       outline: none; border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(36,118,128,.1);
+      box-shadow: 0 0 0 3px rgba(255,87,51,.1);
     }
     textarea { resize: vertical; min-height: 70px; }
     /* Modal */
@@ -163,7 +170,7 @@
     .bar-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .bar-label { min-width: 120px; font-size: .82rem; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
     .bar-track { flex: 1; background: #f0f7f8; border-radius: 6px; height: 24px; overflow: hidden; }
-    .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #2a8f9e); border-radius: 6px; display: flex; align-items: center; padding-right: 6px; transition: width .5s; }
+    .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-light)); border-radius: 6px; display: flex; align-items: center; padding-right: 6px; transition: width .5s; }
     .bar-fill span { color: #fff; font-size: .75rem; font-weight: 700; }
     .period-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 14px; }
     .period-table th { background: #f0f7f8; padding: 8px 10px; font-weight: 700; color: var(--primary); }
@@ -173,7 +180,7 @@
       display: none;
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      background: linear-gradient(180deg, var(--primary-dark), #143f45);
+      background: linear-gradient(180deg, var(--secondary-dark), #0D1B2A);
       z-index: 200;
       padding: 6px 0 8px;
       box-shadow: 0 -3px 16px rgba(0,0,0,.2);
@@ -243,7 +250,7 @@
       .stat-card { padding: 12px; }
       .stat-val { font-size: 1.6rem; }
     }
-    .spinner { display: inline-block; width: 16px; height: 16px; border: 2.5px solid rgba(36,118,128,.3); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2.5px solid rgba(255,87,51,.3); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
     @media (max-width: 768px) {
       .sidebar { transform: translateX(110%); transition: transform .28s ease; width: 82vw !important; max-width: 290px; }
       .sidebar.open { transform: translateX(0); }
@@ -278,19 +285,25 @@
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 <nav class="sidebar" id="sidebar">
   <div class="sidebar-logo">
-    {% if config.LOGO_URL %}<img src="{{ config.LOGO_URL }}" alt="logo">{% endif %}
-    <div class="sidebar-logo-text">{{ config.ORG_AR }}<br><small style="font-weight:400;opacity:.75">لوحة التحكم</small></div>
+    {% if config.LOGO_URL %}
+    <div class="sidebar-logo-chip"><img src="{{ config.LOGO_URL }}" alt="logo"></div>
+    {% endif %}
+    <div class="sidebar-logo-text">لوحة التحكم</div>
   </div>
   <div class="sidebar-nav">
     <button class="nav-item active" onclick="showTab('bookings')"><i class="fas fa-calendar-check"></i> طلبات الحجز <span class="nav-badge" id="nbPending">0</span></button>
     <button class="nav-item" onclick="showTab('halls')"><i class="fas fa-laptop"></i> المراحل والعربات</button>
     <button class="nav-item" onclick="showTab('blocked')"><i class="fas fa-ban"></i> غير متاح</button>
     <button class="nav-item" onclick="showTab('contacts')"><i class="fas fa-address-book"></i> جهات الاتصال</button>
+    <button class="nav-item" onclick="showTab('teachers')"><i class="fas fa-chalkboard-teacher"></i> المعلمون</button>
+    <button class="nav-item" onclick="showTab('students')"><i class="fas fa-user-graduate"></i> الطلاب</button>
     <button class="nav-item" onclick="showTab('reports')"><i class="fas fa-chart-bar"></i> التقارير</button>
     <button class="nav-item" onclick="showTab('calview')"><i class="fas fa-calendar-alt"></i> التقويم</button>
   </div>
   <div class="sidebar-footer">
     <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
+    <br><br>
+    <a href="#" onclick="toggleLang();return false;"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></a>
     <br><br>
     <a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> خروج</a>
   </div>
@@ -304,6 +317,7 @@
       <h1 id="pageTitle">طلبات الحجز</h1>
     </div>
     <div class="topbar-right">
+      <button class="btn btn-outline btn-sm" onclick="toggleLang()"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></button>
       <button class="btn btn-outline btn-sm" onclick="refreshAll()"><i class="fas fa-sync"></i> تحديث</button>
       <span style="font-size:.85rem;color:var(--muted)" id="clockEl"></span>
     </div>
@@ -445,7 +459,79 @@
       </div>
     </div>
 
-    <!-- ── REPORTS TAB ── -->
+    <!-- ── TEACHERS TAB ── -->
+    <div class="tab-panel" id="tab-teachers">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-chalkboard-teacher"></i> إضافة معلم/ة</div>
+        <div class="form-grid">
+          <div class="form-group"><label>الاسم <span style="color:#c0392b">*</span></label><input type="text" id="tcName"></div>
+          <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="tcEmail" dir="ltr"></div>
+          <div class="form-group"><label>الجوال</label><input type="tel" id="tcPhone" dir="ltr"></div>
+          <div class="form-group"><label>المرحلة (اختياري)</label><select id="tcStage"><option value="">--</option></select></div>
+        </div>
+        <button class="btn btn-primary" onclick="addTeacher()"><i class="fas fa-plus"></i> إضافة</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-upload"></i> رفع قائمة (CSV/TXT)</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">ملف CSV أو TXT — كل سطر: <code>name,email,phone</code></p>
+        <input type="file" id="tcFile" accept=".csv,.txt" onchange="uploadTeachers(this)">
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-list"></i> قائمة المعلمين</div>
+        <div style="margin-bottom:10px">
+          <select id="tcFilterStage" onchange="loadTeachers()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+            <option value="">كل المراحل</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>الاسم</th><th>البريد</th><th>الجوال</th><th>المرحلة</th><th>حذف</th></tr></thead>
+            <tbody id="teachersTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── STUDENTS TAB ── -->
+    <div class="tab-panel" id="tab-students">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-user-graduate"></i> إضافة طالب/ة</div>
+        <div class="form-grid quad">
+          <div class="form-group"><label>الاسم <span style="color:#c0392b">*</span></label><input type="text" id="stuName"></div>
+          <div class="form-group"><label>المرحلة</label><select id="stuStage" onchange="onStuStageChange()"><option value="">--</option></select></div>
+          <div class="form-group"><label>الصف</label><select id="stuGrade" onchange="onStuGradeChange()"><option value="">--</option></select></div>
+          <div class="form-group"><label>الشعبة</label><select id="stuSection"><option value="">--</option></select></div>
+        </div>
+        <button class="btn btn-primary" onclick="addStudent()"><i class="fas fa-plus"></i> إضافة</button>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-upload"></i> رفع قائمة (CSV/TXT)</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">
+          حدّد المرحلة/الصف/الشعبة أولاً، ثم ارفع ملف فيه اسم طالب واحد بكل سطر — سيُضافوا جميعاً لنفس الشعبة.
+        </p>
+        <div class="form-grid quad" style="margin-bottom:10px">
+          <select id="stuUpStage" onchange="onStuUpStageChange()"><option value="">المرحلة</option></select>
+          <select id="stuUpGrade" onchange="onStuUpGradeChange()"><option value="">الصف</option></select>
+          <select id="stuUpSection"><option value="">الشعبة</option></select>
+          <input type="file" id="stuFile" accept=".csv,.txt" onchange="uploadStudents(this)">
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-list"></i> قائمة الطلاب</div>
+        <div class="form-grid quad" style="margin-bottom:10px">
+          <select id="stuFilterStage" onchange="onStuFilterStageChange()"><option value="">كل المراحل</option></select>
+          <select id="stuFilterGrade" onchange="onStuFilterGradeChange()"><option value="">كل الصفوف</option></select>
+          <select id="stuFilterSection" onchange="loadStudents()"><option value="">كل الشعب</option></select>
+          <div></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>الاسم</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>حذف</th></tr></thead>
+            <tbody id="studentsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     <div class="tab-panel" id="tab-calview">
   <div class="card">
     <div class="card-title"><i class="fas fa-calendar-alt"></i> التقويم المرئي</div>
@@ -471,6 +557,8 @@
         <div class="stat-card"><div class="stat-val" id="rs-halls" style="font-size:1rem">-</div><div class="stat-label">أكثر مرحلة استخداماً</div></div>
         <div class="stat-card"><div class="stat-val" id="rs-month" style="font-size:1rem">-</div><div class="stat-label">أكثر شهر</div></div>
         <div class="stat-card"><div class="stat-val" id="rs-hours">-</div><div class="stat-label">إجمالي الحصص</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-period" style="font-size:1rem">-</div><div class="stat-label">أكثر حصة حجزاً</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-cancelled-by" style="font-size:1rem">-</div><div class="stat-label">الأكثر إلغاءً</div></div>
       </div>
 
       <!-- Charts Row -->
@@ -500,7 +588,8 @@
             <label>تجميع حسب</label>
             <select id="anaDim">
               <option value="hall">المراحل</option>
-              <option value="person">الأشخاص</option>
+              <option value="person">المعلمون</option>
+              <option value="period">الحصص</option>
               <option value="month">الأشهر</option>
               <option value="dow">أيام الأسبوع</option>
             </select>
@@ -511,6 +600,8 @@
               <option value="all">الكل</option>
               <option value="approved">المعتمدة فقط</option>
               <option value="pending">قيد المراجعة فقط</option>
+              <option value="cancelled">الملغية فقط</option>
+              <option value="rejected">المرفوضة فقط</option>
             </select>
           </div>
           <div class="form-group"><label>من تاريخ</label><input type="date" id="anaFrom"></div>
@@ -587,6 +678,258 @@ let selectedIds = new Set();
 let STRUCTURE = [];   // stages → grades → sections
 let PERIODS = [];
 
+// ── i18n (bilingual admin panel; layout stays RTL, only text swaps) ──
+const I18N_EN = {
+  "طلبات الحجز": "Bookings",
+  "المراحل والعربات": "Stages & Trolleys",
+  "المراحل والعربات، الصفوف والشعب": "Stages, Trolleys, Grades & Sections",
+  "غير متاح": "Unavailable",
+  "الفترات المحظورة": "Blocked Periods",
+  "الفترات غير المتاحة": "Unavailable Periods",
+  "جهات الاتصال": "Contacts",
+  "التقارير": "Reports",
+  "التقويم": "Calendar",
+  "التقويم المرئي": "Visual Calendar",
+  "الروزنامة العامة": "Public Calendar",
+  "خروج": "Logout",
+  "تحديث": "Refresh",
+  "لوحة التحكم": "Admin Panel",
+  "إجمالي الطلبات": "Total Bookings",
+  "قيد المراجعة": "Pending",
+  "معتمد": "Approved",
+  "مرفوض": "Rejected",
+  "ملغي": "Cancelled",
+  "الكل": "All",
+  "بحث...": "Search...",
+  "🔍 بحث...": "🔍 Search...",
+  "حذف المحدد": "Delete Selected",
+  "طباعة": "Print",
+  "رقم الطلب": "Request ID",
+  "الاسم": "Name",
+  "الموضوع": "Subject",
+  "المرحلة": "Stage",
+  "الصف": "Grade",
+  "الشعبة": "Section",
+  "الحصة": "Period",
+  "التاريخ": "Date",
+  "الحالة": "Status",
+  "الإجراءات": "Actions",
+  "إضافة مرحلة جديدة": "Add New Stage",
+  "اسم المرحلة (عربي)": "Stage name (Arabic)",
+  "الاسم (إنجليزي)": "Name (English)",
+  "معرّف العربة (Trolley)": "Trolley ID",
+  "مرحلة فعالة": "Active stage",
+  "إضافة مرحلة": "Add Stage",
+  "الحصص (مشتركة بين المرحلتين)": "Periods (shared by both stages)",
+  "رقم الحصة": "Period number",
+  "اسم الحصة": "Period name",
+  "من الساعة (اختياري)": "From time (optional)",
+  "إلى الساعة (اختياري)": "To time (optional)",
+  "إضافة حصة": "Add Period",
+  "من": "From",
+  "إلى": "To",
+  "إضافة فترة محظورة": "Add Blocked Period",
+  "من تاريخ": "From date",
+  "إلى تاريخ": "To date",
+  "المرحلة/العربة (اتركه فارغاً لحظر الكل)": "Stage/trolley (leave blank to block all)",
+  "كل المراحل": "All Stages",
+  "السبب": "Reason",
+  "إضافة": "Add",
+  "إضافة جهة اتصال": "Add Contact",
+  "البريد الإلكتروني": "Email",
+  "الاسم (اختياري)": "Name (optional)",
+  "رفع قائمة (CSV/TXT)": "Upload list (CSV/TXT)",
+  "ملف CSV أو TXT — كل سطر:": "A CSV or TXT file — each line:",
+  "أو": "or",
+  "فقط": "only",
+  "قائمة جهات الاتصال": "Contacts List",
+  "تاريخ الإضافة": "Date Added",
+  "حذف": "Delete",
+  "أكثر مرحلة استخداماً": "Most-used stage",
+  "أكثر شهر": "Busiest month",
+  "إجمالي الحصص": "Total Periods",
+  "توزيع الحالات": "Status Distribution",
+  "الحجوزات الشهرية": "Monthly Bookings",
+  "مقارنة المراحل (العربات)": "Stage (Trolley) Comparison",
+  "مستكشف البيانات": "Data Explorer",
+  "تجميع حسب": "Group by",
+  "المراحل": "Stages",
+  "الأشخاص": "People",
+  "الأشهر": "Months",
+  "أيام الأسبوع": "Days of week",
+  "المعتمدة فقط": "Approved only",
+  "قيد المراجعة فقط": "Pending only",
+  "تحليل": "Analyze",
+  "الحجوزات": "Bookings",
+  "معتمدة": "Approved",
+  "عدد الحصص": "Number of periods",
+  "مرفوضة/ملغية": "Rejected/Cancelled",
+  "مرفوض/ملغي": "Rejected/Cancelled",
+  "تعديل الحجز": "Edit Booking",
+  "البريد": "Email",
+  "الجوال": "Phone",
+  "نيابة عن": "On behalf of",
+  "المادة / الغرض": "Subject / Purpose",
+  "المادة/الغرض": "Subject/Purpose",
+  "تاريخ الحجز": "Booking date",
+  "ملاحظات": "Notes",
+  "حفظ": "Save",
+  "إلغاء": "Cancel",
+  "سبب الرفض": "Rejection reason",
+  "رفض الحجز": "Reject Booking",
+  "المرفقات": "Attachments",
+  "اتصالات": "Contacts",
+  "محظور": "Blocked",
+  "تقارير": "Reports",
+  "إغلاق": "Close",
+  "موافقة": "Approve",
+  "رفض": "Reject",
+  "إعادة لقيد المراجعة": "Revert to Pending",
+  "تعديل": "Edit",
+  "لا توجد بيانات": "No data available",
+  "لا توجد جهات اتصال": "No contacts",
+  "لا توجد حصص بعد": "No periods yet",
+  "لا توجد شعب": "No sections",
+  "لا توجد فترات محظورة": "No blocked periods",
+  "لا توجد مراحل بعد": "No stages yet",
+  "لا توجد نتائج": "No results",
+  "مثال: TROLLEY-A": "e.g. TROLLEY-A",
+  "مثال: الحصة الأولى": "e.g. Period One",
+  "مثال: المرحلة الأساسية": "e.g. Basic Stage",
+  "فعالة": "Active",
+  "معطلة": "Disabled",
+  "غير محدد": "Unspecified",
+  "اسم شعبة جديدة": "New section name",
+  "اسم صف جديد": "New grade name",
+  "الأحد": "Sunday",
+  "الاثنين": "Monday",
+  "الثلاثاء": "Tuesday",
+  "الأربعاء": "Wednesday",
+  "الخميس": "Thursday",
+  "الجمعة": "Friday",
+  "السبت": "Saturday",
+  "اسم الحصة:": "Period name:",
+  "اسم المرحلة (عربي):": "Stage name (Arabic):",
+  "الاسم (إنجليزي):": "Name (English):",
+  "معرّف العربة (Trolley):": "Trolley ID:",
+  "من الساعة (HH:MM أو فارغ):": "From time (HH:MM or blank):",
+  "إلى الساعة (HH:MM أو فارغ):": "To time (HH:MM or blank):",
+  "أدخل سبب الرفض": "Enter rejection reason",
+  "أدخل سبب الرفض...": "Enter rejection reason...",
+  "إلغاء هذا الحجز؟": "Cancel this booking?",
+  "اسم الشعبة مطلوب": "Section name is required",
+  "اسم الصف مطلوب": "Grade name is required",
+  "اسم المرحلة ومعرّف العربة مطلوبان": "Stage name and trolley ID are required",
+  "البريد مطلوب": "Email is required",
+  "التاريخ مطلوب": "Date is required",
+  "رقم الحصة مطلوب": "Period number is required",
+  "أُعيد لقيد المراجعة": "Reverted to pending",
+  "تم الإلغاء": "Cancelled",
+  "تم التحديث": "Updated",
+  "تم الحذف": "Deleted",
+  "تم الحفظ": "Saved",
+  "تم الحفظ ✓": "Saved ✓",
+  "تم الرفض": "Rejected",
+  "✅ تمت الموافقة": "✅ Approved",
+  "تمت إضافة المرحلة": "Stage added",
+  "تمت الإضافة": "Added",
+  "خطأ": "Error",
+  "حذف جهة الاتصال هذه؟": "Delete this contact?",
+  "حذف هذا الصف؟ سيتم حذف شعبه أيضاً.": "Delete this grade? Its sections will also be deleted.",
+  "حذف هذه الحصة؟": "Delete this period?",
+  "حذف هذه الشعبة؟": "Delete this section?",
+  "حذف هذه الفترة؟": "Delete this period?",
+  "حذف هذه المرحلة؟ سيتم حذف صفوفها وشعبها أيضاً.": "Delete this stage? Its grades and sections will also be deleted.",
+  "تقرير الحجوزات": "Bookings Report",
+  "المعلمون": "Teachers",
+  "الطلاب": "Students",
+  "إضافة معلم/ة": "Add Teacher",
+  "الجوال": "Phone",
+  "المرحلة (اختياري)": "Stage (optional)",
+  "قائمة المعلمين": "Teachers List",
+  "إضافة طالب/ة": "Add Student",
+  "قائمة الطلاب": "Students List",
+  "كل الصفوف": "All Grades",
+  "كل الشعب": "All Sections",
+  "اسم المعلم مطلوب": "Teacher name is required",
+  "اسم الطالب والشعبة مطلوبان": "Student name and section are required",
+  "يرجى تحديد المرحلة والصف والشعبة أولاً": "Please select stage, grade and section first",
+  "حذف هذا المعلم؟": "Delete this teacher?",
+  "حذف هذا الطالب؟": "Delete this student?",
+  "حدّد المرحلة/الصف/الشعبة أولاً، ثم ارفع ملف فيه اسم طالب واحد بكل سطر — سيُضافوا جميعاً لنفس الشعبة.":
+    "Select stage/grade/section first, then upload a file with one student name per line — they'll all be added to that section.",
+  "ملف CSV أو TXT — كل سطر: name,email,phone": "A CSV or TXT file — each line: name,email,phone",
+  "أكثر حصة حجزاً": "Most-booked period",
+  "الأكثر إلغاءً": "Most cancellations",
+  "الحصص": "Periods",
+  "الملغية فقط": "Cancelled only",
+  "المرفوضة فقط": "Rejected only",
+  "لا يوجد": "None",
+  "-- كل المراحل --": "-- All Stages --",
+  "العنصر": "Item",
+  "من الساعة": "From time",
+  "إلى الساعة": "To time",
+  "عربة": "Trolley",
+  "إضافة صف": "Add Grade",
+  "ملف": "File",
+};
+
+let AR = (localStorage.getItem('adminLang') || '{{ lang }}') !== 'en';
+
+function t(s) { return AR ? s : (I18N_EN[s] || s); }
+
+let ORIGINAL_TEXT_NODES = null;
+function captureStaticText() {
+  ORIGINAL_TEXT_NODES = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode(n) {
+      if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      if (n.parentElement && n.parentElement.closest('script,style')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  let n;
+  while (n = walker.nextNode()) ORIGINAL_TEXT_NODES.push({ node: n, original: n.nodeValue });
+}
+
+function applyStaticLang() {
+  if (!ORIGINAL_TEXT_NODES) return;
+  document.documentElement.lang = AR ? 'ar' : 'en';
+  ORIGINAL_TEXT_NODES.forEach(({ node, original }) => {
+    const trimmed = original.trim();
+    node.nodeValue = AR ? original : original.replace(trimmed, I18N_EN[trimmed] || trimmed);
+  });
+  document.querySelectorAll('[placeholder]').forEach(el => {
+    if (!el.dataset.origPlaceholder) el.dataset.origPlaceholder = el.getAttribute('placeholder');
+    const orig = el.dataset.origPlaceholder;
+    el.setAttribute('placeholder', AR ? orig : (I18N_EN[orig] || orig));
+  });
+  document.querySelectorAll('.lang-btn').forEach(b => b.textContent = AR ? 'EN' : 'AR');
+  const activeTab = document.querySelector('.tab-panel.active');
+  if (activeTab) {
+    const id = activeTab.id.replace('tab-', '');
+    if (id === 'bookings') renderTable();
+    if (id === 'halls') { renderStagesTree(); renderPeriodsTable(); }
+    if (id === 'blocked') loadBlocked();
+    if (id === 'contacts') loadContacts();
+    if (id === 'teachers') loadTeachersTab();
+    if (id === 'students') loadStudentsTab();
+    if (id === 'reports') loadReportStats();
+    if (id === 'calview') renderCal();
+  }
+}
+
+function toggleLang() {
+  AR = !AR;
+  localStorage.setItem('adminLang', AR ? 'ar' : 'en');
+  applyStaticLang();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  captureStaticText();
+  applyStaticLang();
+});
+
 async function loadStructure() {
   STRUCTURE = await fetch('/admin/api/halls').then(r => r.json());
 }
@@ -606,12 +949,14 @@ function showTab(name) {
       n.classList.add('active');
     }
   });
-  const titles = {bookings:'طلبات الحجز', halls:'المراحل والعربات', blocked:'الفترات غير المتاحة', contacts:'جهات الاتصال', reports:'التقارير', calview:'التقويم المرئي'};
+  const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), calview:t('التقويم المرئي')};
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
   if (name === 'calview')  initAdminCal();
   if (name === 'blocked')  loadBlocked();
   if (name === 'contacts') loadContacts();
+  if (name === 'teachers') loadTeachersTab();
+  if (name === 'students') loadStudentsTab();
   if (name === 'reports')  loadReportStats();
 }
 
@@ -624,13 +969,14 @@ function updateClock() {
 setInterval(updateClock, 1000); updateClock();
 
 // ── Toast ──
-function showToast(msg, color = '#247680') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.background = color;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
+function showToast(msg, color = '#FF5733') {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = t(msg);
+  toastEl.style.background = color;
+  toastEl.classList.add('show');
+  setTimeout(() => toastEl.classList.remove('show'), 3000);
 }
+function confirmT(msg) { return confirm(t(msg)); }
 
 // ── API helpers ──
 async function api(url, body) {
@@ -680,7 +1026,7 @@ function renderTable() {
   if (curSearch) rows = rows.filter(b =>
     (b.reqId + b.name + (b.title||'') + (b.stage||'') + (b.grade||'') + (b.section||'') + b.email).toLowerCase().includes(curSearch)
   );
-  const sLabels = {approved:'معتمد',pending:'قيد المراجعة',rejected:'مرفوض',cancelled:'ملغي'};
+  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
   tbody.innerHTML = rows.map(b => `
     <tr>
       <td><input type="checkbox" ${selectedIds.has(b.reqId)?'checked':''} onchange="toggleSel('${b.reqId}',this)"></td>
@@ -690,7 +1036,7 @@ function renderTable() {
       <td>${esc(b.stage||'')}</td>
       <td>${esc(b.grade||'')}</td>
       <td>${esc(b.section||'')}</td>
-      <td>${b.periodNumber ? 'الحصة '+b.periodNumber : ''}</td>
+      <td>${b.periodNumber ? t('الحصة')+' '+b.periodNumber : ''}</td>
       <td>${b.date}</td>
       <td><span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span></td>
       <td>
@@ -701,7 +1047,7 @@ function renderTable() {
           ${b.status!=='cancelled'&&b.status!=='rejected'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')"><i class="fas fa-ban"></i></button>`:''}
         </div>
       </td>
-    </tr>`).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">لا توجد نتائج</td></tr>';
+    </tr>`).join('') || `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">${t('لا توجد نتائج')}</td></tr>`;
   document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
 }
 
@@ -719,7 +1065,7 @@ function toggleAll(cb) {
 }
 
 async function bulkDelete() {
-  if (!selectedIds.size || !confirm(`حذف ${selectedIds.size} حجز نهائياً؟`)) return;
+  if (!selectedIds.size || !confirm((AR ? `حذف ${selectedIds.size} حجز نهائياً؟` : `Permanently delete ${selectedIds.size} booking(s)?`))) return;
   const data = await api('/admin/api/bulk-delete', {ids: [...selectedIds]});
   if (data.success) { showToast('تم الحذف'); selectedIds.clear(); loadBookings(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -731,7 +1077,7 @@ async function quickApprove(reqId) {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 async function quickCancel(reqId) {
-  if (!confirm('إلغاء هذا الحجز؟')) return;
+  if (!confirmT('إلغاء هذا الحجز؟')) return;
   const data = await api('/admin/api/cancel', {reqId});
   if (data.success) { showToast('تم الإلغاء'); loadBookings(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -756,8 +1102,8 @@ function openDetail(reqId) {
   if (!b) return;
   document.getElementById('bkModalAlert').innerHTML = '';
   document.getElementById('bkModalTitle').innerHTML = `<i class="fas fa-calendar-check"></i> ${b.reqId}`;
-  const sLabels = {approved:'معتمد',pending:'قيد المراجعة',rejected:'مرفوض',cancelled:'ملغي'};
-  const periodStr = b.periodNumber ? ('الحصة ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
+  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
+  const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
   document.getElementById('bkModalBody').innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:.88rem">
       ${drow('رقم الطلب', `<strong style="color:var(--primary)">${b.reqId}</strong>`)}
@@ -769,8 +1115,29 @@ function openDetail(reqId) {
       ${drow('التاريخ', b.date)}
       ${drow('ملاحظات', b.notes||'-')}
       ${b.rejectReason ? drow('سبب الرفض', `<span style="color:#c0392b">${esc(b.rejectReason)}</span>`) : ''}
-      ${b.att&&b.att.length ? drow('المرفقات', b.att.map(u=>`<a href="${u}" target="_blank" style="color:var(--primary)"><i class="fas fa-paperclip"></i> ملف</a>`).join(' ')) : ''}
-    </table>`;
+      ${b.att&&b.att.length ? drow('المرفقات', b.att.map(u=>`<a href="${u}" target="_blank" style="color:var(--primary)"><i class="fas fa-paperclip"></i> ${t('ملف')}</a>`).join(' ')) : ''}
+    </table>
+    ${b.status === 'approved' ? `<div id="checkoutSection" style="margin-top:14px"><div style="color:var(--muted);font-size:.85rem">${AR?'جاري تحميل قائمة تسليم الأجهزة...':'Loading device handover list...'}</div></div>` : ''}`;
+
+  if (b.status === 'approved') {
+    fetch(`/admin/api/checkout/${b.reqId}`).then(r => r.json()).then(data => {
+      const el = document.getElementById('checkoutSection');
+      if (!el) return;
+      if (!data.success || !data.checkout) {
+        el.innerHTML = `<div style="background:#fff3cd;border-radius:8px;padding:10px 14px;font-size:.85rem">${AR?'لم يقم المعلم بتعبئة نموذج تسليم الأجهزة بعد':'Teacher has not filled the device handover form yet'}</div>`;
+        return;
+      }
+      const rows = data.checkout.lines.map(l => `
+        <tr><td style="padding:5px 8px">${l.seq}</td><td style="padding:5px 8px">${esc(l.studentName||'')}</td>
+        <td style="padding:5px 8px">${l.laptopNumber ?? (AR?'—':'—')}</td></tr>`).join('');
+      el.innerHTML = `
+        <div style="font-weight:700;color:var(--primary);margin:10px 0 6px;font-size:.9rem"><i class="fas fa-laptop"></i> ${AR?'قائمة تسليم الأجهزة':'Device Handover List'}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+          <thead><tr style="background:#f0f7f8"><th style="padding:5px 8px;text-align:${AR?'right':'left'}">#</th><th style="padding:5px 8px;text-align:${AR?'right':'left'}">${AR?'الطالب':'Student'}</th><th style="padding:5px 8px;text-align:${AR?'right':'left'}">${AR?'اللابتوب':'Laptop'}</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }).catch(() => {});
+  }
 
   let footer = '';
   if (b.status === 'pending') {
@@ -796,7 +1163,7 @@ async function quickSetPending(reqId) {
 }
 
 function drow(label, val) {
-  return `<tr><td style="padding:7px 10px;font-weight:700;background:#f0f7f8;width:36%">${label}</td><td style="padding:7px 10px;border-bottom:1px solid var(--border)">${val}</td></tr>`;
+  return `<tr><td style="padding:7px 10px;font-weight:700;background:#f0f7f8;width:36%">${t(label)}</td><td style="padding:7px 10px;border-bottom:1px solid var(--border)">${val}</td></tr>`;
 }
 
 function editPopulateStages(selectedStageId) {
@@ -872,7 +1239,7 @@ async function loadHalls() {
   hallsList = STRUCTURE;
   // Update blocked-period stage select too
   const blkSel = document.getElementById('blkHall');
-  blkSel.innerHTML = '<option value="">-- كل المراحل --</option>' +
+  blkSel.innerHTML = `<option value="">-- ${t('كل المراحل')} --</option>` +
     STRUCTURE.map(s => `<option value="${s.trolleyCode}">${esc(s.nameAr)}</option>`).join('');
 
   renderStagesTree();
@@ -881,19 +1248,19 @@ async function loadHalls() {
 function renderStagesTree() {
   const el = document.getElementById('stagesTree');
   if (!el) return;
-  if (!STRUCTURE.length) { el.innerHTML = '<p style="color:var(--muted);text-align:center">لا توجد مراحل بعد</p>'; return; }
+  if (!STRUCTURE.length) { el.innerHTML = `<p style="color:var(--muted);text-align:center">${t('لا توجد مراحل بعد')}</p>`; return; }
 
   el.innerHTML = STRUCTURE.map(s => `
     <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
         <div>
           <strong style="font-size:1.02rem;color:var(--primary)"><i class="fas fa-laptop"></i> ${esc(s.nameAr)}</strong>
-          <span style="color:var(--muted);font-size:.82rem"> — عربة: <span dir="ltr" style="font-weight:700">${esc(s.trolleyCode)}</span></span>
-          <span class="badge ${s.active?'badge-approved':'badge-cancelled'}" style="margin-right:8px">${s.active?'فعالة':'معطلة'}</span>
+          <span style="color:var(--muted);font-size:.82rem"> — ${t("عربة")}: <span dir="ltr" style="font-weight:700">${esc(s.trolleyCode)}</span></span>
+          <span class="badge ${s.active?'badge-approved':'badge-cancelled'}" style="margin-right:8px">${t(s.active?'فعالة':'معطلة')}</span>
         </div>
         <div class="action-btns">
           <button class="btn btn-sm btn-outline" onclick="openEditStage(${s.id})"><i class="fas fa-edit"></i></button>
-          <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${s.id},${s.active?'false':'true'})">${s.active?'<i class="fas fa-toggle-off"></i> تعطيل':'<i class="fas fa-toggle-on"></i> تفعيل'}</button>
+          <button class="btn btn-orange btn-sm" onclick="toggleHallActive(${s.id},${s.active?'false':'true'})">${s.active?'<i class="fas fa-toggle-off"></i> '+t('تعطيل'):'<i class="fas fa-toggle-on"></i> '+t('تفعيل')}</button>
           <button class="btn btn-red btn-sm" onclick="deleteHall(${s.id})"><i class="fas fa-trash"></i></button>
         </div>
       </div>
@@ -910,7 +1277,7 @@ function renderStagesTree() {
                 <span style="background:#e8f4f5;border-radius:12px;padding:2px 10px;font-size:.78rem;display:inline-flex;align-items:center;gap:5px">
                   ${esc(sec.nameAr)}
                   <button onclick="deleteSection(${sec.id})" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:.8rem">✕</button>
-                </span>`).join('') || '<span style="color:var(--muted);font-size:.78rem">لا توجد شعب</span>'}
+                </span>`).join('') || `<span style="color:var(--muted);font-size:.78rem">${t('لا توجد شعب')}</span>`}
             </div>
             <div style="display:flex;gap:4px">
               <input type="text" placeholder="اسم شعبة جديدة" id="newSec_${g.id}" style="flex:1;font-size:.78rem;padding:4px 6px;border:1px solid var(--border);border-radius:6px">
@@ -919,7 +1286,7 @@ function renderStagesTree() {
           </div>`).join('')}
         <div style="background:#fff;border:1.5px dashed var(--border);border-radius:8px;padding:10px;min-width:180px;flex:1;display:flex;flex-direction:column;gap:6px;justify-content:center">
           <input type="text" placeholder="اسم صف جديد" id="newGrade_${s.id}" style="font-size:.82rem;padding:5px 8px;border:1px solid var(--border);border-radius:6px">
-          <button class="btn btn-sm btn-primary" onclick="addGrade(${s.id})"><i class="fas fa-plus"></i> إضافة صف</button>
+          <button class="btn btn-sm btn-primary" onclick="addGrade(${s.id})"><i class="fas fa-plus"></i> ${t("إضافة صف")}</button>
         </div>
       </div>
     </div>`).join('');
@@ -946,17 +1313,19 @@ async function addHall() {
 async function openEditStage(id) {
   const s = STRUCTURE.find(x => x.id === id);
   if (!s) return;
-  const nameAr = prompt('اسم المرحلة (عربي):', s.nameAr);
+  const nameAr = prompt(t('اسم المرحلة (عربي):'), s.nameAr);
   if (nameAr === null) return;
-  const trolleyCode = prompt('معرّف العربة (Trolley):', s.trolleyCode);
+  const nameEn = prompt(t('الاسم (إنجليزي):'), s.nameEn || '');
+  if (nameEn === null) return;
+  const trolleyCode = prompt(t('معرّف العربة (Trolley):'), s.trolleyCode);
   if (trolleyCode === null) return;
-  const data = await api('/admin/api/update-hall', {id, nameAr, trolleyCode, nameEn: s.nameEn, active: s.active});
-  if (data.success) { showToast('تم الحفظ ✓'); loadHalls(); }
-  else showToast(data.error || 'خطأ', '#c0392b');
+  const data = await api('/admin/api/update-hall', {id, nameAr, nameEn, trolleyCode, active: s.active});
+  if (data.success) { showToast(t('تم الحفظ ✓')); loadHalls(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
 }
 
 async function deleteHall(id) {
-  if (!confirm('حذف هذه المرحلة؟ سيتم حذف صفوفها وشعبها أيضاً.')) return;
+  if (!confirmT('حذف هذه المرحلة؟ سيتم حذف صفوفها وشعبها أيضاً.')) return;
   const data = await api('/admin/api/delete-hall', {id});
   if (data.success) { showToast('تم الحذف'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -979,7 +1348,7 @@ async function addGrade(stageId) {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 async function deleteGrade(id) {
-  if (!confirm('حذف هذا الصف؟ سيتم حذف شعبه أيضاً.')) return;
+  if (!confirmT('حذف هذا الصف؟ سيتم حذف شعبه أيضاً.')) return;
   const data = await api('/admin/api/delete-grade', {id});
   if (data.success) { showToast('تم الحذف'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -994,7 +1363,7 @@ async function addSection(gradeId) {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 async function deleteSection(id) {
-  if (!confirm('حذف هذه الشعبة؟')) return;
+  if (!confirmT('حذف هذه الشعبة؟')) return;
   const data = await api('/admin/api/delete-section', {id});
   if (data.success) { showToast('تم الحذف'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -1009,12 +1378,12 @@ async function renderPeriodsTable() {
       <td>${esc(p.label)}</td>
       <td dir="ltr">${p.startTime||'-'}</td>
       <td dir="ltr">${p.endTime||'-'}</td>
-      <td><span class="badge ${p.active?'badge-approved':'badge-cancelled'}">${p.active?'فعالة':'معطلة'}</span></td>
+      <td><span class="badge ${p.active?'badge-approved':'badge-cancelled'}">${t(p.active?'فعالة':'معطلة')}</span></td>
       <td>
         <button class="btn btn-sm btn-outline" onclick="openEditPeriod(${p.id})"><i class="fas fa-edit"></i></button>
         <button class="btn btn-red btn-sm" onclick="deletePeriod(${p.id})"><i class="fas fa-trash"></i></button>
       </td>
-    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--muted)">لا توجد حصص بعد</td></tr>';
+    </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--muted)">${t('لا توجد حصص بعد')}</td></tr>`;
 }
 
 async function addPeriod() {
@@ -1037,18 +1406,18 @@ async function addPeriod() {
 async function openEditPeriod(id) {
   const p = PERIODS.find(x => x.id === id);
   if (!p) return;
-  const label = prompt('اسم الحصة:', p.label);
+  const label = prompt(t('اسم الحصة:'), p.label);
   if (label === null) return;
-  const startTime = prompt('من الساعة (HH:MM أو فارغ):', p.startTime || '');
+  const startTime = prompt(t('من الساعة (HH:MM أو فارغ):'), p.startTime || '');
   if (startTime === null) return;
-  const endTime = prompt('إلى الساعة (HH:MM أو فارغ):', p.endTime || '');
+  const endTime = prompt(t('إلى الساعة (HH:MM أو فارغ):'), p.endTime || '');
   if (endTime === null) return;
   const data = await api('/admin/api/update-period', {id, label, startTime, endTime, active: p.active});
   if (data.success) { showToast('تم الحفظ ✓'); renderPeriodsTable(); }
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 async function deletePeriod(id) {
-  if (!confirm('حذف هذه الحصة؟')) return;
+  if (!confirmT('حذف هذه الحصة؟')) return;
   const data = await api('/admin/api/delete-period', {id});
   if (data.success) { showToast('تم الحذف'); renderPeriodsTable(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -1062,12 +1431,12 @@ async function loadBlocked() {
     return `
     <tr>
       <td>${b.s}</td><td>${b.e}</td>
-      <td>${esc(b.hall ? (stage ? stage.nameAr : b.hall) : 'كل المراحل')}</td>
+      <td>${esc(b.hall ? (stage ? stage.nameAr : b.hall) : t('كل المراحل'))}</td>
       <td dir="ltr">${b.fromT||'-'}</td><td dir="ltr">${b.toT||'-'}</td>
       <td>${esc(b.r)}</td>
       <td><button class="btn btn-red btn-sm" onclick="deleteBlocked(${b.id})"><i class="fas fa-trash"></i></button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">لا توجد فترات محظورة</td></tr>';
+  }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted)">${t('لا توجد فترات محظورة')}</td></tr>`;
 }
 
 async function addBlocked() {
@@ -1086,7 +1455,7 @@ async function addBlocked() {
 }
 
 async function deleteBlocked(id) {
-  if (!confirm('حذف هذه الفترة؟')) return;
+  if (!confirmT('حذف هذه الفترة؟')) return;
   const data = await api('/admin/api/delete-blocked', {id});
   if (data.success) { showToast('تم الحذف'); loadBlocked(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -1101,7 +1470,7 @@ async function loadContacts() {
       <td>${esc(c.name||'-')}</td>
       <td>${c.date}</td>
       <td><button class="btn btn-red btn-sm" onclick="deleteContact(${c.id})"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted)">لا توجد جهات اتصال</td></tr>';
+    </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted)">${t('لا توجد جهات اتصال')}</td></tr>`;
 }
 
 async function addContact() {
@@ -1114,7 +1483,7 @@ async function addContact() {
 }
 
 async function deleteContact(id) {
-  if (!confirm('حذف جهة الاتصال هذه؟')) return;
+  if (!confirmT('حذف جهة الاتصال هذه؟')) return;
   const data = await api('/admin/api/delete-contact', {id});
   if (data.success) { showToast('تم الحذف'); loadContacts(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -1130,8 +1499,208 @@ async function uploadContacts(input) {
     return {email: (parts[0]||'').trim(), name: (parts[1]||'').trim()};
   }).filter(x => x.email && x.email.includes('@'));
   const data = await api('/admin/api/add-contacts', {list});
-  showToast(data.success ? `تمت الإضافة: ${data.count}` : (data.error||'خطأ'), data.success ? '#247680' : '#c0392b');
+  showToast(data.success ? `${t('تمت الإضافة')}: ${data.count}` : (data.error||t('خطأ')), data.success ? '#FF5733' : '#c0392b');
   if (data.success) loadContacts();
+  input.value = '';
+}
+
+// ── Teachers ───────────────────────────────────────────────────
+function populateStageSelects(selectEls, includeAllOption) {
+  selectEls.forEach(sel => {
+    if (!sel) return;
+    const keepFirst = sel.options[0];
+    sel.innerHTML = '';
+    if (keepFirst) sel.appendChild(keepFirst);
+    STRUCTURE.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.id; o.textContent = AR ? s.nameAr : (s.nameEn || s.nameAr);
+      sel.appendChild(o);
+    });
+  });
+}
+
+async function loadTeachersTab() {
+  await loadStructure();
+  populateStageSelects([
+    document.getElementById('tcStage'),
+    document.getElementById('tcFilterStage'),
+  ]);
+  loadTeachers();
+}
+
+async function loadTeachers() {
+  const stageId = document.getElementById('tcFilterStage').value;
+  const url = stageId ? `/admin/api/teachers?stageId=${stageId}` : '/admin/api/teachers';
+  const list = await fetch(url).then(r => r.json());
+  const stageName = id => {
+    const s = STRUCTURE.find(x => String(x.id) === String(id));
+    return s ? (AR ? s.nameAr : (s.nameEn || s.nameAr)) : '';
+  };
+  document.getElementById('teachersTable').innerHTML = list.map(tc => `
+    <tr>
+      <td>${esc(tc.name)}</td>
+      <td dir="ltr">${esc(tc.email)}</td>
+      <td dir="ltr">${esc(tc.phone)}</td>
+      <td>${esc(stageName(tc.stageId))}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteTeacher(${tc.id})"><i class="fas fa-trash"></i></button></td>
+    </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+}
+
+async function addTeacher() {
+  const name = document.getElementById('tcName').value.trim();
+  if (!name) { showToast(t('اسم المعلم مطلوب'), '#c0392b'); return; }
+  const data = await api('/admin/api/add-teacher', {
+    name, email: document.getElementById('tcEmail').value.trim(),
+    phone: document.getElementById('tcPhone').value.trim(),
+    stageId: document.getElementById('tcStage').value || null,
+  });
+  if (data.success) {
+    document.getElementById('tcName').value = '';
+    document.getElementById('tcEmail').value = '';
+    document.getElementById('tcPhone').value = '';
+    showToast(t('تمت الإضافة')); loadTeachers();
+  } else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function deleteTeacher(id) {
+  if (!confirmT('حذف هذا المعلم؟')) return;
+  const data = await api('/admin/api/delete-teacher', {id});
+  if (data.success) { showToast(t('تم الحذف')); loadTeachers(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function uploadTeachers(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const stageId = document.getElementById('tcStage').value || null;
+  const text = await file.text();
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const list = lines.map(l => {
+    const parts = l.split(',');
+    return {name: (parts[0]||'').trim(), email: (parts[1]||'').trim(),
+             phone: (parts[2]||'').trim(), stageId};
+  }).filter(x => x.name);
+  const data = await api('/admin/api/bulk-add-teachers', {list});
+  showToast(data.success ? `${t('تمت الإضافة')}: ${data.count}` : (data.error||t('خطأ')), data.success ? '#FF5733' : '#c0392b');
+  if (data.success) loadTeachers();
+  input.value = '';
+}
+
+// ── Students ───────────────────────────────────────────────────
+function gradesForStage(stageId) {
+  const s = STRUCTURE.find(x => String(x.id) === String(stageId));
+  return s ? s.grades : [];
+}
+function sectionsForGrade(stageId, gradeId) {
+  const grades = gradesForStage(stageId);
+  const g = grades.find(x => String(x.id) === String(gradeId));
+  return g ? g.sections : [];
+}
+function fillGradeSelect(sel, stageId, keepFirstLabel) {
+  sel.innerHTML = `<option value="">${keepFirstLabel}</option>` +
+    gradesForStage(stageId).map(g => `<option value="${g.id}">${AR ? g.nameAr : (g.nameEn||g.nameAr)}</option>`).join('');
+}
+function fillSectionSelect(sel, stageId, gradeId, keepFirstLabel) {
+  sel.innerHTML = `<option value="">${keepFirstLabel}</option>` +
+    sectionsForGrade(stageId, gradeId).map(s => `<option value="${s.id}">${AR ? s.nameAr : (s.nameEn||s.nameAr)}</option>`).join('');
+}
+
+function onStuStageChange() {
+  fillGradeSelect(document.getElementById('stuGrade'), document.getElementById('stuStage').value, '--');
+  fillSectionSelect(document.getElementById('stuSection'), null, null, '--');
+}
+function onStuGradeChange() {
+  fillSectionSelect(document.getElementById('stuSection'), document.getElementById('stuStage').value, document.getElementById('stuGrade').value, '--');
+}
+function onStuUpStageChange() {
+  fillGradeSelect(document.getElementById('stuUpGrade'), document.getElementById('stuUpStage').value, t('الصف'));
+  fillSectionSelect(document.getElementById('stuUpSection'), null, null, t('الشعبة'));
+}
+function onStuUpGradeChange() {
+  fillSectionSelect(document.getElementById('stuUpSection'), document.getElementById('stuUpStage').value, document.getElementById('stuUpGrade').value, t('الشعبة'));
+}
+function onStuFilterStageChange() {
+  fillGradeSelect(document.getElementById('stuFilterGrade'), document.getElementById('stuFilterStage').value, t('كل الصفوف'));
+  fillSectionSelect(document.getElementById('stuFilterSection'), null, null, t('كل الشعب'));
+  loadStudents();
+}
+function onStuFilterGradeChange() {
+  fillSectionSelect(document.getElementById('stuFilterSection'), document.getElementById('stuFilterStage').value, document.getElementById('stuFilterGrade').value, t('كل الشعب'));
+  loadStudents();
+}
+
+async function loadStudentsTab() {
+  await loadStructure();
+  populateStageSelects([
+    document.getElementById('stuStage'),
+    document.getElementById('stuUpStage'),
+    document.getElementById('stuFilterStage'),
+  ]);
+  loadStudents();
+}
+
+async function loadStudents() {
+  const sectionId = document.getElementById('stuFilterSection').value;
+  const gradeId = document.getElementById('stuFilterGrade').value;
+  const stageId = document.getElementById('stuFilterStage').value;
+  let url = '/admin/api/students';
+  if (sectionId) url += `?sectionId=${sectionId}`;
+  else if (gradeId) url += `?gradeId=${gradeId}`;
+  else if (stageId) url += `?stageId=${stageId}`;
+  const list = await fetch(url).then(r => r.json());
+
+  function labelFor(kind, id) {
+    if (kind === 'stage') { const s = STRUCTURE.find(x=>x.id===id); return s ? (AR?s.nameAr:(s.nameEn||s.nameAr)) : ''; }
+    for (const s of STRUCTURE) {
+      if (kind === 'grade') { const g = s.grades.find(x=>x.id===id); if (g) return AR?g.nameAr:(g.nameEn||g.nameAr); }
+      if (kind === 'section') { for (const g of s.grades) { const sec = g.sections.find(x=>x.id===id); if (sec) return AR?sec.nameAr:(sec.nameEn||sec.nameAr); } }
+    }
+    return '';
+  }
+
+  document.getElementById('studentsTable').innerHTML = list.map(s => `
+    <tr>
+      <td>${esc(s.name)}</td>
+      <td>${esc(labelFor('stage', s.stageId))}</td>
+      <td>${esc(labelFor('grade', s.gradeId))}</td>
+      <td>${esc(labelFor('section', s.sectionId))}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteStudent(${s.id})"><i class="fas fa-trash"></i></button></td>
+    </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+}
+
+async function addStudent() {
+  const name = document.getElementById('stuName').value.trim();
+  const sectionId = document.getElementById('stuSection').value;
+  if (!name || !sectionId) { showToast(AR?'اسم الطالب والشعبة مطلوبان':'Student name and section are required', '#c0392b'); return; }
+  const data = await api('/admin/api/add-student', {name, sectionId});
+  if (data.success) {
+    document.getElementById('stuName').value = '';
+    showToast(t('تمت الإضافة')); loadStudents();
+  } else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function deleteStudent(id) {
+  if (!confirmT('حذف هذا الطالب؟')) return;
+  const data = await api('/admin/api/delete-student', {id});
+  if (data.success) { showToast(t('تم الحذف')); loadStudents(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function uploadStudents(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const sectionId = document.getElementById('stuUpSection').value;
+  if (!sectionId) {
+    showToast(AR ? 'يرجى تحديد المرحلة والصف والشعبة أولاً' : 'Please select stage, grade and section first', '#c0392b');
+    input.value = '';
+    return;
+  }
+  const text = await file.text();
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const list = lines.map(l => ({name: l.split(',')[0].trim(), sectionId})).filter(x => x.name);
+  const data = await api('/admin/api/bulk-add-students', {list});
+  showToast(data.success ? `${t('تمت الإضافة')}: ${data.count}` : (data.error||t('خطأ')), data.success ? '#FF5733' : '#c0392b');
+  if (data.success) loadStudents();
   input.value = '';
 }
 
@@ -1153,11 +1722,12 @@ function runReport() {
   if (toD)   rows = rows.filter(r => r.date <= toD);
 
   const groups = {};
-  const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'].map(t);
   for (const r of rows) {
     let key = '';
-    if (dim === 'hall')   key = r.stage || 'غير محدد';
-    else if (dim === 'person') key = r.name || 'غير محدد';
+    if (dim === 'hall')   key = r.stage || t('غير محدد');
+    else if (dim === 'person') key = r.name || t('غير محدد');
+    else if (dim === 'period') key = r.periodNumber ? (t('الحصة') + ' ' + r.periodNumber) : t('غير محدد');
     else if (dim === 'month')  key = (r.date||'').substring(0, 7);
     else if (dim === 'dow') {
       const d = new Date((r.date||'') + 'T00:00:00');
@@ -1176,7 +1746,7 @@ function runReport() {
   else arr.sort((a,b) => b.data.count - a.data.count);
 
   const chart = document.getElementById('anaChart');
-  if (!arr.length) { chart.innerHTML = '<p style="color:var(--muted);text-align:center">لا توجد بيانات</p>'; document.getElementById('anaTable').innerHTML = ''; document.getElementById('reportResult').style.display='block'; return; }
+  if (!arr.length) { chart.innerHTML = `<p style="color:var(--muted);text-align:center">${t('لا توجد بيانات')}</p>`; document.getElementById('anaTable').innerHTML = ''; document.getElementById('reportResult').style.display='block'; return; }
 
   const mx = arr[0].data.count;
   chart.innerHTML = arr.slice(0,12).map(({key, data}) => {
@@ -1201,8 +1771,8 @@ function runReport() {
       </tbody>
     </table>`;
 
-  const dimLabels = {hall:'المراحل',person:'الأشخاص',month:'الأشهر',dow:'أيام الأسبوع'};
-  document.getElementById('reportTitle').innerHTML = `<i class="fas fa-chart-bar"></i> نتائج: ${dimLabels[dim]||dim}`;
+  const dimLabels = {hall:t('المراحل'),person:t('المعلمون'),period:t('الحصص'),month:t('الأشهر'),dow:t('أيام الأسبوع')};
+  document.getElementById('reportTitle').innerHTML = `<i class="fas fa-chart-bar"></i> ${AR?'نتائج':'Results'}: ${dimLabels[dim]||dim}`;
   document.getElementById('reportResult').style.display = 'block';
 }
 
@@ -1238,7 +1808,7 @@ async function initAdminCal() {
   // Populate stage filter (by trolley code)
   const seen = new Set();
   const sel = document.getElementById('calHallFilter');
-  sel.innerHTML = '<option value="">كل المراحل</option>';
+  sel.innerHTML = `<option value="">${t('كل المراحل')}</option>`;
   allBookingsForCal.forEach(b => {
     if (b.trolleyCode && !seen.has(b.trolleyCode)) {
       seen.add(b.trolleyCode);
@@ -1271,7 +1841,7 @@ function renderCal() {
   if (adminCalInstance) { adminCalInstance.destroy(); }
 
   adminCalInstance = new FullCalendar.Calendar(el, {
-    locale: 'ar',
+    locale: AR ? 'ar' : 'en',
     direction: 'rtl',
     initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
     headerToolbar: {
@@ -1312,12 +1882,24 @@ async function loadReportStats() {
 
   const totalPeriods = data.length;
 
+  const periodCount = {};
+  data.forEach(b => { if (b.periodNumber) periodCount[b.periodNumber] = (periodCount[b.periodNumber]||0) + 1; });
+  const topPeriod = Object.entries(periodCount).sort((a,b)=>b[1]-a[1])[0];
+
+  const cancelledByTeacher = {};
+  data.filter(b => b.status === 'cancelled').forEach(b => {
+    if (b.name) cancelledByTeacher[b.name] = (cancelledByTeacher[b.name]||0) + 1;
+  });
+  const topCancelled = Object.entries(cancelledByTeacher).sort((a,b)=>b[1]-a[1])[0];
+
   document.getElementById('rs-approved').textContent = approved;
   document.getElementById('rs-pending').textContent  = pending;
   document.getElementById('rs-rejected').textContent = rejected + cancelled;
   document.getElementById('rs-halls').textContent    = topHall ? topHall[0] : '-';
   document.getElementById('rs-month').textContent    = topMonth ? topMonth[0].replace('-',' / ') : '-';
   document.getElementById('rs-hours').textContent    = totalPeriods;
+  document.getElementById('rs-period').textContent   = topPeriod ? `${t('الحصة')} ${topPeriod[0]} (${topPeriod[1]})` : '-';
+  document.getElementById('rs-cancelled-by').textContent = topCancelled ? `${topCancelled[0]} (${topCancelled[1]})` : t('لا يوجد');
 
   if (!data.length) return;
 
@@ -1411,7 +1993,7 @@ function drawMonthChart(sortedMonths) {
 
   // Line
   ctx.beginPath();
-  ctx.strokeStyle = '#247680'; ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#FF5733'; ctx.lineWidth = 2.5;
   sortedMonths.forEach(([m,v],i) => {
     const x = pad.left + i*step;
     const y = pad.top + ch - (v/mx)*ch;
@@ -1429,7 +2011,7 @@ function drawMonthChart(sortedMonths) {
   ctx.lineTo(pad.left + (sortedMonths.length-1)*step, pad.top+ch);
   ctx.lineTo(pad.left, pad.top+ch);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(36,118,128,.1)';
+  ctx.fillStyle = 'rgba(255,87,51,.1)';
   ctx.fill();
 
   // Dots + labels
@@ -1438,7 +2020,7 @@ function drawMonthChart(sortedMonths) {
     const y = pad.top + ch - (v/mx)*ch;
     ctx.beginPath();
     ctx.arc(x,y,4,0,Math.PI*2);
-    ctx.fillStyle = '#247680'; ctx.fill();
+    ctx.fillStyle = '#FF5733'; ctx.fill();
     ctx.fillStyle = '#1e2a2b'; ctx.font = '10px Tajawal';
     ctx.textAlign = 'center';
     ctx.fillText(v, x, y-10);
@@ -1451,9 +2033,9 @@ function drawHallBars(hallCount) {
   const el = document.getElementById('hallBars');
   if (!el) return;
   const sorted = Object.entries(hallCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
-  if (!sorted.length) { el.innerHTML='<p style="color:var(--muted);text-align:center">لا توجد بيانات</p>'; return; }
+  if (!sorted.length) { el.innerHTML=`<p style="color:var(--muted);text-align:center">${t('لا توجد بيانات')}</p>`; return; }
   const mx = sorted[0][1];
-  const colors = ['#247680','#2d9aa8','#27ae60','#e67e22','#c0392b','#8e44ad'];
+  const colors = ['#FF5733','#1B3358','#27ae60','#e67e22','#c0392b','#8e44ad'];
   el.innerHTML = sorted.map(([hall,count],i) => {
     const pct = Math.round(count/mx*100);
     return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
@@ -1466,44 +2048,49 @@ function drawHallBars(hallCount) {
 
 // ── Export CSV ──
 function exportCSV() {
-  const rows = [['رقم الطلب','الاسم','البريد','الجوال','الموضوع','المرحلة','الصف','الشعبة','الحصة','التاريخ','الحالة','ملاحظات','تاريخ الطلب']];
-  const statusLbl = {pending:'قيد المراجعة', approved:'معتمد', rejected:'مرفوض', cancelled:'ملغي'};
+  const rows = [[t('رقم الطلب'),t('الاسم'),t('البريد'),t('الجوال'),t('الموضوع'),t('المرحلة'),t('الصف'),t('الشعبة'),t('الحصة'),t('التاريخ'),t('الحالة'),t('ملاحظات'),t('تاريخ الطلب')]];
+  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), rejected:t('مرفوض'), cancelled:t('ملغي')};
   const filtered = allBookings;
   filtered.forEach(b => {
     rows.push([b.reqId, b.name, b.email, b.phone||'', b.title||'', b.stage||'', b.grade||'', b.section||'',
-      b.periodNumber ? ('الحصة '+b.periodNumber) : '',
+      b.periodNumber ? (t('الحصة')+' '+b.periodNumber) : '',
       b.date||'', statusLbl[b.status]||b.status, b.notes||'', b.createdAt||'']);
   });
   const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `حجوزات_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `${AR?'حجوزات':'bookings'}_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
-  showToast('تم تصدير الملف ✓');
+  showToast(AR ? 'تم تصدير الملف ✓' : 'File exported ✓');
 }
 
 // ── Export Print ──
 function exportPrint() {
-  const statusLbl = {pending:'قيد المراجعة', approved:'معتمد', rejected:'مرفوض', cancelled:'ملغي'};
+  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), rejected:t('مرفوض'), cancelled:t('ملغي')};
   const rows = allBookings.map(b => [
     b.reqId, b.name, b.stage||'', b.grade||'', b.section||'',
-    b.periodNumber ? ('الحصة '+b.periodNumber) : '', b.date||'',
+    b.periodNumber ? (t('الحصة')+' '+b.periodNumber) : '', b.date||'',
     statusLbl[b.status]||b.status, b.notes||''
   ].map(c => '<td>'+String(c).replace(/</g,'&lt;')+'</td>').join('')).map(r => '<tr>'+r+'</tr>').join('');
 
+  const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
+  const reportTitle = AR ? 'تقرير الحجوزات' : 'Bookings Report';
+  const totalLine = AR
+    ? `إجمالي: ${allBookings.length} حجز — ${new Date().toLocaleDateString('ar-SA')}`
+    : `Total: ${allBookings.length} booking(s) — ${new Date().toLocaleDateString('en-US')}`;
   const html = [
-    '<!DOCTYPE html><html dir="rtl" lang="ar"><head>',
-    '<meta charset="UTF-8"><title>تقرير الحجوزات</title>',
+    `<!DOCTYPE html><html ${dirAttr}><head>`,
+    `<meta charset="UTF-8"><title>${reportTitle}</title>`,
     '<style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}',
-    'h2{color:#247680}table{width:100%;border-collapse:collapse}',
-    'th{background:#247680;color:#fff;padding:8px;text-align:right}',
+    'h2{color:#FF5733}table{width:100%;border-collapse:collapse}',
+    `th{background:#FF5733;color:#fff;padding:8px;text-align:${AR?'right':'left'}}`,
     'td{padding:7px;border-bottom:1px solid #ddd}',
     '@media print{button{display:none}}</style></head><body>',
-    '<h2>تقرير الحجوزات</h2>',
-    '<p>إجمالي: '+allBookings.length+' حجز — '+new Date().toLocaleDateString('ar-SA')+'</p>',
-    '<button onclick="window.print()" style="background:#247680;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">طباعة</button>',
-    '<table><thead><tr><th>رقم الطلب</th><th>الاسم</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>الحصة</th><th>التاريخ</th><th>الحالة</th><th>ملاحظات</th></tr></thead>',
+    `<h2>${reportTitle}</h2>`,
+    `<p>${totalLine}</p>`,
+    `<button onclick="window.print()" style="background:#FF5733;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">${t('طباعة')}</button>`,
+    `<table><thead><tr><th>${t('رقم الطلب')}</th><th>${t('الاسم')}</th><th>${t('المرحلة')}</th><th>${t('الصف')}</th><th>${t('الشعبة')}</th><th>${t('الحصة')}</th><th>${t('التاريخ')}</th><th>${t('الحالة')}</th><th>${t('ملاحظات')}</th></tr></thead>`,
     '<tbody>'+rows+'</tbody></table></body></html>'
   ].join('');
 
