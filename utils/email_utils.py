@@ -76,6 +76,7 @@ def _send_via_graph(to_email, to_name, subject, html_body, bcc_list=None):
         if r.status_code not in (200, 201, 202):
             print(f'[email] Graph sendMail failed: HTTP {r.status_code} — {r.text[:500]} (sender={sender_email}, to={to_email})', flush=True)
             return False
+        print(f'[email] sent successfully via Graph (to={to_email}, subject={subject[:60]})', flush=True)
         return True
     except Exception as e:
         print(f'[email] Graph sendMail raised exception: {e}', flush=True)
@@ -108,7 +109,11 @@ def _send_via_brevo(to_email, to_name, subject, html_body, bcc_list=None):
             json=payload,
             timeout=15,
         )
-        return r.status_code in (200, 201, 202)
+        if r.status_code not in (200, 201, 202):
+            print(f'[email] Brevo send failed: HTTP {r.status_code} — {r.text[:500]} (to={to_email})', flush=True)
+            return False
+        print(f'[email] sent successfully via Brevo (to={to_email}, subject={subject[:60]})', flush=True)
+        return True
     except Exception:
         return False
 
