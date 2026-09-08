@@ -83,9 +83,14 @@ def save_upload(file_obj):
     return f'/uploads/{fname}'
 
 
-def get_all_contact_emails():
+def get_all_contact_emails(stage_id=None):
+    """Contacts assigned to a specific stage are notified only for that
+    stage's bookings; contacts with no stage assigned are notified for all."""
     from models import Contact
-    return [c.email for c in Contact.query.all() if is_valid_email(c.email)]
+    q = Contact.query
+    if stage_id is not None:
+        q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
+    return [c.email for c in q.all() if is_valid_email(c.email)]
 
 
 def get_blocked_for_date(booking_date):
