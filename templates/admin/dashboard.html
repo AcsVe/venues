@@ -27,9 +27,9 @@
       overflow-y: auto;
     }
     .sidebar-logo {
-      padding: 18px 16px;
+      padding: 12px 16px;
       border-bottom: 1px solid rgba(255,255,255,.15);
-      display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+      display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
     }
     .sidebar-logo-chip {
       background: #fff; border-radius: 8px; padding: 6px 10px;
@@ -37,26 +37,30 @@
     }
     .sidebar-logo-chip img { height: 34px; max-width: 100%; object-fit: contain; display: block; }
     .sidebar-logo-text { font-size: .8rem; font-weight: 600; opacity: .8; }
-    .sidebar-nav { flex: 1; padding: 12px 0; }
+    .sidebar-nav { flex: 1; padding: 6px 0; }
     .nav-item {
       display: flex; align-items: center; gap: 10px;
-      padding: 11px 18px; cursor: pointer;
+      padding: 8px 18px; cursor: pointer;
       font-size: .92rem; font-weight: 600; color: rgba(255,255,255,.8);
       transition: all .2s; border: none; background: none;
-      width: 100%; text-align: right; font-family: inherit;
+      width: 100%; text-align: start; font-family: inherit;
     }
     .nav-item:hover, .nav-item.active {
       background: rgba(255,255,255,.15); color: #fff;
     }
     .nav-item i { width: 20px; text-align: center; }
     .nav-badge {
-      margin-right: auto; background: var(--accent); color: #1e2a2b;
+      margin-inline-start: auto; background: var(--accent); color: #1e2a2b;
       border-radius: 10px; padding: 1px 8px; font-size: .72rem; font-weight: 800;
     }
-    .sidebar-footer { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.15); }
+    .sidebar-footer {
+      padding: 10px 16px; border-top: 1px solid rgba(255,255,255,.15);
+      display: flex; flex-direction: column; gap: 4px;
+    }
     .sidebar-footer a {
       display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.7);
       text-decoration: none; font-size: .85rem; font-weight: 600;
+      padding: 6px 0;
     }
     .sidebar-footer a:hover { color: #fff; }
     /* Main */
@@ -110,7 +114,7 @@
     /* Table */
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-    th { background: #f0f7f8; color: var(--primary); font-weight: 700; padding: 10px 12px; text-align: right; white-space: nowrap; }
+    th { background: #f0f7f8; color: var(--primary); font-weight: 700; padding: 10px 12px; text-align: start; white-space: nowrap; }
     td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     tr:hover td { background: #fafefe; }
     .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px; border-radius: 20px; font-size: .75rem; font-weight: 700; }
@@ -302,9 +306,7 @@
   </div>
   <div class="sidebar-footer">
     <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
-    <br><br>
     <a href="#" onclick="toggleLang();return false;"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></a>
-    <br><br>
     <a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> خروج</a>
   </div>
 </nav>
@@ -651,7 +653,7 @@
       <div class="form-group"><label>البريد</label><input type="email" id="editEmail" dir="ltr"></div>
       <div class="form-group"><label>الجوال</label><input type="tel" id="editPhone" dir="ltr"></div>
       <div class="form-group"><label>نيابة عن</label><input type="text" id="editBehalf"></div>
-      <div class="form-group"><label>المادة / الغرض</label><input type="text" id="editTitle"></div>
+      <div class="form-group"><label>سبب الحجز</label><input type="text" id="editTitle"></div>
       <div class="form-group"><label>المرحلة</label><select id="editStage" onchange="onEditStageChange()"></select></div>
       <div class="form-group"><label>الصف</label><select id="editGrade" onchange="onEditGradeChange()"></select></div>
       <div class="form-group"><label>الشعبة</label><select id="editSection"></select></div>
@@ -886,7 +888,14 @@ const I18N_EN = {
   "المرحلة (اتركه فارغاً لتصل إشعارات كل المراحل)": "Stage (leave blank to notify for all stages)",
   "المرحلة لهذه القائمة (اتركه فارغاً لكل المراحل)": "Stage for this list (leave blank for all stages)",
   "عرض التفاصيل": "View Details",
+  "سبب الحجز": "Reason for Booking",
+  "تاريخ الطباعة": "Printed on",
+  "إجمالي": "Total",
 };
+
+const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
+const ORG_EN_NAME = {{ config.ORG_EN|tojson }};
+const ORG_LOGO_URL = {{ config.LOGO_URL|tojson }};
 
 let AR = (localStorage.getItem('adminLang') || '{{ lang }}') !== 'en';
 
@@ -909,6 +918,7 @@ function captureStaticText() {
 function applyStaticLang() {
   if (!ORIGINAL_TEXT_NODES) return;
   document.documentElement.lang = AR ? 'ar' : 'en';
+  document.documentElement.dir  = AR ? 'rtl' : 'ltr';
   ORIGINAL_TEXT_NODES.forEach(({ node, original }) => {
     const trimmed = original.trim();
     node.nodeValue = AR ? original : original.replace(trimmed, I18N_EN[trimmed] || trimmed);
@@ -991,6 +1001,45 @@ function showToast(msg, color = '#FF5733') {
   setTimeout(() => toastEl.classList.remove('show'), 3000);
 }
 function confirmT(msg) { return confirm(t(msg)); }
+
+function printLetterheadHtml(bodyHtml, titleAr, titleEn) {
+  const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
+  const title = AR ? titleAr : titleEn;
+  const now = new Date();
+  const printedAt = now.toLocaleString(AR ? 'ar-SA' : 'en-US');
+  const logoImg = ORG_LOGO_URL ? `<img src="${ORG_LOGO_URL}" alt="logo" style="height:46px;display:block">` : '';
+
+  return `<!DOCTYPE html><html ${dirAttr}><head>
+<meta charset="UTF-8"><title>${title}</title>
+<style>
+  body{font-family:Arial,sans-serif;padding:24px;color:#1e2a2b;margin:0}
+  .print-header{display:flex;align-items:center;gap:14px;border-bottom:3px solid #FF5733;padding-bottom:14px;margin-bottom:18px}
+  .print-header .org-names{font-weight:800;font-size:15px;line-height:1.5}
+  .print-header .org-names .ar{color:#1B3358}
+  .print-header .org-names .en{color:#6b7c7e;font-size:13px}
+  h2{color:#FF5733;margin:0 0 6px}
+  table{width:100%;border-collapse:collapse}
+  th{background:#FF5733;color:#fff;padding:8px;text-align:${AR?'right':'left'};font-size:12px}
+  td{padding:7px;border-bottom:1px solid #ddd;font-size:12px}
+  .print-footer{margin-top:26px;padding-top:12px;border-top:1px solid #ddd;font-size:11px;color:#888;display:flex;justify-content:space-between}
+  .print-btn{background:#FF5733;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-size:13px}
+  @media print{.print-btn{display:none}}
+</style></head><body>
+  <div class="print-header">
+    ${logoImg}
+    <div class="org-names">
+      <div class="ar">${ORG_AR_NAME}</div>
+      <div class="en">${ORG_EN_NAME}</div>
+    </div>
+  </div>
+  <button class="print-btn" onclick="window.print()">${AR?'طباعة':'Print'}</button>
+  ${bodyHtml}
+  <div class="print-footer">
+    <span>${AR?'تاريخ الطباعة':'Printed on'}: ${printedAt}</span>
+    <span>${ORG_AR_NAME} — ${AR?'نظام حجز عربات الحواسيب':'Laptop Trolley Booking System'}</span>
+  </div>
+</body></html>`;
+}
 
 // ── API helpers ──
 async function api(url, body) {
@@ -1128,7 +1177,7 @@ function openDetail(reqId) {
       ${drow('رقم الطلب', `<strong style="color:var(--primary)">${b.reqId}</strong>`)}
       ${drow('الحالة', `<span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span>`)}
       ${drow('الاسم', b.name)} ${drow('البريد', b.email)}
-      ${drow('الجوال', b.phone||'-')} ${drow('المادة/الغرض', b.title||'-')}
+      ${drow('الجوال', b.phone||'-')} ${drow('سبب الحجز', b.title||'-')}
       ${drow('المرحلة', b.stage||'-')} ${drow('الصف', b.grade||'-')}
       ${drow('الشعبة', b.section||'-')} ${drow('الحصة', periodStr)}
       ${drow('التاريخ', b.date)}
@@ -1181,22 +1230,16 @@ function printBooking(reqId) {
   if (!b) return;
   const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
   const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
-  const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
   const rows = [
     [t('رقم الطلب'), b.reqId], [t('الحالة'), sLabels[b.status]||b.status],
     [t('الاسم'), b.name], [t('البريد'), b.email], [t('الجوال'), b.phone||'-'],
-    [t('المادة/الغرض'), b.title||'-'], [t('المرحلة'), b.stage||'-'], [t('الصف'), b.grade||'-'],
+    [t('سبب الحجز'), b.title||'-'], [t('المرحلة'), b.stage||'-'], [t('الصف'), b.grade||'-'],
     [t('الشعبة'), b.section||'-'], [t('الحصة'), periodStr], [t('التاريخ'), b.date],
     [t('ملاحظات'), b.notes||'-'],
   ].map(([k,v]) => `<tr><td style="padding:8px;background:#f0f7f8;font-weight:700;width:35%">${k}</td><td style="padding:8px;border-bottom:1px solid #eee">${String(v).replace(/</g,'&lt;')}</td></tr>`).join('');
 
-  const html = `<!DOCTYPE html><html ${dirAttr}><head><meta charset="UTF-8"><title>${b.reqId}</title>
-    <style>body{font-family:Arial,sans-serif;padding:24px}h2{color:#FF5733}
-    table{width:100%;border-collapse:collapse;margin-top:12px}
-    @media print{button{display:none}}</style></head><body>
-    <h2>${AR?'تفاصيل الحجز':'Booking Details'}</h2>
-    <button onclick="window.print()" style="background:#FF5733;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">${AR?'طباعة':'Print'}</button>
-    <table>${rows}</table></body></html>`;
+  const body = `<h2>${AR?'تفاصيل الحجز':'Booking Details'}</h2><table style="margin-top:12px">${rows}</table>`;
+  const html = printLetterheadHtml(body, `${AR?'تفاصيل الحجز':'Booking Details'} — ${b.reqId}`, `${AR?'تفاصيل الحجز':'Booking Details'} — ${b.reqId}`);
   const win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();
@@ -1826,7 +1869,7 @@ function runReport() {
 
   document.getElementById('anaTable').innerHTML = `
     <table class="period-table">
-      <thead><tr><th>العنصر</th><th>الحجوزات</th><th>معتمدة</th><th>قيد المراجعة</th><th>عدد الحصص</th></tr></thead>
+      <thead><tr><th>${t('العنصر')}</th><th>${t('الحجوزات')}</th><th>${t('معتمدة')}</th><th>${t('قيد المراجعة')}</th><th>${t('عدد الحصص')}</th></tr></thead>
       <tbody>${arr.map(({key,data}) => `
         <tr>
           <td style="font-weight:700">${esc(key)}</td>
@@ -1852,7 +1895,7 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 
 // ── Helpers ───────────────────────────────────────────────────
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function refreshAll() { loadBookings(); loadStats(); showToast('تم التحديث'); }
+function refreshAll() { loadBookings(); loadStats(); showToast(t('تم التحديث')); }
 
 // ── Sidebar toggle ──
 function toggleSidebar() {
@@ -1995,9 +2038,9 @@ function drawDonut(approved, pending, rejected, total) {
   ctx.clearRect(0,0,200,200);
 
   const slices = [
-    {val: approved, color: '#27ae60', label: 'معتمد'},
-    {val: pending,  color: '#e67e22', label: 'قيد المراجعة'},
-    {val: rejected, color: '#c0392b', label: 'مرفوض/ملغي'},
+    {val: approved, color: '#27ae60', label: t('معتمد')},
+    {val: pending,  color: '#e67e22', label: t('قيد المراجعة')},
+    {val: rejected, color: '#c0392b', label: t('مرفوض/ملغي')},
   ].filter(s => s.val > 0);
 
   if (!slices.length) return;
@@ -2025,7 +2068,7 @@ function drawDonut(approved, pending, rejected, total) {
   ctx.fillText(total, cx, cy-8);
   ctx.font = '12px Tajawal';
   ctx.fillStyle = '#6b7c7e';
-  ctx.fillText('إجمالي', cx, cy+12);
+  ctx.fillText(t('إجمالي'), cx, cy+12);
 
   // legend
   document.getElementById('donutLegend').innerHTML = slices.map(s =>
@@ -2106,7 +2149,7 @@ function drawHallBars(hallCount) {
   el.innerHTML = sorted.map(([hall,count],i) => {
     const pct = Math.round(count/mx*100);
     return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
-      '<div style="width:120px;font-size:.82rem;font-weight:700;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+hall+'">'+hall+'</div>' +
+      '<div style="width:120px;font-size:.82rem;font-weight:700;text-align:start;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+hall+'">'+hall+'</div>' +
       '<div style="flex:1;background:#e8f0f2;border-radius:6px;height:30px;overflow:hidden">' +
       '<div style="width:'+pct+'%;background:'+colors[i%colors.length]+';height:100%;border-radius:6px;display:flex;align-items:center;padding:0 8px;transition:width .5s">' +
       '<span style="color:#fff;font-size:.78rem;font-weight:700">'+count+'</span></div></div></div>';
@@ -2115,7 +2158,7 @@ function drawHallBars(hallCount) {
 
 // ── Export CSV ──
 function exportCSV() {
-  const rows = [[t('رقم الطلب'),t('الاسم'),t('البريد'),t('الجوال'),t('الموضوع'),t('المرحلة'),t('الصف'),t('الشعبة'),t('الحصة'),t('التاريخ'),t('الحالة'),t('ملاحظات'),t('تاريخ الطلب')]];
+  const rows = [[t('رقم الطلب'),t('الاسم'),t('البريد'),t('الجوال'),t('سبب الحجز'),t('المرحلة'),t('الصف'),t('الشعبة'),t('الحصة'),t('التاريخ'),t('الحالة'),t('ملاحظات'),t('تاريخ الطلب')]];
   const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), rejected:t('مرفوض'), cancelled:t('ملغي')};
   const filtered = allBookings;
   filtered.forEach(b => {
@@ -2141,26 +2184,17 @@ function exportPrint() {
     statusLbl[b.status]||b.status, b.notes||''
   ].map(c => '<td>'+String(c).replace(/</g,'&lt;')+'</td>').join('')).map(r => '<tr>'+r+'</tr>').join('');
 
-  const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
-  const reportTitle = AR ? 'تقرير الحجوزات' : 'Bookings Report';
   const totalLine = AR
-    ? `إجمالي: ${allBookings.length} حجز — ${new Date().toLocaleDateString('ar-SA')}`
-    : `Total: ${allBookings.length} booking(s) — ${new Date().toLocaleDateString('en-US')}`;
-  const html = [
-    `<!DOCTYPE html><html ${dirAttr}><head>`,
-    `<meta charset="UTF-8"><title>${reportTitle}</title>`,
-    '<style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}',
-    'h2{color:#FF5733}table{width:100%;border-collapse:collapse}',
-    `th{background:#FF5733;color:#fff;padding:8px;text-align:${AR?'right':'left'}}`,
-    'td{padding:7px;border-bottom:1px solid #ddd}',
-    '@media print{button{display:none}}</style></head><body>',
-    `<h2>${reportTitle}</h2>`,
-    `<p>${totalLine}</p>`,
-    `<button onclick="window.print()" style="background:#FF5733;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:12px">${t('طباعة')}</button>`,
-    `<table><thead><tr><th>${t('رقم الطلب')}</th><th>${t('الاسم')}</th><th>${t('المرحلة')}</th><th>${t('الصف')}</th><th>${t('الشعبة')}</th><th>${t('الحصة')}</th><th>${t('التاريخ')}</th><th>${t('الحالة')}</th><th>${t('ملاحظات')}</th></tr></thead>`,
-    '<tbody>'+rows+'</tbody></table></body></html>'
-  ].join('');
+    ? `إجمالي: ${allBookings.length} حجز`
+    : `Total: ${allBookings.length} booking(s)`;
 
+  const body = `
+    <h2>${AR?'تقرير الحجوزات':'Bookings Report'}</h2>
+    <p style="margin:0 0 16px;color:#555">${totalLine}</p>
+    <table><thead><tr><th>${t('رقم الطلب')}</th><th>${t('الاسم')}</th><th>${t('المرحلة')}</th><th>${t('الصف')}</th><th>${t('الشعبة')}</th><th>${t('الحصة')}</th><th>${t('التاريخ')}</th><th>${t('الحالة')}</th><th>${t('ملاحظات')}</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+
+  const html = printLetterheadHtml(body, 'تقرير الحجوزات', 'Bookings Report');
   const win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();
