@@ -1,16 +1,94 @@
+import time
 import requests
 from flask import current_app
 
+# Simple in-memory access-token cache (per process). Avoids requesting a
+# fresh token from Azure AD on every single email send.
+_ms_token_cache = {'token': None, 'expires_at': 0}
 
-def _send(to_email, to_name, subject, html_body, bcc_list=None):
-    """Send email via Brevo API (synchronous)."""
+
+def _get_ms_access_token():
+    tenant_id     = current_app.config.get('MS_TENANT_ID', '')
+    client_id     = current_app.config.get('MS_CLIENT_ID', '')
+    client_secret = current_app.config.get('MS_CLIENT_SECRET', '')
+    if not (tenant_id and client_id and client_secret):
+        print('[email] MS Graph not configured: missing tenant_id/client_id/client_secret', flush=True)
+        return None
+
+    now = time.time()
+    if _ms_token_cache['token'] and now < _ms_token_cache['expires_at'] - 60:
+        return _ms_token_cache['token']
+
+    try:
+        r = requests.post(
+            f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token',
+            data={
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'scope': 'https://graph.microsoft.com/.default',
+                'grant_type': 'client_credentials',
+            },
+            timeout=15,
+        )
+        if r.status_code != 200:
+            print(f'[email] MS token request failed: HTTP {r.status_code} — {r.text[:500]}', flush=True)
+            return None
+        data = r.json()
+        token = data.get('access_token')
+        if not token:
+            print(f'[email] MS token response had no access_token: {r.text[:500]}', flush=True)
+            return None
+        _ms_token_cache['token'] = token
+        _ms_token_cache['expires_at'] = now + int(data.get('expires_in', 3600))
+        return token
+    except Exception as e:
+        print(f'[email] MS token request raised exception: {e}', flush=True)
+        return None
+
+
+def _send_via_graph(to_email, to_name, subject, html_body, bcc_list=None):
+    token = _get_ms_access_token()
+    if not token:
+        return False
+
+    sender_email = current_app.config.get('MS_SENDER_EMAIL', '')
+    if not sender_email:
+        print('[email] MS_SENDER_EMAIL is not set', flush=True)
+        return False
+
+    message = {
+        'subject': subject,
+        'body': {'contentType': 'HTML', 'content': html_body},
+        'toRecipients': [{'emailAddress': {'address': to_email, 'name': to_name or to_email}}],
+    }
+    if bcc_list:
+        unique_bcc = list({e.lower(): e for e in bcc_list if e and '@' in e}.values())
+        if unique_bcc:
+            message['bccRecipients'] = [{'emailAddress': {'address': e}} for e in unique_bcc[:50]]
+
+    try:
+        r = requests.post(
+            f'https://graph.microsoft.com/v1.0/users/{sender_email}/sendMail',
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+            json={'message': message, 'saveToSentItems': True},
+            timeout=15,
+        )
+        if r.status_code not in (200, 201, 202):
+            print(f'[email] Graph sendMail failed: HTTP {r.status_code} — {r.text[:500]} (sender={sender_email}, to={to_email})', flush=True)
+            return False
+        return True
+    except Exception as e:
+        print(f'[email] Graph sendMail raised exception: {e}', flush=True)
+        return False
+
+
+def _send_via_brevo(to_email, to_name, subject, html_body, bcc_list=None):
     api_key = current_app.config.get('BREVO_API_KEY', '')
     if not api_key:
         return False
 
     sender_email = current_app.config.get('SENDER_EMAIL', '')
     sender_name  = current_app.config.get('SENDER_NAME', 'مدرسة الرائد العربي')
-    org_ar       = current_app.config.get('ORG_AR', '')
 
     payload = {
         'sender': {'name': sender_name, 'email': sender_email},
@@ -28,11 +106,19 @@ def _send(to_email, to_name, subject, html_body, bcc_list=None):
             'https://api.brevo.com/v3/smtp/email',
             headers={'api-key': api_key, 'Content-Type': 'application/json'},
             json=payload,
-            timeout=15
+            timeout=15,
         )
         return r.status_code in (200, 201, 202)
     except Exception:
         return False
+
+
+def _send(to_email, to_name, subject, html_body, bcc_list=None):
+    """Send an email. Uses Microsoft 365 (Graph API) when configured,
+    otherwise falls back to Brevo."""
+    if current_app.config.get('MS_CLIENT_SECRET'):
+        return _send_via_graph(to_email, to_name, subject, html_body, bcc_list)
+    return _send_via_brevo(to_email, to_name, subject, html_body, bcc_list)
 
 
 def _date_label(date_str, start_time='', end_time=''):
