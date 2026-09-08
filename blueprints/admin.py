@@ -119,11 +119,22 @@ def api_approve():
     base_url = current_app.config.get('BASE_URL', '')
     checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url else ''
 
+    print(f"[email] DEBUG: approve started for {req_id}", flush=True)
     try:
-        send_staff_notification('approve', _booking_email_ctx(b), _get_contacts())
-        send_approve(_booking_email_ctx(b, checkoutUrl=checkout_url))
+        print("[email] DEBUG: building context...", flush=True)
+        ctx = _booking_email_ctx(b)
+        print(f"[email] DEBUG: context built, email={ctx.get('email')}", flush=True)
+        contacts = _get_contacts()
+        print(f"[email] DEBUG: contacts fetched, count={len(contacts)}", flush=True)
+        send_staff_notification('approve', ctx, contacts)
+        print("[email] DEBUG: send_staff_notification returned", flush=True)
+        ctx2 = _booking_email_ctx(b, checkoutUrl=checkout_url)
+        send_approve(ctx2)
+        print("[email] DEBUG: send_approve returned", flush=True)
     except Exception as e:
+        import traceback
         print(f"[email] notification failed: {e}", flush=True)
+        print(f"[email] TRACEBACK: {traceback.format_exc()}", flush=True)
 
     return jsonify({'success': True})
 
