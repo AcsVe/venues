@@ -123,6 +123,7 @@ async function loadMonth(y, m) {
   const key = y + '_' + m;
   if (monthCache[key]) return monthCache[key];
   const res = await fetch('/api/month-data?y=' + y + '&m=' + m);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
   const data = await res.json();
   monthCache[key] = data;
   return data;
@@ -133,8 +134,26 @@ async function renderCalendar() {
     AR ? (MONTHS_AR[curMonth-1] + ' ' + curYear) : (MONTHS_EN[curMonth-1] + ' ' + curYear);
 
   const grid = document.getElementById('calGrid');
-  grid.innerHTML = '';
+  grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--muted)">
+    <span class="spinner" style="border-color:var(--border);border-top-color:var(--primary)"></span>
+  </div>`;
 
+  let data;
+  try {
+    data = await loadMonth(curYear, curMonth);
+  } catch (e) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--muted)">
+      <i class="fas fa-exclamation-triangle" style="font-size:1.5rem;margin-bottom:8px;display:block"></i>
+      ${AR ? 'تعذّر تحميل الروزنامة.' : 'Could not load the calendar.'}
+      <br>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="renderCalendar()">
+        <i class="fas fa-redo"></i> ${AR ? 'إعادة المحاولة' : 'Retry'}
+      </button>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = '';
   const dayNames = AR ? DAYS_AR : DAYS_EN;
   for (const d of dayNames) {
     const el = document.createElement('div');
@@ -143,7 +162,6 @@ async function renderCalendar() {
     grid.appendChild(el);
   }
 
-  const data = await loadMonth(curYear, curMonth);
   const bookings = data.bookings || [];
   const blocked  = data.blocked  || {};
 
