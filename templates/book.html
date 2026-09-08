@@ -129,7 +129,7 @@
 
     <div class="form-group">
       <label>{{ 'تاريخ الحجز' if lang == 'ar' else 'Booking Date' }} <span class="req">*</span></label>
-      <input type="date" id="bookingDate" min="{{ today }}" value="{{ pre_date }}">
+      <input type="date" id="bookingDate" min="{{ today }}" value="{{ pre_date }}" onchange="refreshPeriodAvailability()">
     </div>
 
     <div class="form-group">
@@ -221,11 +221,54 @@ function onStageChange() {
   if (!stage) {
     gradeSel.innerHTML = `<option value="">${AR ? '-- اختر الصف --' : '-- Select Grade --'}</option>`;
     gradeSel.disabled = true;
+    resetPeriodOptions();
     return;
   }
   gradeSel.innerHTML = `<option value="">${AR ? '-- اختر الصف --' : '-- Select Grade --'}</option>` +
     stage.grades.map(g => `<option value="${g.id}">${AR ? g.nameAr : (g.nameEn||g.nameAr)}</option>`).join('');
   gradeSel.disabled = false;
+  refreshPeriodAvailability();
+}
+
+// ── Period availability (shows only open periods once stage + date are picked) ──
+const PERIOD_OPTIONS_HTML = document.getElementById('periodSel').innerHTML;
+
+function resetPeriodOptions() {
+  document.getElementById('periodSel').innerHTML = PERIOD_OPTIONS_HTML;
+}
+
+async function refreshPeriodAvailability() {
+  const stageId = document.getElementById('stageSel').value;
+  const bookingDate = document.getElementById('bookingDate').value;
+  const periodSel = document.getElementById('periodSel');
+
+  if (!stageId || !bookingDate) {
+    resetPeriodOptions();
+    return;
+  }
+
+  const prevValue = periodSel.value;
+  periodSel.disabled = true;
+
+  try {
+    const res = await fetch(`/api/available-periods?stageId=${stageId}&date=${bookingDate}`);
+    const periods = await res.json();
+    if (!Array.isArray(periods)) { resetPeriodOptions(); return; }
+
+    periodSel.innerHTML = `<option value="">${AR ? '-- اختر الحصة --' : '-- Select Period --'}</option>` +
+      periods.map(p => {
+        const timeStr = p.startTime ? ` (${p.startTime} - ${p.endTime})` : '';
+        const takenLabel = p.available ? '' : (AR ? ' — محجوزة' : ' — Booked');
+        return `<option value="${p.id}" ${p.available ? '' : 'disabled'}>${p.label}${timeStr}${takenLabel}</option>`;
+      }).join('');
+
+    if ([...periodSel.options].some(o => o.value === prevValue && !o.disabled)) {
+      periodSel.value = prevValue;
+    }
+  } catch (e) {
+    resetPeriodOptions();
+  }
+  periodSel.disabled = false;
 }
 
 function onGradeChange() {
