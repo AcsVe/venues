@@ -302,6 +302,31 @@ def send_pending(data):
                  bcc_list=data.get('bcc', []))
 
 
+def send_checkout_reminder(data):
+    """Sent automatically a short while after an approved booking's period
+    ends, if the device-handover form is still empty."""
+    checkout_url = data.get('checkoutUrl', '')
+    content_ar = f"""
+    <h2 style="color:#e67e22;margin-top:0">📋 تذكير — نموذج تسليم الأجهزة</h2>
+    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، يرجى العلم أنه لم يتم تسليم سجل استخدام الطلبة للأجهزة الخاص بحجزكم التالي. يُرجى العمل على تعبئته وإرساله في أقرب وقت ممكن.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">{_rows_ar(data, bg='#fef9f0')}</table>
+    <div style="text-align:center;margin:16px 0">
+      <a href="{checkout_url}" style="display:inline-block;background:#27ae60;color:#fff;padding:9px 20px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem">فتح نموذج تسليم الأجهزة</a>
+    </div>
+    """
+    content_en = f"""
+    <h2 style="color:#e67e22;margin-top:0">📋 Reminder — Device Handover Form</h2>
+    <p>Dear <strong>{data['name']}</strong>, please note that the student device-usage record for your booking below has not been submitted yet. Please fill it out and send it as soon as possible.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">{_rows_en(data, bg='#fef9f0')}</table>
+    <div style="text-align:center;margin:16px 0">
+      <a href="{checkout_url}" style="display:inline-block;background:#27ae60;color:#fff;padding:9px 20px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem">Open Handover Form</a>
+    </div>
+    """
+    return _send(data['email'], data['name'],
+                 f"[الرائد العربي / Al-Raed] تذكير — نموذج تسليم الأجهزة #{data['reqId']}",
+                 _base_html(content_ar, content_en, '#e67e22'))
+
+
 def send_staff_notification(event_type, data, contacts):
     """Send internal notification to all staff contacts."""
     if not contacts:
