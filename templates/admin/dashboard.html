@@ -23,7 +23,7 @@
       width: var(--sidebar); min-height: 100vh;
       background: linear-gradient(180deg, var(--secondary-dark), var(--secondary));
       color: #fff; display: flex; flex-direction: column;
-      position: fixed; top: 0; right: 0; bottom: 0; z-index: 150;
+      position: fixed; top: 0; inset-inline-end: 0; bottom: 0; z-index: 150;
       overflow-y: auto;
     }
     .sidebar-logo {
@@ -35,7 +35,7 @@
       background: #fff; border-radius: 8px; padding: 6px 10px;
       display: flex; align-items: center; width: 100%; box-sizing: border-box;
     }
-    .sidebar-logo-chip img { height: 34px; max-width: 100%; object-fit: contain; display: block; }
+    .sidebar-logo-chip img { height: 44px; max-width: 100%; object-fit: contain; display: block; }
     .sidebar-logo-text { font-size: .8rem; font-weight: 600; opacity: .8; }
     .sidebar-nav { flex: 1; padding: 6px 0; }
     .nav-item {
@@ -64,7 +64,7 @@
     }
     .sidebar-footer a:hover { color: #fff; }
     /* Main */
-    .main { margin-right: var(--sidebar); display: flex; flex-direction: column; min-height: 100vh; width: calc(100% - var(--sidebar)); }
+    .main { margin-inline-end: var(--sidebar); display: flex; flex-direction: column; min-height: 100vh; width: calc(100% - var(--sidebar)); }
     .topbar {
       background: #fff; padding: 14px 24px;
       box-shadow: 0 1px 4px rgba(0,0,0,.08);
@@ -120,6 +120,7 @@
     .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px; border-radius: 20px; font-size: .75rem; font-weight: 700; }
     .badge-pending   { background: #fff3cd; color: #856404; }
     .badge-approved  { background: #d1e7dd; color: #0a6640; }
+    .badge-completed { background: #cfe2ff; color: #0b3d91; }
     .badge-rejected  { background: #f8d7da; color: #842029; }
     .badge-cancelled { background: #e2e3e5; color: #41464b; }
     /* Actions */
@@ -211,7 +212,7 @@
       :root { --sidebar: 0px; }
       .sidebar {
         position: fixed !important;
-        top: 0; right: 0; bottom: 0;
+        top: 0; inset-inline-end: 0; bottom: 0;
         width: 82vw !important;
         max-width: 300px;
         transform: translateX(105%) !important;
@@ -219,9 +220,11 @@
         z-index: 300;
         min-height: 100vh;
       }
+      html[dir="ltr"] .sidebar { transform: translateX(-105%) !important; }
+      html[dir="ltr"] .sidebar.open { transform: translateX(0) !important; }
       .sidebar.open { transform: translateX(0) !important; }
       .main {
-        margin-right: 0 !important;
+        margin-inline-end: 0 !important;
         width: 100% !important;
         max-width: 100vw;
       }
@@ -257,8 +260,10 @@
     .spinner { display: inline-block; width: 16px; height: 16px; border: 2.5px solid rgba(255,87,51,.3); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
     @media (max-width: 768px) {
       .sidebar { transform: translateX(110%); transition: transform .28s ease; width: 82vw !important; max-width: 290px; }
+      html[dir="ltr"] .sidebar { transform: translateX(-110%); }
+      html[dir="ltr"] .sidebar.open { transform: translateX(0); }
       .sidebar.open { transform: translateX(0); }
-      .main { margin-right: 0 !important; width: 100% !important; }
+      .main { margin-inline-end: 0 !important; width: 100% !important; }
       .hamburger { display: inline-flex !important; }
       .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
       .form-grid { grid-template-columns: 1fr !important; }
@@ -332,6 +337,7 @@
         <div class="stat-card" onclick="filterByStat('all')" style="cursor:pointer" title="عرض كل الطلبات"><div class="stat-val" id="stTotal">-</div><div class="stat-label">إجمالي الطلبات</div></div>
         <div class="stat-card accent" onclick="filterByStat('pending')" style="cursor:pointer" title="عرض قيد المراجعة"><div class="stat-val" id="stPending">-</div><div class="stat-label">قيد المراجعة</div></div>
         <div class="stat-card green" onclick="filterByStat('approved')" style="cursor:pointer" title="عرض المعتمدة"><div class="stat-val" id="stApproved">-</div><div class="stat-label">معتمد</div></div>
+        <div class="stat-card" style="background:#cfe2ff;cursor:pointer" onclick="filterByStat('completed')" title="عرض المكتملة"><div class="stat-val" id="stCompleted" style="color:#0b3d91">-</div><div class="stat-label" style="color:#0b3d91">مكتمل</div></div>
         <div class="stat-card red" onclick="filterByStat('rejected')" style="cursor:pointer" title="عرض المرفوضة"><div class="stat-val" id="stRejected">-</div><div class="stat-label">مرفوض</div></div>
         <div class="stat-card orange" onclick="filterByStat('cancelled')" style="cursor:pointer" title="عرض الملغية"><div class="stat-val" id="stCancelled">-</div><div class="stat-label">ملغي</div></div>
       </div>
@@ -340,6 +346,7 @@
           <button class="filter-btn active" data-filter="all" onclick="filterBk('all',this)">الكل</button>
           <button class="filter-btn" data-filter="pending" onclick="filterBk('pending',this)">قيد المراجعة</button>
           <button class="filter-btn" data-filter="approved" onclick="filterBk('approved',this)">معتمد</button>
+          <button class="filter-btn" data-filter="completed" onclick="filterBk('completed',this)">مكتمل</button>
           <button class="filter-btn" data-filter="rejected" onclick="filterBk('rejected',this)">مرفوض</button>
           <button class="filter-btn" data-filter="cancelled" onclick="filterBk('cancelled',this)">ملغي</button>
           <input class="search-input" type="text" placeholder="🔍 بحث..." oninput="searchBk(this.value)">
@@ -627,6 +634,34 @@
         <div id="anaChart"></div>
         <div id="anaTable" style="margin-top:14px;overflow-x:auto"></div>
       </div>
+
+      <!-- Device Handover Report -->
+      <div class="card">
+        <div class="card-title"><i class="fas fa-laptop-house"></i> سجل تسليم الأجهزة</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+          <input type="text" id="checkoutSearch" placeholder="بحث برقم اللابتوب أو اسم الطالب أو المعلم..." style="flex:1;min-width:200px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit" oninput="renderCheckoutLines()">
+          <button class="btn btn-outline btn-sm" onclick="loadCheckoutReport()"><i class="fas fa-sync"></i> تحديث</button>
+          <button class="btn btn-outline btn-sm" onclick="exportCheckoutCSV()"><i class="fas fa-file-csv"></i> تصدير CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>رقم الحجز</th><th>المعلم/ة</th><th>التاريخ</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>الطالب</th><th>رقم اللابتوب</th></tr></thead>
+            <tbody id="checkoutLinesTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Missing Handover List -->
+      <div class="card">
+        <div class="card-title" style="color:#e67e22"><i class="fas fa-exclamation-triangle"></i> حجوزات بدون نموذج تسليم</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:12px">حجوزات معتمدة أو مكتملة لم يُرسَل لها نموذج تسليم الأجهزة بعد.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>رقم الحجز</th><th>المعلم/ة</th><th>البريد</th><th>التاريخ</th><th>المرحلة</th><th>الحالة</th><th>فتح النموذج</th></tr></thead>
+            <tbody id="missingCheckoutTable"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
   </div><!-- /content -->
@@ -891,6 +926,21 @@ const I18N_EN = {
   "سبب الحجز": "Reason for Booking",
   "تاريخ الطباعة": "Printed on",
   "إجمالي": "Total",
+  "مكتمل": "Completed",
+  "اكتمل الحجز": "Mark Completed",
+  "تحديد الحجز كمكتمل؟": "Mark this booking as completed?",
+  "تم إغلاق الحجز": "Booking marked completed",
+  "سجل تسليم الأجهزة": "Device Handover Log",
+  "بحث برقم اللابتوب أو اسم الطالب أو المعلم...": "Search by laptop number, student, or teacher...",
+  "تصدير CSV": "Export CSV",
+  "حجوزات بدون نموذج تسليم": "Bookings Without a Handover Form",
+  "حجوزات معتمدة أو مكتملة لم يُرسَل لها نموذج تسليم الأجهزة بعد.": "Approved or completed bookings that have no device handover form submitted yet.",
+  "رقم الحجز": "Request ID",
+  "المعلم/ة": "Teacher",
+  "الطالب": "Student",
+  "رقم اللابتوب": "Laptop Number",
+  "لم يُسلَّم": "Not handed out",
+  "فتح النموذج": "Open Form",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -938,7 +988,7 @@ function applyStaticLang() {
     if (id === 'contacts') loadContactsTab();
     if (id === 'teachers') loadTeachersTab();
     if (id === 'students') loadStudentsTab();
-    if (id === 'reports') loadReportStats();
+    if (id === 'reports') { loadReportStats(); loadCheckoutReport(); }
     if (id === 'calview') renderCal();
   }
 }
@@ -981,7 +1031,7 @@ function showTab(name) {
   if (name === 'contacts') loadContactsTab();
   if (name === 'teachers') loadTeachersTab();
   if (name === 'students') loadStudentsTab();
-  if (name === 'reports')  loadReportStats();
+  if (name === 'reports')  { loadReportStats(); loadCheckoutReport(); }
 }
 
 // ── Clock ──
@@ -1067,6 +1117,7 @@ async function loadStats() {
     document.getElementById('stTotal').textContent    = data.total;
     document.getElementById('stPending').textContent  = data.pending;
     document.getElementById('stApproved').textContent = data.approved;
+    document.getElementById('stCompleted').textContent= data.completed;
     document.getElementById('stRejected').textContent = data.rejected;
     document.getElementById('stCancelled').textContent= data.cancelled;
     document.getElementById('nbPending').textContent  = data.pending;
@@ -1094,14 +1145,14 @@ function renderTable() {
   if (curSearch) rows = rows.filter(b =>
     (b.reqId + b.name + (b.title||'') + (b.stage||'') + (b.grade||'') + (b.section||'') + b.email).toLowerCase().includes(curSearch)
   );
-  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
+  const sLabels = {approved:t('معتمد'),completed:t('مكتمل'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
   tbody.innerHTML = rows.map(b => `
     <tr>
       <td><input type="checkbox" ${selectedIds.has(b.reqId)?'checked':''} onchange="toggleSel('${b.reqId}',this)"></td>
       <td><strong style="color:var(--primary)">${esc(b.reqId)}</strong></td>
       <td>${esc(b.name)}</td>
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(b.title||'')}">${esc(b.title||'-')}</td>
-      <td>${esc(b.stage||'')}</td>
+      <td>${esc(stageDisplayName(b.stage)||'')}</td>
       <td>${esc(b.grade||'')}</td>
       <td>${esc(b.section||'')}</td>
       <td>${b.periodNumber ? t('الحصة')+' '+b.periodNumber : ''}</td>
@@ -1112,7 +1163,8 @@ function renderTable() {
           <button class="btn btn-blue btn-sm" onclick="openDetail('${b.reqId}')" title="${t('عرض التفاصيل')}"><i class="fas fa-eye"></i></button>
           ${b.status==='pending'?`<button class="btn btn-green btn-sm" onclick="quickApprove('${b.reqId}')" title="${t('موافقة')}"><i class="fas fa-check"></i></button>`:''}
           ${b.status==='pending'?`<button class="btn btn-red btn-sm" onclick="openReject('${b.reqId}')" title="${t('رفض')}"><i class="fas fa-times"></i></button>`:''}
-          ${b.status!=='cancelled'&&b.status!=='rejected'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')" title="${t('إلغاء')}"><i class="fas fa-ban"></i></button>`:''}
+          ${b.status==='approved'?`<button class="btn btn-blue btn-sm" onclick="quickComplete('${b.reqId}')" title="${t('اكتمل الحجز')}"><i class="fas fa-flag-checkered"></i></button>`:''}
+          ${b.status!=='cancelled'&&b.status!=='rejected'&&b.status!=='completed'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')" title="${t('إلغاء')}"><i class="fas fa-ban"></i></button>`:''}
         </div>
       </td>
     </tr>`).join('') || `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">${t('لا توجد نتائج')}</td></tr>`;
@@ -1151,6 +1203,13 @@ async function quickCancel(reqId) {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 
+async function quickComplete(reqId) {
+  if (!confirmT('تحديد الحجز كمكتمل؟')) return;
+  const data = await api('/admin/api/complete', {reqId});
+  if (data.success) { showToast(t('تم إغلاق الحجز')); loadBookings(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
 function openReject(reqId) {
   document.getElementById('rejectReqId').value = reqId;
   document.getElementById('rejectReason').value = '';
@@ -1170,7 +1229,7 @@ function openDetail(reqId) {
   if (!b) return;
   document.getElementById('bkModalAlert').innerHTML = '';
   document.getElementById('bkModalTitle').innerHTML = `<i class="fas fa-calendar-check"></i> ${b.reqId}`;
-  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
+  const sLabels = {approved:t('معتمد'),completed:t('مكتمل'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
   const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
   document.getElementById('bkModalBody').innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:.88rem">
@@ -1178,7 +1237,7 @@ function openDetail(reqId) {
       ${drow('الحالة', `<span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span>`)}
       ${drow('الاسم', b.name)} ${drow('البريد', b.email)}
       ${drow('الجوال', b.phone||'-')} ${drow('سبب الحجز', b.title||'-')}
-      ${drow('المرحلة', b.stage||'-')} ${drow('الصف', b.grade||'-')}
+      ${drow('المرحلة', stageDisplayName(b.stage)||'-')} ${drow('الصف', b.grade||'-')}
       ${drow('الشعبة', b.section||'-')} ${drow('الحصة', periodStr)}
       ${drow('التاريخ', b.date)}
       ${drow('ملاحظات', b.notes||'-')}
@@ -1212,7 +1271,10 @@ function openDetail(reqId) {
     footer += `<button class="btn btn-green" onclick="quickApprove('${b.reqId}');closeModal('bkModal')"><i class="fas fa-check"></i> موافقة</button>`;
     footer += `<button class="btn btn-red" onclick="closeModal('bkModal');openReject('${b.reqId}')"><i class="fas fa-times"></i> رفض</button>`;
   }
-  if (b.status !== 'cancelled' && b.status !== 'rejected') {
+  if (b.status === 'approved') {
+    footer += `<button class="btn btn-blue" onclick="quickComplete('${b.reqId}');closeModal('bkModal')"><i class="fas fa-flag-checkered"></i> ${t('اكتمل الحجز')}</button>`;
+  }
+  if (b.status !== 'cancelled' && b.status !== 'rejected' && b.status !== 'completed') {
     footer += `<button class="btn btn-orange" onclick="quickCancel('${b.reqId}');closeModal('bkModal')"><i class="fas fa-ban"></i> إلغاء</button>`;
   }
   if (b.status !== 'pending') {
@@ -1228,12 +1290,12 @@ function openDetail(reqId) {
 function printBooking(reqId) {
   const b = allBookings.find(x => x.reqId === reqId);
   if (!b) return;
-  const sLabels = {approved:t('معتمد'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
+  const sLabels = {approved:t('معتمد'),completed:t('مكتمل'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
   const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
   const rows = [
     [t('رقم الطلب'), b.reqId], [t('الحالة'), sLabels[b.status]||b.status],
     [t('الاسم'), b.name], [t('البريد'), b.email], [t('الجوال'), b.phone||'-'],
-    [t('سبب الحجز'), b.title||'-'], [t('المرحلة'), b.stage||'-'], [t('الصف'), b.grade||'-'],
+    [t('سبب الحجز'), b.title||'-'], [t('المرحلة'), stageDisplayName(b.stage)||'-'], [t('الصف'), b.grade||'-'],
     [t('الشعبة'), b.section||'-'], [t('الحصة'), periodStr], [t('التاريخ'), b.date],
     [t('ملاحظات'), b.notes||'-'],
   ].map(([k,v]) => `<tr><td style="padding:8px;background:#f0f7f8;font-weight:700;width:35%">${k}</td><td style="padding:8px;border-bottom:1px solid #eee">${String(v).replace(/</g,'&lt;')}</td></tr>`).join('');
@@ -1567,6 +1629,12 @@ function stageLabelById(id) {
   return s ? (AR ? s.nameAr : (s.nameEn || s.nameAr)) : '';
 }
 
+function stageDisplayName(arabicName) {
+  if (!arabicName) return arabicName;
+  const s = STRUCTURE.find(x => x.nameAr === arabicName);
+  return s ? (AR ? s.nameAr : (s.nameEn || s.nameAr)) : arabicName;
+}
+
 async function loadContacts() {
   const filterStageId = document.getElementById('ctFilterStage').value;
   const data = await fetch('/admin/api/contacts').then(r => r.json());
@@ -1835,7 +1903,7 @@ function runReport() {
   const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'].map(t);
   for (const r of rows) {
     let key = '';
-    if (dim === 'hall')   key = r.stage || t('غير محدد');
+    if (dim === 'hall')   key = r.stage ? stageDisplayName(r.stage) : t('غير محدد');
     else if (dim === 'person') key = r.name || t('غير محدد');
     else if (dim === 'period') key = r.periodNumber ? (t('الحصة') + ' ' + r.periodNumber) : t('غير محدد');
     else if (dim === 'month')  key = (r.date||'').substring(0, 7);
@@ -1937,7 +2005,7 @@ function renderCal() {
     .filter(b => !filter || b.trolleyCode === filter)
     .map(b => ({
       id: b.id,
-      title: `${b.stage||''} — ${[b.grade,b.section].filter(Boolean).join(' ')} — ${b.name}`,
+      title: `${stageDisplayName(b.stage)||''} — ${[b.grade,b.section].filter(Boolean).join(' ')} — ${b.name}`,
       start: b.date,
       end: b.date,
       allDay: true,
@@ -1973,11 +2041,79 @@ function renderCal() {
 }
 
 // ── Report Stats + Charts ──
+// ── Device Handover Report ──
+let checkoutReportData = { lines: [], missing: [] };
+
+async function loadCheckoutReport() {
+  try {
+    checkoutReportData = await fetch('/admin/api/checkout-report').then(r => r.json());
+  } catch (e) {
+    checkoutReportData = { lines: [], missing: [] };
+  }
+  renderCheckoutLines();
+  renderMissingCheckout();
+}
+
+function renderCheckoutLines() {
+  const q = (document.getElementById('checkoutSearch').value || '').toLowerCase().trim();
+  let lines = checkoutReportData.lines;
+  if (q) {
+    lines = lines.filter(l =>
+      String(l.laptopNumber||'').includes(q) ||
+      (l.studentName||'').toLowerCase().includes(q) ||
+      (l.teacher||'').toLowerCase().includes(q) ||
+      (l.reqId||'').toLowerCase().includes(q)
+    );
+  }
+  lines = [...lines].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  document.getElementById('checkoutLinesTable').innerHTML = lines.map(l => `
+    <tr>
+      <td><strong style="color:var(--primary)">${esc(l.reqId)}</strong></td>
+      <td>${esc(l.teacher)}</td>
+      <td>${l.date}</td>
+      <td>${esc(l.stage||'')}</td>
+      <td>${esc(l.grade||'')}</td>
+      <td>${esc(l.section||'')}</td>
+      <td>${esc(l.studentName||'')}</td>
+      <td>${l.laptopNumber ?? `<span style="color:var(--muted)">${t('لم يُسلَّم')}</span>`}</td>
+    </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+}
+
+function renderMissingCheckout() {
+  const missing = checkoutReportData.missing;
+  const sLabels = {approved:t('معتمد'), completed:t('مكتمل')};
+  document.getElementById('missingCheckoutTable').innerHTML = missing.map(m => `
+    <tr>
+      <td><strong style="color:var(--primary)">${esc(m.reqId)}</strong></td>
+      <td>${esc(m.teacher)}</td>
+      <td dir="ltr">${esc(m.email)}</td>
+      <td>${m.date}</td>
+      <td>${esc(m.stage||'')}</td>
+      <td><span class="badge badge-${m.status}">${sLabels[m.status]||m.status}</span></td>
+      <td><a href="/checkout/${m.reqId}" target="_blank" class="btn btn-outline btn-sm"><i class="fas fa-external-link-alt"></i></a></td>
+    </tr>`).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted)">${AR?'لا يوجد — كل الحجوزات مكتملة السجل ✓':'None — every booking has a handover record ✓'}</td></tr>`;
+}
+
+function exportCheckoutCSV() {
+  const rows = [[t('رقم الحجز'),t('المعلم/ة'),t('التاريخ'),t('المرحلة'),t('الصف'),t('الشعبة'),t('الطالب'),t('رقم اللابتوب')]];
+  checkoutReportData.lines.forEach(l => {
+    rows.push([l.reqId, l.teacher, l.date, l.stage||'', l.grade||'', l.section||'', l.studentName||'', l.laptopNumber ?? '']);
+  });
+  const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${AR?'تسليم_الأجهزة':'device_handover'}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast(AR ? 'تم تصدير الملف ✓' : 'File exported ✓');
+}
+
 async function loadReportStats() {
   const res = await fetch('/admin/api/bookings?filter=all');
   const data = await res.json();
 
   const approved  = data.filter(b => b.status === 'approved').length;
+  const completed = data.filter(b => b.status === 'completed').length;
   const pending   = data.filter(b => b.status === 'pending').length;
   const rejected  = data.filter(b => b.status === 'rejected').length;
   const cancelled = data.filter(b => b.status === 'cancelled').length;
@@ -2005,7 +2141,7 @@ async function loadReportStats() {
   document.getElementById('rs-approved').textContent = approved;
   document.getElementById('rs-pending').textContent  = pending;
   document.getElementById('rs-rejected').textContent = rejected + cancelled;
-  document.getElementById('rs-halls').textContent    = topHall ? topHall[0] : '-';
+  document.getElementById('rs-halls').textContent    = topHall ? stageDisplayName(topHall[0]) : '-';
   document.getElementById('rs-month').textContent    = topMonth ? topMonth[0].replace('-',' / ') : '-';
   document.getElementById('rs-hours').textContent    = totalPeriods;
   document.getElementById('rs-period').textContent   = topPeriod ? `${t('الحصة')} ${topPeriod[0]} (${topPeriod[1]})` : '-';
@@ -2014,7 +2150,7 @@ async function loadReportStats() {
   if (!data.length) return;
 
   // ── Donut Chart ──
-  drawDonut(approved, pending, rejected + cancelled, data.length);
+  drawDonut(approved, completed, pending, rejected + cancelled, data.length);
 
   // ── Monthly Line Chart ──
   const months = {};
@@ -2030,7 +2166,7 @@ async function loadReportStats() {
   drawHallBars(hallCount);
 }
 
-function drawDonut(approved, pending, rejected, total) {
+function drawDonut(approved, completed, pending, rejected, total) {
   const canvas = document.getElementById('donutChart');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -2038,9 +2174,10 @@ function drawDonut(approved, pending, rejected, total) {
   ctx.clearRect(0,0,200,200);
 
   const slices = [
-    {val: approved, color: '#27ae60', label: t('معتمد')},
-    {val: pending,  color: '#e67e22', label: t('قيد المراجعة')},
-    {val: rejected, color: '#c0392b', label: t('مرفوض/ملغي')},
+    {val: approved,  color: '#27ae60', label: t('معتمد')},
+    {val: completed, color: '#0b3d91', label: t('مكتمل')},
+    {val: pending,   color: '#e67e22', label: t('قيد المراجعة')},
+    {val: rejected,  color: '#c0392b', label: t('مرفوض/ملغي')},
   ].filter(s => s.val > 0);
 
   if (!slices.length) return;
@@ -2147,9 +2284,10 @@ function drawHallBars(hallCount) {
   const mx = sorted[0][1];
   const colors = ['#FF5733','#1B3358','#27ae60','#e67e22','#c0392b','#8e44ad'];
   el.innerHTML = sorted.map(([hall,count],i) => {
+    const hallLabel = stageDisplayName(hall);
     const pct = Math.round(count/mx*100);
     return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
-      '<div style="width:120px;font-size:.82rem;font-weight:700;text-align:start;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+hall+'">'+hall+'</div>' +
+      '<div style="width:120px;font-size:.82rem;font-weight:700;text-align:start;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(hallLabel)+'">'+esc(hallLabel)+'</div>' +
       '<div style="flex:1;background:#e8f0f2;border-radius:6px;height:30px;overflow:hidden">' +
       '<div style="width:'+pct+'%;background:'+colors[i%colors.length]+';height:100%;border-radius:6px;display:flex;align-items:center;padding:0 8px;transition:width .5s">' +
       '<span style="color:#fff;font-size:.78rem;font-weight:700">'+count+'</span></div></div></div>';
@@ -2159,10 +2297,10 @@ function drawHallBars(hallCount) {
 // ── Export CSV ──
 function exportCSV() {
   const rows = [[t('رقم الطلب'),t('الاسم'),t('البريد'),t('الجوال'),t('سبب الحجز'),t('المرحلة'),t('الصف'),t('الشعبة'),t('الحصة'),t('التاريخ'),t('الحالة'),t('ملاحظات'),t('تاريخ الطلب')]];
-  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), rejected:t('مرفوض'), cancelled:t('ملغي')};
+  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), completed:t('مكتمل'), rejected:t('مرفوض'), cancelled:t('ملغي')};
   const filtered = allBookings;
   filtered.forEach(b => {
-    rows.push([b.reqId, b.name, b.email, b.phone||'', b.title||'', b.stage||'', b.grade||'', b.section||'',
+    rows.push([b.reqId, b.name, b.email, b.phone||'', b.title||'', stageDisplayName(b.stage)||'', b.grade||'', b.section||'',
       b.periodNumber ? (t('الحصة')+' '+b.periodNumber) : '',
       b.date||'', statusLbl[b.status]||b.status, b.notes||'', b.createdAt||'']);
   });
@@ -2177,9 +2315,9 @@ function exportCSV() {
 
 // ── Export Print ──
 function exportPrint() {
-  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), rejected:t('مرفوض'), cancelled:t('ملغي')};
+  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), completed:t('مكتمل'), rejected:t('مرفوض'), cancelled:t('ملغي')};
   const rows = allBookings.map(b => [
-    b.reqId, b.name, b.stage||'', b.grade||'', b.section||'',
+    b.reqId, b.name, stageDisplayName(b.stage)||'', b.grade||'', b.section||'',
     b.periodNumber ? (t('الحصة')+' '+b.periodNumber) : '', b.date||'',
     statusLbl[b.status]||b.status, b.notes||''
   ].map(c => '<td>'+String(c).replace(/</g,'&lt;')+'</td>').join('')).map(r => '<tr>'+r+'</tr>').join('');
