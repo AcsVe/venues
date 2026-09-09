@@ -499,7 +499,16 @@
           <div class="form-group"><label>الاسم <span style="color:#c0392b">*</span></label><input type="text" id="tcName"></div>
           <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="tcEmail" dir="ltr"></div>
           <div class="form-group"><label>الجوال</label><input type="tel" id="tcPhone" dir="ltr"></div>
-          <div class="form-group"><label>المرحلة (اختياري)</label><select id="tcStage"><option value="">--</option></select></div>
+          <div></div>
+        </div>
+        <p style="font-size:.82rem;color:var(--muted);margin:4px 0 10px">
+          التعيين اختياري بكل المستويات — استخدمه لتعبئة نموذج الحجز تلقائياً عند كتابة اسم هذا المعلم.
+        </p>
+        <div class="form-grid quad">
+          <div class="form-group"><label>المرحلة</label><select id="tcStage" onchange="onTcStageChange()"><option value="">--</option></select></div>
+          <div class="form-group"><label>الصف</label><select id="tcGrade" onchange="onTcGradeChange()" disabled><option value="">--</option></select></div>
+          <div class="form-group"><label>الشعبة</label><select id="tcSection" disabled><option value="">--</option></select></div>
+          <div></div>
         </div>
         <button class="btn btn-primary" onclick="addTeacher()"><i class="fas fa-plus"></i> إضافة</button>
       </div>
@@ -517,7 +526,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>الاسم</th><th>البريد</th><th>الجوال</th><th>المرحلة</th><th>حذف</th></tr></thead>
+            <thead><tr><th>الاسم</th><th>البريد</th><th>الجوال</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>تعديل</th><th>حذف</th></tr></thead>
             <tbody id="teachersTable"></tbody>
           </table>
         </div>
@@ -548,6 +557,25 @@
           <input type="file" id="stuFile" accept=".csv,.txt" onchange="uploadStudents(this)">
         </div>
       </div>
+      <div class="card" style="border:1.5px solid #1B3358">
+        <div class="card-title" style="color:#1B3358"><i class="fas fa-exchange-alt"></i> نقل شعبة كاملة</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">
+          ينقل كل طلاب شعبة معيّنة إلى شعبة أخرى دفعة وحدة (مفيد عند دمج أو إعادة توزيع الشعب).
+        </p>
+        <div class="form-grid">
+          <div class="form-group"><label>من شعبة</label>
+            <select id="bulkMoveFromStage" onchange="onBulkMoveFromStageChange()"><option value="">المرحلة</option></select>
+            <select id="bulkMoveFromGrade" onchange="onBulkMoveFromGradeChange()" style="margin-top:6px"><option value="">الصف</option></select>
+            <select id="bulkMoveFromSection" style="margin-top:6px"><option value="">الشعبة</option></select>
+          </div>
+          <div class="form-group"><label>إلى شعبة</label>
+            <select id="bulkMoveToStage" onchange="onBulkMoveToStageChange()"><option value="">المرحلة</option></select>
+            <select id="bulkMoveToGrade" onchange="onBulkMoveToGradeChange()" style="margin-top:6px"><option value="">الصف</option></select>
+            <select id="bulkMoveToSection" style="margin-top:6px"><option value="">الشعبة</option></select>
+          </div>
+        </div>
+        <button class="btn" style="background:#1B3358;color:#fff" onclick="bulkMoveSection()"><i class="fas fa-exchange-alt"></i> نقل الكل</button>
+      </div>
       <div class="card">
         <div class="card-title"><i class="fas fa-list"></i> قائمة الطلاب</div>
         <div class="form-grid quad" style="margin-bottom:10px">
@@ -558,7 +586,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>الاسم</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>حذف</th></tr></thead>
+            <thead><tr><th>الاسم</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>نقل</th><th>حذف</th></tr></thead>
             <tbody id="studentsTable"></tbody>
           </table>
         </div>
@@ -979,6 +1007,16 @@ const I18N_EN = {
   "أرشفة كل الحجوزات الأقدم من هذا التاريخ": "Archive all bookings older than this date",
   "معاينة": "Preview",
   "أعلى استخدام من معلم/ة": "Highest usage by a teacher",
+  "نقل": "Move",
+  "تم النقل": "Moved",
+  "نقل شعبة كاملة": "Move an Entire Section",
+  "ينقل كل طلاب شعبة معيّنة إلى شعبة أخرى دفعة وحدة (مفيد عند دمج أو إعادة توزيع الشعب).":
+    "Moves every student in one section to another section at once (useful for merging or redistributing classes).",
+  "من شعبة": "From Section",
+  "إلى شعبة": "To Section",
+  "نقل الكل": "Move All",
+  "التعيين اختياري بكل المستويات — استخدمه لتعبئة نموذج الحجز تلقائياً عند كتابة اسم هذا المعلم.":
+    "Assignment is optional at every level — use it to auto-fill the booking form when this teacher's name is entered.",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1746,22 +1784,52 @@ async function loadTeachersTab() {
   loadTeachers();
 }
 
+function onTcStageChange() {
+  const stageId = document.getElementById('tcStage').value;
+  const gradeSel = document.getElementById('tcGrade');
+  const sectionSel = document.getElementById('tcSection');
+  if (!stageId) {
+    gradeSel.innerHTML = '<option value="">--</option>'; gradeSel.disabled = true;
+    sectionSel.innerHTML = '<option value="">--</option>'; sectionSel.disabled = true;
+    return;
+  }
+  fillGradeSelect(gradeSel, stageId, '--');
+  gradeSel.disabled = false;
+  sectionSel.innerHTML = '<option value="">--</option>'; sectionSel.disabled = true;
+}
+function onTcGradeChange() {
+  const stageId = document.getElementById('tcStage').value;
+  const gradeId = document.getElementById('tcGrade').value;
+  const sectionSel = document.getElementById('tcSection');
+  if (!gradeId) { sectionSel.innerHTML = '<option value="">--</option>'; sectionSel.disabled = true; return; }
+  fillSectionSelect(sectionSel, stageId, gradeId, '--');
+  sectionSel.disabled = false;
+}
+
+function gradeSectionLabel(kind, id) {
+  if (!id) return '';
+  for (const s of STRUCTURE) {
+    if (kind === 'grade') { const g = s.grades.find(x => x.id === id); if (g) return AR ? g.nameAr : (g.nameEn||g.nameAr); }
+    if (kind === 'section') { for (const g of s.grades) { const sec = g.sections.find(x => x.id === id); if (sec) return AR ? sec.nameAr : (sec.nameEn||sec.nameAr); } }
+  }
+  return '';
+}
+
 async function loadTeachers() {
   const stageId = document.getElementById('tcFilterStage').value;
   const url = stageId ? `/admin/api/teachers?stageId=${stageId}` : '/admin/api/teachers';
   const list = await fetch(url).then(r => r.json());
-  const stageName = id => {
-    const s = STRUCTURE.find(x => String(x.id) === String(id));
-    return s ? (AR ? s.nameAr : (s.nameEn || s.nameAr)) : '';
-  };
   document.getElementById('teachersTable').innerHTML = list.map(tc => `
     <tr>
       <td>${esc(tc.name)}</td>
       <td dir="ltr">${esc(tc.email)}</td>
       <td dir="ltr">${esc(tc.phone)}</td>
-      <td>${esc(stageName(tc.stageId))}</td>
+      <td>${esc(stageLabelById(tc.stageId))}</td>
+      <td>${esc(gradeSectionLabel('grade', tc.gradeId))}</td>
+      <td>${esc(gradeSectionLabel('section', tc.sectionId))}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="openEditTeacher(${tc.id})" title="${t('تعديل')}"><i class="fas fa-edit"></i></button></td>
       <td><button class="btn btn-red btn-sm" onclick="deleteTeacher(${tc.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
 }
 
 async function addTeacher() {
@@ -1771,6 +1839,8 @@ async function addTeacher() {
     name, email: document.getElementById('tcEmail').value.trim(),
     phone: document.getElementById('tcPhone').value.trim(),
     stageId: document.getElementById('tcStage').value || null,
+    gradeId: document.getElementById('tcGrade').value || null,
+    sectionId: document.getElementById('tcSection').value || null,
   });
   if (data.success) {
     document.getElementById('tcName').value = '';
@@ -1778,6 +1848,36 @@ async function addTeacher() {
     document.getElementById('tcPhone').value = '';
     showToast(t('تمت الإضافة')); loadTeachers();
   } else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function openEditTeacher(id) {
+  const list = await fetch('/admin/api/teachers').then(r => r.json());
+  const tc = list.find(x => x.id === id);
+  if (!tc) return;
+  const name = prompt(t('الاسم:') || 'الاسم:', tc.name);
+  if (name === null) return;
+  const email = prompt('Email:', tc.email || '');
+  if (email === null) return;
+  const phone = prompt(AR ? 'الجوال:' : 'Phone:', tc.phone || '');
+  if (phone === null) return;
+
+  // Reuse the same add-form cascading selects to pick the new assignment.
+  document.getElementById('tcStage').value = tc.stageId || '';
+  onTcStageChange();
+  if (tc.gradeId) { document.getElementById('tcGrade').value = tc.gradeId; onTcGradeChange(); }
+  if (tc.sectionId) { document.getElementById('tcSection').value = tc.sectionId; }
+
+  if (!confirm(AR ? 'حدّد المرحلة/الصف/الشعبة الجديدة بأعلى النموذج ثم اضغط موافق للحفظ.' :
+                     'Pick the new stage/grade/section at the top of the form, then press OK to save.')) return;
+
+  const data = await api('/admin/api/update-teacher', {
+    id, name, email, phone,
+    stageId: document.getElementById('tcStage').value || null,
+    gradeId: document.getElementById('tcGrade').value || null,
+    sectionId: document.getElementById('tcSection').value || null,
+  });
+  if (data.success) { showToast(t('تم الحفظ ✓')); loadTeachers(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
 }
 
 async function deleteTeacher(id) {
@@ -1853,8 +1953,48 @@ async function loadStudentsTab() {
     document.getElementById('stuStage'),
     document.getElementById('stuUpStage'),
     document.getElementById('stuFilterStage'),
+    document.getElementById('bulkMoveFromStage'),
+    document.getElementById('bulkMoveToStage'),
   ]);
   loadStudents();
+}
+
+function onBulkMoveFromStageChange() {
+  const stageId = document.getElementById('bulkMoveFromStage').value;
+  fillGradeSelect(document.getElementById('bulkMoveFromGrade'), stageId, AR?'الصف':'Grade');
+  document.getElementById('bulkMoveFromSection').innerHTML = `<option value="">${AR?'الشعبة':'Section'}</option>`;
+}
+function onBulkMoveFromGradeChange() {
+  const stageId = document.getElementById('bulkMoveFromStage').value;
+  const gradeId = document.getElementById('bulkMoveFromGrade').value;
+  fillSectionSelect(document.getElementById('bulkMoveFromSection'), stageId, gradeId, AR?'الشعبة':'Section');
+}
+function onBulkMoveToStageChange() {
+  const stageId = document.getElementById('bulkMoveToStage').value;
+  fillGradeSelect(document.getElementById('bulkMoveToGrade'), stageId, AR?'الصف':'Grade');
+  document.getElementById('bulkMoveToSection').innerHTML = `<option value="">${AR?'الشعبة':'Section'}</option>`;
+}
+function onBulkMoveToGradeChange() {
+  const stageId = document.getElementById('bulkMoveToStage').value;
+  const gradeId = document.getElementById('bulkMoveToGrade').value;
+  fillSectionSelect(document.getElementById('bulkMoveToSection'), stageId, gradeId, AR?'الشعبة':'Section');
+}
+
+async function bulkMoveSection() {
+  const fromSectionId = document.getElementById('bulkMoveFromSection').value;
+  const toSectionId = document.getElementById('bulkMoveToSection').value;
+  if (!fromSectionId || !toSectionId) {
+    showToast(AR?'يرجى تحديد الشعبتين (المصدر والوجهة) بالكامل':'Please fully select both the source and destination sections', '#c0392b');
+    return;
+  }
+  if (fromSectionId === toSectionId) {
+    showToast(AR?'الشعبتان متطابقتان':'Source and destination are the same section', '#c0392b');
+    return;
+  }
+  if (!confirmT('سيتم نقل كل طلاب الشعبة المصدر إلى الشعبة الوجهة. متابعة؟')) return;
+  const data = await api('/admin/api/move-students-bulk', {fromSectionId, toSectionId});
+  if (data.success) { showToast(`${t('تم النقل')}: ${data.count}`); loadStudents(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
 }
 
 async function loadStudents() {
@@ -1882,8 +2022,26 @@ async function loadStudents() {
       <td>${esc(labelFor('stage', s.stageId))}</td>
       <td>${esc(labelFor('grade', s.gradeId))}</td>
       <td>${esc(labelFor('section', s.sectionId))}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="openMoveStudent(${s.id}, ${s.stageId}, ${s.gradeId})" title="${t('نقل')}"><i class="fas fa-exchange-alt"></i></button></td>
       <td><button class="btn btn-red btn-sm" onclick="deleteStudent(${s.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+}
+
+async function openMoveStudent(studentId) {
+  // Build a flat list of "Stage — Grade — Section" choices for a simple prompt-based picker.
+  const options = [];
+  STRUCTURE.forEach(s => s.grades.forEach(g => g.sections.forEach(sec => {
+    options.push({id: sec.id, label: `${AR?s.nameAr:(s.nameEn||s.nameAr)} — ${AR?g.nameAr:(g.nameEn||g.nameAr)} — ${AR?sec.nameAr:(sec.nameEn||sec.nameAr)}`});
+  })));
+  const listText = options.map((o,i) => `${i+1}. ${o.label}`).join('\n');
+  const choice = prompt((AR?'اختر رقم الشعبة الجديدة:\n':'Choose the new section number:\n') + listText);
+  if (choice === null) return;
+  const idx = parseInt(choice, 10) - 1;
+  if (isNaN(idx) || !options[idx]) { showToast(AR?'اختيار غير صحيح':'Invalid choice', '#c0392b'); return; }
+
+  const data = await api('/admin/api/move-student', {id: studentId, sectionId: options[idx].id});
+  if (data.success) { showToast(t('تم النقل')); loadStudents(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
 }
 
 async function addStudent() {
@@ -2447,6 +2605,12 @@ function exportPrint() {
 loadBookings();
 loadHalls();
 loadPeriods();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+  });
+}
 </script>
 
 <nav class="mobile-nav">
