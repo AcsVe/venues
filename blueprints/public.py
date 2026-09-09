@@ -303,6 +303,8 @@ def api_cancel_by_user():
         return jsonify({'success': False, 'error': 'غير موجود أو البريد غير مطابق'}), 404
     if b.status == 'cancelled':
         return jsonify({'success': False, 'error': 'الحجز ملغي بالفعل'}), 400
+    if b.status == 'completed':
+        return jsonify({'success': False, 'error': 'لا يمكن إلغاء حجز مكتمل'}), 400
 
     b.status      = 'cancelled'
     b.action_date = datetime.utcnow()
@@ -342,6 +344,8 @@ def api_amend_by_user():
         return jsonify({'success': False, 'error': 'غير موجود'}), 404
     if b.status == 'cancelled':
         return jsonify({'success': False, 'error': 'الحجز ملغي'}), 400
+    if b.status == 'completed':
+        return jsonify({'success': False, 'error': 'لا يمكن تعديل حجز مكتمل'}), 400
 
     booking_date = f.get('bookingDate', b.booking_date)
 
@@ -431,7 +435,7 @@ def checkout_form(req_id):
     if not b:
         msg = 'رقم الحجز غير موجود' if lang == 'ar' else 'Booking number not found'
         return render_template('error.html', msg=msg, lang=lang)
-    if b.status != 'approved':
+    if b.status not in ('approved', 'completed'):
         msg = ('نموذج تسليم الأجهزة متاح فقط بعد اعتماد الحجز من الإدارة' if lang == 'ar'
                else 'The device handover form is only available after the booking is approved')
         return render_template('error.html', msg=msg, lang=lang)
@@ -458,7 +462,7 @@ def api_submit_checkout():
     b = Booking.query.filter_by(req_id=req_id).first()
     if not b:
         return jsonify({'success': False, 'error': 'الحجز غير موجود'}), 404
-    if b.status != 'approved':
+    if b.status not in ('approved', 'completed'):
         return jsonify({'success': False, 'error': 'الحجز غير معتمد بعد'}), 400
 
     # Validate laptop numbers: within range, and no duplicate assignment
