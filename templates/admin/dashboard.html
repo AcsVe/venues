@@ -1063,10 +1063,10 @@ function showTab(name) {
 // ── Clock ──
 function updateClock() {
   const now = new Date();
-  document.getElementById('clockEl').textContent =
-    now.toLocaleDateString('ar-SA') + ' ' + now.toLocaleTimeString('ar-SA');
+  const opts = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn' };
+  document.getElementById('clockEl').textContent = now.toLocaleString(AR ? 'ar' : 'en-US', opts);
 }
-setInterval(updateClock, 1000); updateClock();
+setInterval(updateClock, 30000); updateClock();
 
 // ── Toast ──
 function showToast(msg, color = '#FF5733') {
@@ -1082,7 +1082,9 @@ function printLetterheadHtml(bodyHtml, titleAr, titleEn) {
   const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
   const title = AR ? titleAr : titleEn;
   const now = new Date();
-  const printedAt = now.toLocaleString(AR ? 'ar-SA' : 'en-US');
+  const printedAt = now.toLocaleString(AR ? 'ar' : 'en-US', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn'
+  });
   const logoImg = ORG_LOGO_URL ? `<img src="${ORG_LOGO_URL}" alt="logo" style="height:46px;display:block">` : '';
 
   return `<!DOCTYPE html><html ${dirAttr}><head>
