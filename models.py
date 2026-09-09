@@ -5,20 +5,25 @@ db = SQLAlchemy()
 
 
 class Teacher(db.Model):
-    """Roster of teachers, optionally linked to a stage — used as a reference
-    list / autocomplete source for the booking form (item 2 of the request)."""
+    """Roster of teachers. stage/grade/section are all optional and
+    independently settable — a teacher can be tied to a whole stage, a
+    specific grade, or one exact section. Used both as a reference/contact
+    list and to auto-fill the booking form when a matching name is entered."""
     __tablename__ = 'teachers'
     id         = db.Column(db.Integer, primary_key=True)
     name       = db.Column(db.String(200), nullable=False)
     email      = db.Column(db.String(200))
     phone      = db.Column(db.String(50))
     stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'))
+    grade_id   = db.Column(db.Integer, db.ForeignKey('grades.id'))
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
         return {
             'id': self.id, 'name': self.name, 'email': self.email or '',
             'phone': self.phone or '', 'stageId': self.stage_id,
+            'gradeId': self.grade_id, 'sectionId': self.section_id,
         }
 
 
@@ -293,6 +298,8 @@ def init_db(app):
                 conn.exec_driver_sql(f"ALTER TABLE bookings ADD COLUMN IF NOT EXISTS {col} {coltype}")
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS stage_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_reminder_sent BOOLEAN DEFAULT FALSE")
+            conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
+            conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
             # Contacts can now repeat the same email across different stages —
             # drop the old single-column unique constraint if present.
             try:
