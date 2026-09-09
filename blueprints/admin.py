@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from functools import wraps
 from flask import (Blueprint, render_template, request, jsonify,
-                   session, redirect, url_for, current_app)
+                   session, redirect, url_for, current_app, send_file)
 from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact,
                     Teacher, Student, BookingCheckout, CheckoutLine)
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
@@ -763,3 +763,108 @@ def api_checkout_report():
     } for b in missing]
 
     return jsonify({'lines': lines_out, 'missing': missing_out})
+
+
+# ── Archive old data (export-then-delete, to stay within storage limits) ──
+@admin_bp.route('/api/archive-preview')
+@login_required
+def api_archive_preview():
+    before_date = request.args.get('beforeDate', '')
+    if not before_date:
+        return jsonify({'error': 'التاريخ مطلوب'}), 400
+
+    bookings = Booking.query.filter(Booking.booking_date < before_date).all()
+    by_status = {}
+    for b in bookings:
+        by_status[b.status] = by_status.get(b.status, 0) + 1
+
+    booking_ids = [b.id for b in bookings]
+    checkout_count = (BookingCheckout.query.filter(BookingCheckout.booking_id.in_(booking_ids)).count()
+                       if booking_ids else 0)
+
+    return jsonify({'total': len(bookings), 'byStatus': by_status, 'checkoutCount': checkout_count})
+
+
+@admin_bp.route('/api/archive-export')
+@login_required
+def api_archive_export():
+    import io
+    import csv
+    import zipfile
+
+    before_date = request.args.get('beforeDate', '')
+    if not before_date:
+        return jsonify({'error': 'التاريخ مطلوب'}), 400
+
+    bookings = Booking.query.filter(Booking.booking_date < before_date).order_by(Booking.booking_date).all()
+    booking_ids = [b.id for b in bookings]
+    booking_map = {b.id: b for b in bookings}
+
+    checkouts = (BookingCheckout.query.filter(BookingCheckout.booking_id.in_(booking_ids)).all()
+                 if booking_ids else [])
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        b_io = io.StringIO()
+        b_io.write('\ufeff')  # BOM so Excel opens Arabic text correctly
+        writer = csv.writer(b_io)
+        writer.writerow(['reqId', 'name', 'email', 'phone', 'title', 'bookingDate', 'stage', 'grade',
+                         'section', 'periodNumber', 'startTime', 'endTime', 'status', 'notes',
+                         'rejectReason', 'createdAt'])
+        for b in bookings:
+            writer.writerow([
+                b.req_id, b.name, b.email, b.phone or '', b.event_title or '', b.booking_date,
+                b.stage_name or '', b.grade_name or '', b.section_name or '', b.period_number or '',
+                b.start_time or '', b.end_time or '', b.status, b.notes or '', b.reject_reason or '',
+                b.created_at.isoformat() if b.created_at else '',
+            ])
+        zf.writestr('bookings.csv', b_io.getvalue())
+
+        c_io = io.StringIO()
+        c_io.write('\ufeff')
+        writer2 = csv.writer(c_io)
+        writer2.writerow(['reqId', 'teacher', 'date', 'studentName', 'laptopNumber'])
+        for co in checkouts:
+            b = booking_map.get(co.booking_id)
+            for line in co.lines:
+                writer2.writerow([
+                    b.req_id if b else '', b.name if b else '', b.booking_date if b else '',
+                    line.student_name or '', line.laptop_number if line.laptop_number is not None else '',
+                ])
+        zf.writestr('checkout_lines.csv', c_io.getvalue())
+
+    buf.seek(0)
+    filename = f'archive_before_{before_date}.zip'
+    return send_file(buf, mimetype='application/zip', as_attachment=True, download_name=filename)
+
+
+@admin_bp.route('/api/archive-delete', methods=['POST'])
+@login_required
+def api_archive_delete():
+    data = request.get_json(silent=True) or {}
+    before_date = data.get('beforeDate', '')
+    confirm = data.get('confirm', False)
+
+    if not before_date:
+        return jsonify({'success': False, 'error': 'التاريخ مطلوب'}), 400
+    if not confirm:
+        return jsonify({'success': False, 'error': 'يجب تأكيد العملية'}), 400
+
+    bookings = Booking.query.filter(Booking.booking_date < before_date).all()
+    booking_ids = [b.id for b in bookings]
+    if not booking_ids:
+        return jsonify({'success': True, 'deletedBookings': 0, 'deletedCheckouts': 0})
+
+    # Delete dependent checkout data first — Booking has no ORM-level
+    # cascade to BookingCheckout, and the FK would otherwise block deletion.
+    checkouts = BookingCheckout.query.filter(BookingCheckout.booking_id.in_(booking_ids)).all()
+    checkout_count = len(checkouts)
+    for co in checkouts:
+        CheckoutLine.query.filter_by(checkout_id=co.id).delete()
+        db.session.delete(co)
+
+    deleted_count = len(booking_ids)
+    Booking.query.filter(Booking.id.in_(booking_ids)).delete(synchronize_session=False)
+    db.session.commit()
+
+    return jsonify({'success': True, 'deletedBookings': deleted_count, 'deletedCheckouts': checkout_count})
