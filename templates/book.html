@@ -73,7 +73,7 @@
     <div class="form-row">
       <div class="form-group">
         <label>{{ 'اسم المعلم/ة' if lang == 'ar' else 'Teacher Name' }} <span class="req">*</span></label>
-        <input type="text" id="fullName" list="teacherNamesList" placeholder="{{ 'الاسم الرباعي' if lang == 'ar' else 'Enter full name' }}">
+        <input type="text" id="fullName" list="teacherNamesList" placeholder="{{ 'الاسم الرباعي' if lang == 'ar' else 'Enter full name' }}" onchange="onTeacherNameChange()">
         <datalist id="teacherNamesList"></datalist>
       </div>
       <div class="form-group">
@@ -412,6 +412,32 @@ async function loadTeacherNames() {
     const names = await res.json();
     document.getElementById('teacherNamesList').innerHTML =
       names.map(n => `<option value="${esc(n)}">`).join('');
+  } catch (e) {}
+}
+
+async function onTeacherNameChange() {
+  const name = document.getElementById('fullName').value.trim();
+  if (!name) return;
+
+  // Don't override a selection the teacher already made manually.
+  if (document.getElementById('stageSel').value) return;
+
+  try {
+    const res = await fetch('/api/teacher-lookup?name=' + encodeURIComponent(name));
+    const data = await res.json();
+    if (!data.found) return;
+
+    if (data.stageId) {
+      document.getElementById('stageSel').value = data.stageId;
+      onStageChange();
+    }
+    if (data.gradeId) {
+      document.getElementById('gradeSel').value = data.gradeId;
+      onGradeChange();
+    }
+    if (data.sectionId) {
+      document.getElementById('sectionSel').value = data.sectionId;
+    }
   } catch (e) {}
 }
 
