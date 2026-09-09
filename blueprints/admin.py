@@ -93,13 +93,14 @@ def api_stats():
     total   = Booking.query.count()
     pending = Booking.query.filter_by(status='pending').count()
     approved= Booking.query.filter_by(status='approved').count()
+    completed=Booking.query.filter_by(status='completed').count()
     rejected= Booking.query.filter_by(status='rejected').count()
     cancelled=Booking.query.filter_by(status='cancelled').count()
     today_c = Booking.query.filter_by(booking_date=today).count()
     stages_c = Stage.query.filter_by(active=True).count()
 
     return jsonify({
-        'total': total, 'pending': pending, 'approved': approved,
+        'total': total, 'pending': pending, 'approved': approved, 'completed': completed,
         'rejected': rejected, 'cancelled': cancelled,
         'today': today_c, 'halls': stages_c,
     })
@@ -139,6 +140,26 @@ def api_approve():
         print(f"[email] notification failed: {e}", flush=True)
         print(f"[email] TRACEBACK: {traceback.format_exc()}", flush=True)
 
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/complete', methods=['POST'])
+@login_required
+def api_complete():
+    """Manually close out an approved booking once the trolley has been
+    returned and everything is settled."""
+    data   = request.get_json(silent=True) or {}
+    req_id = data.get('reqId', '')
+
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    if b.status != 'approved':
+        return jsonify({'success': False, 'error': 'يمكن إغلاق الحجوزات المعتمدة فقط'}), 400
+
+    b.status      = 'completed'
+    b.action_date = datetime.utcnow()
+    db.session.commit()
     return jsonify({'success': True})
 
 
@@ -707,3 +728,38 @@ def api_get_checkout(req_id):
     if not checkout:
         return jsonify({'success': True, 'checkout': None})
     return jsonify({'success': True, 'checkout': checkout.to_dict()})
+
+
+@admin_bp.route('/api/checkout-report')
+@login_required
+def api_checkout_report():
+    """Full device-handover history across all bookings, plus the list of
+    approved/completed bookings that still have no handover record."""
+    checkouts = BookingCheckout.query.all()
+    lines_out = []
+    covered_booking_ids = set()
+    for co in checkouts:
+        b = Booking.query.get(co.booking_id)
+        if not b:
+            continue
+        covered_booking_ids.add(b.id)
+        for line in co.lines:
+            lines_out.append({
+                'reqId': b.req_id, 'teacher': b.name, 'date': b.booking_date,
+                'stage': b.stage_name, 'grade': b.grade_name, 'section': b.section_name,
+                'periodNumber': b.period_number,
+                'studentName': line.student_name, 'laptopNumber': line.laptop_number,
+            })
+
+    q = Booking.query.filter(Booking.status.in_(['approved', 'completed']))
+    if covered_booking_ids:
+        q = q.filter(~Booking.id.in_(covered_booking_ids))
+    missing = q.order_by(Booking.booking_date.desc()).all()
+
+    missing_out = [{
+        'reqId': b.req_id, 'teacher': b.name, 'email': b.email, 'date': b.booking_date,
+        'stage': b.stage_name, 'grade': b.grade_name, 'section': b.section_name,
+        'status': b.status,
+    } for b in missing]
+
+    return jsonify({'lines': lines_out, 'missing': missing_out})
