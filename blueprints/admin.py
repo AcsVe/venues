@@ -605,7 +605,8 @@ def api_add_teacher():
     if not data.get('name'):
         return jsonify({'success': False, 'error': 'اسم المعلم مطلوب'}), 400
     tch = Teacher(name=data['name'], email=sanitize_email(data.get('email', '')),
-                  phone=data.get('phone', ''), stage_id=data.get('stageId') or None)
+                  phone=data.get('phone', ''), stage_id=data.get('stageId') or None,
+                  grade_id=data.get('gradeId') or None, section_id=data.get('sectionId') or None)
     db.session.add(tch)
     db.session.commit()
     return jsonify({'success': True, 'id': tch.id})
@@ -615,7 +616,7 @@ def api_add_teacher():
 @login_required
 def api_bulk_add_teachers():
     """Bulk import from a pasted/uploaded CSV-like list.
-    Each item: {name, email, phone, stageId}"""
+    Each item: {name, email, phone, stageId, gradeId, sectionId}"""
     data  = request.get_json(silent=True) or {}
     items = data.get('list', [])
     added = 0
@@ -627,10 +628,30 @@ def api_bulk_add_teachers():
             name=name, email=sanitize_email(item.get('email', '')),
             phone=(item.get('phone') or '').strip(),
             stage_id=item.get('stageId') or None,
+            grade_id=item.get('gradeId') or None,
+            section_id=item.get('sectionId') or None,
         ))
         added += 1
     db.session.commit()
     return jsonify({'success': True, 'count': added})
+
+
+@admin_bp.route('/api/update-teacher', methods=['POST'])
+@login_required
+def api_update_teacher():
+    data = request.get_json(silent=True) or {}
+    tch = Teacher.query.get(data.get('id'))
+    if not tch:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    if data.get('name'):
+        tch.name = data['name']
+    tch.email = sanitize_email(data.get('email', tch.email or ''))
+    tch.phone = data.get('phone', tch.phone or '')
+    tch.stage_id   = data.get('stageId') or None
+    tch.grade_id   = data.get('gradeId') or None
+    tch.section_id = data.get('sectionId') or None
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 @admin_bp.route('/api/delete-teacher', methods=['POST'])
@@ -715,6 +736,46 @@ def api_delete_student():
     db.session.delete(stu)
     db.session.commit()
     return jsonify({'success': True})
+
+
+@admin_bp.route('/api/move-student', methods=['POST'])
+@login_required
+def api_move_student():
+    """Transfer one student to a different section (e.g. mid-year class
+    changes). Stage/grade are derived from the destination section."""
+    data = request.get_json(silent=True) or {}
+    stu = Student.query.get(data.get('id'))
+    if not stu:
+        return jsonify({'success': False, 'error': 'الطالب غير موجود'}), 404
+    section = Section.query.get(data.get('sectionId'))
+    if not section:
+        return jsonify({'success': False, 'error': 'الشعبة الوجهة غير موجودة'}), 400
+
+    stu.section_id = section.id
+    stu.grade_id   = section.grade_id
+    stu.stage_id   = section.grade.stage_id
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/move-students-bulk', methods=['POST'])
+@login_required
+def api_move_students_bulk():
+    """Move every student currently in one section to another — handy for
+    a whole-class transfer instead of one student at a time."""
+    data = request.get_json(silent=True) or {}
+    from_section = Section.query.get(data.get('fromSectionId'))
+    to_section   = Section.query.get(data.get('toSectionId'))
+    if not from_section or not to_section:
+        return jsonify({'success': False, 'error': 'الشعبة غير موجودة'}), 400
+
+    students = Student.query.filter_by(section_id=from_section.id).all()
+    for stu in students:
+        stu.section_id = to_section.id
+        stu.grade_id   = to_section.grade_id
+        stu.stage_id   = to_section.grade.stage_id
+    db.session.commit()
+    return jsonify({'success': True, 'count': len(students)})
 
 
 # ── Checkout (laptop handover) viewing for audit ──────────────────────────
