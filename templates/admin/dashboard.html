@@ -307,6 +307,7 @@
     <button class="nav-item" onclick="showTab('teachers')"><i class="fas fa-chalkboard-teacher"></i> المعلمون</button>
     <button class="nav-item" onclick="showTab('students')"><i class="fas fa-user-graduate"></i> الطلاب</button>
     <button class="nav-item" onclick="showTab('reports')"><i class="fas fa-chart-bar"></i> التقارير</button>
+    <button class="nav-item" onclick="showTab('archive')"><i class="fas fa-archive"></i> الأرشفة</button>
     <button class="nav-item" onclick="showTab('calview')"><i class="fas fa-calendar-alt"></i> التقويم</button>
   </div>
   <div class="sidebar-footer">
@@ -664,6 +665,23 @@
       </div>
     </div>
 
+    <!-- ── ARCHIVE TAB ── -->
+    <div class="tab-panel" id="tab-archive">
+      <div class="card" style="border:2px solid #e67e22">
+        <div class="card-title" style="color:#e67e22"><i class="fas fa-archive"></i> أرشفة البيانات القديمة</div>
+        <p style="color:var(--muted);font-size:.9rem;margin-bottom:16px;line-height:1.7">
+          لتوفير مساحة قاعدة البيانات، تقدر تصدّر الحجوزات القديمة كنسخة احتياطية كاملة ثم تحذفها من النظام.
+          <strong style="color:#c0392b">لا يمكن التراجع عن الحذف — تأكد من نجاح تحميل الملف قبل المتابعة.</strong>
+        </p>
+        <div class="form-group">
+          <label>أرشفة كل الحجوزات الأقدم من هذا التاريخ</label>
+          <input type="date" id="archiveDate">
+        </div>
+        <button class="btn btn-outline" onclick="previewArchive()"><i class="fas fa-search"></i> معاينة</button>
+        <div id="archivePreviewResult" style="margin-top:16px"></div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -941,6 +959,14 @@ const I18N_EN = {
   "رقم اللابتوب": "Laptop Number",
   "لم يُسلَّم": "Not handed out",
   "فتح النموذج": "Open Form",
+  "الأرشفة": "Archive",
+  "أرشفة البيانات القديمة": "Archive Old Data",
+  "لتوفير مساحة قاعدة البيانات، تقدر تصدّر الحجوزات القديمة كنسخة احتياطية كاملة ثم تحذفها من النظام.":
+    "To save database space, you can export old bookings as a full backup and then delete them from the system.",
+  "لا يمكن التراجع عن الحذف — تأكد من نجاح تحميل الملف قبل المتابعة.":
+    "This cannot be undone — make sure the file downloaded successfully before continuing.",
+  "أرشفة كل الحجوزات الأقدم من هذا التاريخ": "Archive all bookings older than this date",
+  "معاينة": "Preview",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1023,7 +1049,7 @@ function showTab(name) {
       n.classList.add('active');
     }
   });
-  const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), calview:t('التقويم المرئي')};
+  const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), archive:t('الأرشفة'), calview:t('التقويم المرئي')};
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
   if (name === 'calview')  initAdminCal();
@@ -2106,6 +2132,71 @@ function exportCheckoutCSV() {
   a.download = `${AR?'تسليم_الأجهزة':'device_handover'}_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   showToast(AR ? 'تم تصدير الملف ✓' : 'File exported ✓');
+}
+
+// ── Archive old data ──
+let archiveExported = false;
+
+async function previewArchive() {
+  const d = document.getElementById('archiveDate').value;
+  if (!d) { showToast(AR?'يرجى اختيار تاريخ':'Please select a date', '#c0392b'); return; }
+  archiveExported = false;
+
+  const res = await fetch(`/admin/api/archive-preview?beforeDate=${d}`);
+  const data = await res.json();
+  const statusLbl = {pending:t('قيد المراجعة'), approved:t('معتمد'), completed:t('مكتمل'), rejected:t('مرفوض'), cancelled:t('ملغي')};
+  const breakdown = Object.entries(data.byStatus||{}).map(([s,c]) => `${statusLbl[s]||s}: ${c}`).join('، ');
+
+  const resultEl = document.getElementById('archivePreviewResult');
+  if (!data.total) {
+    resultEl.innerHTML = `<div class="alert alert-info">${AR?'لا توجد حجوزات أقدم من هذا التاريخ':'No bookings older than this date'}</div>`;
+    return;
+  }
+
+  resultEl.innerHTML = `
+    <div class="alert alert-info">
+      ${AR?'عدد الحجوزات':'Bookings'}: <strong>${data.total}</strong>${breakdown ? ' (' + breakdown + ')' : ''}<br>
+      ${AR?'سجلات تسليم الأجهزة المرتبطة':'Related handover records'}: <strong>${data.checkoutCount}</strong>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn-primary" onclick="exportArchive('${d}')"><i class="fas fa-download"></i> ${AR?'تصدير نسخة احتياطية':'Export Backup'}</button>
+      <button class="btn" id="archiveDeleteBtn" style="background:#c0392b;color:#fff" onclick="deleteArchive('${d}')" disabled>
+        <i class="fas fa-trash"></i> ${AR?'حذف بعد التصدير':'Delete After Export'}
+      </button>
+    </div>`;
+}
+
+function exportArchive(d) {
+  window.location.href = `/admin/api/archive-export?beforeDate=${d}`;
+  archiveExported = true;
+  setTimeout(() => {
+    const btn = document.getElementById('archiveDeleteBtn');
+    if (btn) btn.disabled = false;
+  }, 1500);
+}
+
+async function deleteArchive(d) {
+  if (!archiveExported) {
+    showToast(AR?'يرجى تصدير نسخة احتياطية أولاً':'Please export a backup first', '#c0392b');
+    return;
+  }
+  if (!confirm(AR?'هل نزّلت النسخة الاحتياطية فعلاً وفتحتها للتأكد؟ هذا الإجراء لا يمكن التراجع عنه.':
+                  'Have you actually downloaded and checked the backup file? This action cannot be undone.')) return;
+  if (!confirmT('سيتم حذف هذه السجلات نهائياً. متابعة؟')) return;
+
+  const res = await fetch('/admin/api/archive-delete', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({beforeDate: d, confirm: true})
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast(`${AR?'تم حذف':'Deleted'} ${data.deletedBookings} ${AR?'حجز':'booking(s)'}`);
+    document.getElementById('archivePreviewResult').innerHTML = '';
+    document.getElementById('archiveDate').value = '';
+    archiveExported = false;
+  } else {
+    showToast(data.error || t('خطأ'), '#c0392b');
+  }
 }
 
 async function loadReportStats() {
