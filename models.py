@@ -108,7 +108,8 @@ class Booking(db.Model):
 
     notes         = db.Column(db.Text)
     attachments   = db.Column(db.Text)   # comma-separated URLs
-    status        = db.Column(db.String(20), default='pending')  # pending/approved/rejected/cancelled
+    status        = db.Column(db.String(20), default='pending')  # pending/approved/completed/rejected/cancelled
+    checkout_reminder_sent = db.Column(db.Boolean, default=False)
     reject_reason = db.Column(db.Text)
     cc_emails     = db.Column(db.Text)   # semicolon-separated
     action_date   = db.Column(db.DateTime)
@@ -291,6 +292,7 @@ def init_db(app):
             ]:
                 conn.exec_driver_sql(f"ALTER TABLE bookings ADD COLUMN IF NOT EXISTS {col} {coltype}")
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS stage_id INTEGER")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_reminder_sent BOOLEAN DEFAULT FALSE")
             # Contacts can now repeat the same email across different stages —
             # drop the old single-column unique constraint if present.
             try:
