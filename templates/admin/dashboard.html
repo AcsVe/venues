@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="لوحة التحكم">
+  <meta name="apple-mobile-web-app-title" content="إدارة الترولي">
   <meta name="mobile-web-app-capable" content="yes">
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -324,6 +324,7 @@
   <div class="sidebar-footer">
     <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
     <a href="#" onclick="toggleLang();return false;"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></a>
+    <a href="#" id="installAppBtn" onclick="handleInstallClick(event)" style="display:none"><i class="fas fa-download"></i> تثبيت التطبيق</a>
     <a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> خروج</a>
   </div>
 </nav>
@@ -2611,6 +2612,46 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/static/sw.js').catch(() => {});
   });
 }
+
+// ── PWA: Add to Home Screen ──
+let deferredInstallPrompt = null;
+const installBtn = document.getElementById('installAppBtn');
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                   || window.navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+if (!isStandalone) {
+  if (isIOS) {
+    if (installBtn) installBtn.style.display = 'flex';
+  } else {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      if (installBtn) installBtn.style.display = 'flex';
+    });
+  }
+}
+
+function handleInstallClick(e) {
+  e.preventDefault();
+  if (isIOS) {
+    alert(AR
+      ? 'لإضافة لوحة التحكم للشاشة الرئيسية:\n١) اضغط زر المشاركة ⬆️ بأسفل الشاشة\n٢) اختر "Add to Home Screen"'
+      : 'To add this to your Home Screen:\n1) Tap the Share button ⬆️\n2) Choose "Add to Home Screen"');
+    return;
+  }
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.finally(() => {
+      deferredInstallPrompt = null;
+      if (installBtn) installBtn.style.display = 'none';
+    });
+  }
+}
+
+window.addEventListener('appinstalled', () => {
+  if (installBtn) installBtn.style.display = 'none';
+});
 </script>
 
 <nav class="mobile-nav">
