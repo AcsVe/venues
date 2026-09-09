@@ -1,338 +1,355 @@
-<!DOCTYPE html>
-<html lang="{{ lang }}" dir="{{ 'rtl' if lang == 'ar' else 'ltr' }}">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}مدرسة الرائد العربي{% endblock %}</title>
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime, date
 
-  <!-- PWA: Add to Home Screen (Android + iOS) -->
-  <link rel="manifest" href="/static/manifest.json">
-  <meta name="theme-color" content="#1B3358">
-  <link rel="icon" href="/static/icon-192.png" type="image/png">
-  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="الرائد العربي">
-  <meta name="mobile-web-app-capable" content="yes">
+db = SQLAlchemy()
 
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --primary: #FF5733;
-      --primary-dark: #C43D1F;
-      --primary-light: #FF8563;
-      --secondary: #2E4E7A;
-      --secondary-dark: #1B3358;
-      --secondary-light: #5A7CA8;
-      --accent: {{ config.ACCENT_COLOR }};
-      --bg: #eef3f5;
-      --white: #fff;
-      --text: #1e2a2b;
-      --muted: #6b7c7e;
-      --border: #cfe0e3;
-      --radius: 14px;
-      --shadow: 0 4px 20px rgba(255,87,51,.12);
-      --shadow-sm: 0 2px 8px rgba(255,87,51,.08);
-    }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { font-size: 15px; }
-    body {
-      font-family: {% if lang == 'ar' %}'Tajawal'{% else %}'Inter'{% endif %}, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-    }
 
-    /* ── Topbar ── */
-    .topbar {
-      background: linear-gradient(135deg, var(--secondary-dark) 0%, var(--secondary) 50%, var(--secondary-light) 100%);
-      color: #fff;
-      padding: 0 20px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      box-shadow: 0 3px 16px rgba(0,0,0,.25);
-      min-height: 64px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .topbar::after {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    }
-    .topbar-logo-chip {
-      background: #fff;
-      border-radius: 10px;
-      padding: 6px 12px;
-      display: flex;
-      align-items: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,.25);
-      flex-shrink: 0;
-    }
-    .topbar img {
-      height: 44px;
-      display: block;
-    }
-    .topbar-titles { flex: 1; min-width: 0; }
-    .topbar-titles span { font-size: .85rem; opacity: .85; font-weight: 600; }
-    .topbar-nav { display: flex; gap: 6px; flex-shrink: 0; }
-    .topbar-nav a {
-      color: #fff;
-      background: rgba(255,255,255,.20);
-      padding: 7px 13px;
-      border-radius: 9px;
-      text-decoration: none;
-      font-size: .82rem;
-      font-weight: 600;
-      transition: all .2s;
-      white-space: nowrap;
-      border: 1px solid rgba(255,255,255,.22);
-      backdrop-filter: blur(4px);
-    }
-    .topbar-nav a:hover { background: rgba(255,255,255,.32); border-color: rgba(255,255,255,.4); }
-    .topbar-nav a.active {
-      background: var(--accent);
-      color: #fff;
-      border-color: transparent;
-    }
+class Teacher(db.Model):
+    """Roster of teachers. stage/grade/section are all optional and
+    independently settable — a teacher can be tied to a whole stage, a
+    specific grade, or one exact section. Used both as a reference/contact
+    list and to auto-fill the booking form when a matching name is entered."""
+    __tablename__ = 'teachers'
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String(200), nullable=False)
+    email      = db.Column(db.String(200))
+    phone      = db.Column(db.String(50))
+    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'))
+    grade_id   = db.Column(db.Integer, db.ForeignKey('grades.id'))
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    /* ── Container ── */
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+    def to_dict(self):
+        return {
+            'id': self.id, 'name': self.name, 'email': self.email or '',
+            'phone': self.phone or '', 'stageId': self.stage_id,
+            'gradeId': self.grade_id, 'sectionId': self.section_id,
+        }
 
-    /* ── Cards ── */
-    .card {
-      background: var(--white);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 24px;
-      margin-bottom: 20px;
-      border: 1px solid rgba(255,87,51,.08);
-    }
-    .card-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: var(--primary);
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding-bottom: 12px;
-      border-bottom: 2px solid var(--bg);
-    }
 
-    /* ── Buttons ── */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 9px 18px;
-      border-radius: 10px;
-      border: none;
-      cursor: pointer;
-      font-family: inherit;
-      font-size: .9rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: all .2s;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-      color: #fff;
-      box-shadow: 0 3px 10px rgba(255,87,51,.3);
-    }
-    .btn-primary:hover {
-      background: linear-gradient(135deg, var(--primary-light), var(--primary));
-      box-shadow: 0 4px 14px rgba(255,87,51,.4);
-      transform: translateY(-1px);
-    }
-    .btn-accent  { background: var(--accent); color: #fff; box-shadow: 0 3px 10px rgba(61,90,128,.35); }
-    .btn-outline { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
-    .btn-outline:hover { background: var(--primary); color: #fff; }
-    .btn-sm { padding: 6px 12px; font-size: .82rem; }
+class Student(db.Model):
+    """Roster of students, organized by stage/grade/section — used as the
+    prefilled source list for the laptop-checkout form (item 3/4)."""
+    __tablename__ = 'students'
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String(200), nullable=False)
+    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'), nullable=False)
+    grade_id   = db.Column(db.Integer, db.ForeignKey('grades.id'), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    /* ── Forms ── */
-    .form-group { margin-bottom: 16px; }
-    .form-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: .9rem; }
-    .form-group label .req { color: #c0392b; }
-    input, select, textarea {
-      width: 100%;
-      padding: 10px 13px;
-      border: 1.5px solid var(--border);
-      border-radius: 9px;
-      font-family: inherit;
-      font-size: .9rem;
-      background: #fff;
-      color: var(--text);
-      transition: all .2s;
-    }
-    input:focus, select:focus, textarea:focus {
-      outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(255,87,51,.12);
-    }
-    textarea { resize: vertical; min-height: 80px; }
+    def to_dict(self):
+        return {
+            'id': self.id, 'name': self.name, 'stageId': self.stage_id,
+            'gradeId': self.grade_id, 'sectionId': self.section_id,
+        }
 
-    /* ── Status badges ── */
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 10px;
-      border-radius: 20px;
-      font-size: .78rem;
-      font-weight: 700;
-    }
-    .badge-pending  { background: #fff3cd; color: #856404; }
-    .badge-approved { background: #d1e7dd; color: #0a6640; }
-    .badge-completed{ background: #cfe2ff; color: #0b3d91; }
-    .badge-rejected { background: #f8d7da; color: #842029; }
-    .badge-cancelled{ background: #e2e3e5; color: #41464b; }
 
-    /* ── Alert ── */
-    .alert {
-      padding: 12px 16px;
-      border-radius: 9px;
-      margin-bottom: 16px;
-      font-weight: 600;
-      font-size: .9rem;
-    }
-    .alert-success { background: #d1e7dd; color: #0a6640; border: 1px solid #a3cfbb; }
-    .alert-error   { background: #f8d7da; color: #842029; border: 1px solid #f1aeb5; }
-    .alert-info    { background: #cff4fc; color: #055160; border: 1px solid #9eeaf9; }
+class BookingCheckout(db.Model):
+    """One laptop-handover manifest per booking, filled by the teacher after
+    the booking is approved. Submitting is not conditioned on filling every
+    row — a teacher can leave absent students blank."""
+    __tablename__ = 'booking_checkouts'
+    id           = db.Column(db.Integer, primary_key=True)
+    booking_id   = db.Column(db.Integer, db.ForeignKey('bookings.id'), unique=True, nullable=False)
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    /* ── Spinner ── */
-    .spinner {
-      display: inline-block;
-      width: 20px; height: 20px;
-      border: 3px solid rgba(255,255,255,.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    lines = db.relationship('CheckoutLine', backref='checkout', cascade='all, delete-orphan',
+                             order_by='CheckoutLine.seq')
 
-    /* ── Mobile ── */
-    @media (max-width: 640px) {
-      .topbar {
-        padding: 0 12px;
-        min-height: auto;
-        flex-wrap: wrap;
-        padding-top: 10px;
-        padding-bottom: 0;
-        gap: 8px;
-      }
-      .topbar img { height: 34px; }
-      .topbar-titles span { font-size: .7rem; }
-      .topbar-nav {
-        width: 100%;
-        justify-content: stretch;
-        padding-bottom: 10px;
-        gap: 5px;
-      }
-      .topbar-nav a {
-        flex: 1;
-        justify-content: center;
-        padding: 7px 4px;
-        font-size: .72rem;
-        text-align: center;
-      }
-      .topbar-nav a i { display: none; }
-      .container { padding: 12px 10px; }
-      .card { padding: 16px; }
-    }
-  </style>
-  {% block extra_head %}{% endblock %}
-</head>
-<body>
-  <div class="topbar">
-    {% if config.LOGO_URL %}
-    <div class="topbar-logo-chip">
-      <img src="{{ config.LOGO_URL }}" alt="logo">
-    </div>
-    {% endif %}
-    <div class="topbar-titles">
-      <span>{{ 'نظام حجز عربات الحواسيب' if lang == 'ar' else 'Laptop Trolleys Booking System' }}</span>
-    </div>
-    <nav class="topbar-nav">
-      <a href="/calendar?lang={{ lang }}" class="{% if request.endpoint == 'public.calendar' %}active{% endif %}">
-        <i class="fas fa-calendar-alt"></i> {{ 'الروزنامة' if lang == 'ar' else 'Calendar' }}
-      </a>
-      <a href="/book?lang={{ lang }}" class="{% if request.endpoint == 'public.book' %}active{% endif %}">
-        <i class="fas fa-plus-circle"></i> {{ 'حجز جديد' if lang == 'ar' else 'New Booking' }}
-      </a>
-      <a href="/lookup?lang={{ lang }}" class="{% if request.endpoint == 'public.lookup' %}active{% endif %}">
-        <i class="fas fa-search"></i> {{ 'استعلام' if lang == 'ar' else 'Lookup' }}
-      </a>
-      <a href="?lang={{ 'en' if lang == 'ar' else 'ar' }}">
-        <i class="fas fa-globe"></i> {{ 'EN' if lang == 'ar' else 'عربي' }}
-      </a>
-      <a href="#" id="installAppBtn" onclick="handleInstallClick(event)" style="display:none">
-        <i class="fas fa-download"></i> {{ 'تثبيت' if lang == 'ar' else 'Install' }}
-      </a>
-    </nav>
-  </div>
+    def to_dict(self):
+        return {
+            'id': self.id, 'bookingId': self.booking_id,
+            'submittedAt': self.submitted_at.isoformat() if self.submitted_at else '',
+            'lines': [l.to_dict() for l in self.lines],
+        }
 
-  <div class="container">
-    {% block content %}{% endblock %}
-  </div>
 
-  {% block extra_scripts %}{% endblock %}
+class CheckoutLine(db.Model):
+    __tablename__ = 'checkout_lines'
+    id             = db.Column(db.Integer, primary_key=True)
+    checkout_id    = db.Column(db.Integer, db.ForeignKey('booking_checkouts.id'), nullable=False)
+    seq            = db.Column(db.Integer, nullable=False)
+    student_id     = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    student_name   = db.Column(db.String(200))   # snapshot, survives roster edits/deletes
+    laptop_number  = db.Column(db.Integer)        # 1..25, nullable = not handed out
 
-  <script>
-    // ── PWA: service worker + Add-to-Home-Screen ──
-    const PWA_LANG_AR = {{ 'true' if lang == 'ar' else 'false' }};
+    def to_dict(self):
+        return {
+            'seq': self.seq, 'studentId': self.student_id,
+            'studentName': self.student_name, 'laptopNumber': self.laptop_number,
+        }
 
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/static/sw.js').catch(() => {});
-      });
-    }
 
-    let deferredInstallPrompt = null;
-    const installBtn = document.getElementById('installAppBtn');
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-                       || window.navigator.standalone === true;
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+class Booking(db.Model):
+    __tablename__ = 'bookings'
+    id            = db.Column(db.Integer, primary_key=True)
+    req_id        = db.Column(db.String(32), unique=True, nullable=False)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    name          = db.Column(db.String(200), nullable=False)
+    email         = db.Column(db.String(200), nullable=False)
+    phone         = db.Column(db.String(50))
+    on_behalf     = db.Column(db.String(200))
+    event_title   = db.Column(db.String(300))
+    booking_date  = db.Column(db.String(10), nullable=False)   # yyyy-MM-dd
 
-    if (!isStandalone) {
-      if (isIOS) {
-        // iOS has no install prompt API — show the button, clicking it
-        // explains the manual Share > Add to Home Screen steps.
-        if (installBtn) installBtn.style.display = 'flex';
-      } else {
-        window.addEventListener('beforeinstallprompt', (e) => {
-          e.preventDefault();
-          deferredInstallPrompt = e;
-          if (installBtn) installBtn.style.display = 'flex';
-        });
-      }
-    }
+    # ── Academic-structure fields (stage/grade/section/period) ─────────────
+    stage_id       = db.Column(db.Integer, db.ForeignKey('stages.id'))
+    grade_id       = db.Column(db.Integer, db.ForeignKey('grades.id'))
+    section_id     = db.Column(db.Integer, db.ForeignKey('sections.id'))
+    period_id      = db.Column(db.Integer, db.ForeignKey('periods.id'))
+    trolley_code   = db.Column(db.String(50))    # snapshot of the trolley identifier at booking time
+    stage_name     = db.Column(db.String(200))   # snapshot labels (survive later edits/deletes)
+    grade_name     = db.Column(db.String(100))
+    section_name   = db.Column(db.String(100))
+    period_number  = db.Column(db.Integer)
+    start_time     = db.Column(db.String(5))     # derived from the period, kept for display/reports
+    end_time       = db.Column(db.String(5))
 
-    function handleInstallClick(e) {
-      e.preventDefault();
-      if (isIOS) {
-        alert(PWA_LANG_AR
-          ? 'لإضافة الموقع للشاشة الرئيسية:\n١) اضغط زر المشاركة ⬆️ بأسفل الشاشة\n٢) اختر "Add to Home Screen"'
-          : 'To add this to your Home Screen:\n1) Tap the Share button ⬆️\n2) Choose "Add to Home Screen"');
-        return;
-      }
-      if (deferredInstallPrompt) {
-        deferredInstallPrompt.prompt();
-        deferredInstallPrompt.userChoice.finally(() => {
-          deferredInstallPrompt = null;
-          if (installBtn) installBtn.style.display = 'none';
-        });
-      }
-    }
+    # ── Legacy hall-booking fields (kept only so old records keep displaying) ──
+    hall          = db.Column(db.String(200))
+    end_date      = db.Column(db.String(10))
+    full_day      = db.Column(db.Boolean, default=False)
 
-    window.addEventListener('appinstalled', () => {
-      if (installBtn) installBtn.style.display = 'none';
-    });
-  </script>
-</body>
-</html>
+    notes         = db.Column(db.Text)
+    attachments   = db.Column(db.Text)   # comma-separated URLs
+    status        = db.Column(db.String(20), default='pending')  # pending/approved/completed/rejected/cancelled
+    checkout_reminder_sent = db.Column(db.Boolean, default=False)
+    reject_reason = db.Column(db.Text)
+    cc_emails     = db.Column(db.Text)   # semicolon-separated
+    action_date   = db.Column(db.DateTime)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'reqId': self.req_id,
+            'createdAt': self.created_at.isoformat() if self.created_at else '',
+            'name': self.name,
+            'email': self.email,
+            'phone': self.phone or '',
+            'behalf': self.on_behalf or '',
+            'title': self.event_title or '',
+            'stageId': self.stage_id,
+            'gradeId': self.grade_id,
+            'sectionId': self.section_id,
+            'periodId': self.period_id,
+            'trolleyCode': self.trolley_code or '',
+            'stage': self.stage_name or self.hall or '',
+            'grade': self.grade_name or '',
+            'section': self.section_name or '',
+            'periodNumber': self.period_number,
+            'date': self.booking_date,
+            'startTime': self.start_time or '',
+            'endTime': self.end_time or '',
+            'notes': self.notes or '',
+            'att': [a for a in (self.attachments or '').split(',') if a and '[DEL]' not in a],
+            'status': self.status,
+            'rejectReason': self.reject_reason or '',
+            'cc': self.cc_emails or '',
+        }
+
+
+class Stage(db.Model):
+    """A study stage (e.g. أساسي / ثانوي). Each stage owns exactly one laptop
+    trolley, identified by a unique trolley_code — this is the physical
+    resource being booked."""
+    __tablename__ = 'stages'
+    id           = db.Column(db.Integer, primary_key=True)
+    name_ar      = db.Column(db.String(200), nullable=False)
+    name_en      = db.Column(db.String(200))
+    trolley_code = db.Column(db.String(50), unique=True, nullable=False)
+    active       = db.Column(db.Boolean, default=True)
+    sort_order   = db.Column(db.Integer, default=0)
+
+    grades = db.relationship('Grade', backref='stage', cascade='all, delete-orphan',
+                              order_by='Grade.sort_order')
+
+    def to_dict(self, with_grades=False):
+        d = {
+            'id': self.id,
+            'nameAr': self.name_ar,
+            'nameEn': self.name_en or self.name_ar,
+            'trolleyCode': self.trolley_code,
+            'active': self.active,
+        }
+        if with_grades:
+            d['grades'] = [g.to_dict(with_sections=True) for g in self.grades]
+        return d
+
+
+class Grade(db.Model):
+    __tablename__ = 'grades'
+    id         = db.Column(db.Integer, primary_key=True)
+    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'), nullable=False)
+    name_ar    = db.Column(db.String(100), nullable=False)
+    name_en    = db.Column(db.String(100))
+    sort_order = db.Column(db.Integer, default=0)
+
+    sections = db.relationship('Section', backref='grade', cascade='all, delete-orphan',
+                                order_by='Section.sort_order')
+
+    def to_dict(self, with_sections=False):
+        d = {
+            'id': self.id,
+            'stageId': self.stage_id,
+            'nameAr': self.name_ar,
+            'nameEn': self.name_en or self.name_ar,
+        }
+        if with_sections:
+            d['sections'] = [s.to_dict() for s in self.sections]
+        return d
+
+
+class Section(db.Model):
+    __tablename__ = 'sections'
+    id         = db.Column(db.Integer, primary_key=True)
+    grade_id   = db.Column(db.Integer, db.ForeignKey('grades.id'), nullable=False)
+    name_ar    = db.Column(db.String(100), nullable=False)
+    name_en    = db.Column(db.String(100))
+    sort_order = db.Column(db.Integer, default=0)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'gradeId': self.grade_id,
+            'nameAr': self.name_ar,
+            'nameEn': self.name_en or self.name_ar,
+        }
+
+
+class Period(db.Model):
+    """One of the 8 daily class periods, shared by both stages."""
+    __tablename__ = 'periods'
+    id         = db.Column(db.Integer, primary_key=True)
+    number     = db.Column(db.Integer, nullable=False, unique=True)  # 1..8
+    label_ar   = db.Column(db.String(100))
+    start_time = db.Column(db.String(5))
+    end_time   = db.Column(db.String(5))
+    active     = db.Column(db.Boolean, default=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'number': self.number,
+            'label': self.label_ar or f'الحصة {self.number}',
+            'startTime': self.start_time or '',
+            'endTime': self.end_time or '',
+            'active': self.active,
+        }
+
+
+class BlockedPeriod(db.Model):
+    """A date/time range during which a stage's trolley (or all trolleys, if
+    left blank) cannot be booked."""
+    __tablename__ = 'blocked_periods'
+    id         = db.Column(db.Integer, primary_key=True)
+    from_date  = db.Column(db.String(10), nullable=False)
+    to_date    = db.Column(db.String(10), nullable=False)
+    hall       = db.Column(db.String(200))   # stores the trolley_code; empty = all stages
+    from_time  = db.Column(db.String(5))
+    to_time    = db.Column(db.String(5))
+    reason     = db.Column(db.String(300))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            's': self.from_date,
+            'e': self.to_date,
+            'hall': self.hall or '',
+            'fromT': self.from_time or '',
+            'toT': self.to_time or '',
+            'r': self.reason or '',
+        }
+
+
+class Contact(db.Model):
+    __tablename__ = 'contacts'
+    id         = db.Column(db.Integer, primary_key=True)
+    email      = db.Column(db.String(200), nullable=False)
+    name       = db.Column(db.String(200))
+    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'))  # null = all stages
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'email': self.email,
+            'name': self.name or '',
+            'stageId': self.stage_id,
+            'date': self.created_at.strftime('%Y-%m-%d') if self.created_at else '',
+        }
+
+
+def init_db(app):
+    """Create tables and seed default academic structure if empty."""
+    db.create_all()
+
+    # Migration: add new columns to existing tables if they don't exist yet
+    try:
+        with db.engine.connect() as conn:
+            for col, coltype in [
+                ('stage_id', 'INTEGER'), ('grade_id', 'INTEGER'),
+                ('section_id', 'INTEGER'), ('period_id', 'INTEGER'),
+                ('trolley_code', 'VARCHAR(50)'), ('stage_name', 'VARCHAR(200)'),
+                ('grade_name', 'VARCHAR(100)'), ('section_name', 'VARCHAR(100)'),
+                ('period_number', 'INTEGER'),
+            ]:
+                conn.exec_driver_sql(f"ALTER TABLE bookings ADD COLUMN IF NOT EXISTS {col} {coltype}")
+            conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS stage_id INTEGER")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_reminder_sent BOOLEAN DEFAULT FALSE")
+            conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
+            conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
+            # Contacts can now repeat the same email across different stages —
+            # drop the old single-column unique constraint if present.
+            try:
+                conn.exec_driver_sql("ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_email_key")
+            except Exception:
+                pass
+            conn.commit()
+    except Exception:
+        pass
+
+    if Stage.query.count() == 0:
+        basic = Stage(name_ar='المرحلة الأساسية', name_en='Primary Stage',
+                       trolley_code='TROLLEY-A', active=True, sort_order=1)
+        secondary = Stage(name_ar='المرحلة الثانوية', name_en='Secondary Stage',
+                           trolley_code='TROLLEY-B', active=True, sort_order=2)
+        db.session.add_all([basic, secondary])
+        db.session.flush()
+
+        for i, num in enumerate([5, 6]):
+            db.session.add(Grade(stage_id=basic.id, name_ar=f'الصف {_ordinal_ar_m(num)}',
+                                  name_en=f'Grade {num}', sort_order=i))
+        for i, num in enumerate(range(7, 13)):
+            db.session.add(Grade(stage_id=secondary.id, name_ar=f'الصف {_ordinal_ar_m(num)}',
+                                  name_en=f'Grade {num}', sort_order=i))
+        db.session.commit()
+
+        # One default section (أ) per grade — admin can add more from the panel
+        for g in Grade.query.all():
+            db.session.add(Section(grade_id=g.id, name_ar='أ', name_en='A', sort_order=0))
+        db.session.commit()
+
+    if Period.query.count() == 0:
+        for n in range(1, 9):
+            db.session.add(Period(number=n, label_ar=f'الحصة {_ordinal_ar(n)}', active=True))
+        db.session.commit()
+
+
+_ORDINALS_AR_F = {  # feminine — used for الحصة (period)
+    1: 'الأولى', 2: 'الثانية', 3: 'الثالثة', 4: 'الرابعة', 5: 'الخامسة',
+    6: 'السادسة', 7: 'السابعة', 8: 'الثامنة', 9: 'التاسعة', 10: 'العاشرة',
+    11: 'الحادية عشرة', 12: 'الثانية عشرة',
+}
+_ORDINALS_AR_M = {  # masculine — used for الصف (grade)
+    1: 'الأول', 2: 'الثاني', 3: 'الثالث', 4: 'الرابع', 5: 'الخامس',
+    6: 'السادس', 7: 'السابع', 8: 'الثامن', 9: 'التاسع', 10: 'العاشر',
+    11: 'الحادي عشر', 12: 'الثاني عشر',
+}
+
+def _ordinal_ar(n):
+    return _ORDINALS_AR_F.get(n, str(n))
+
+def _ordinal_ar_m(n):
+    return _ORDINALS_AR_M.get(n, str(n))
