@@ -149,6 +149,7 @@ function renderResult(b) {
   const periodLabel = b.periodNumber ? (AR ? 'الحصة ' + b.periodNumber : 'Period ' + b.periodNumber) : '';
   const statusLabels = {
     approved: AR ? 'معتمد' : 'Approved',
+    completed:AR ? 'مكتمل' : 'Completed',
     pending:  AR ? 'قيد المراجعة' : 'Pending',
     rejected: AR ? 'مرفوض' : 'Rejected',
     cancelled:AR ? 'ملغي' : 'Cancelled',
@@ -168,7 +169,7 @@ function renderResult(b) {
     </table>`;
 
   const today = new Date().toISOString().split('T')[0];
-  const canModify = b.status !== 'cancelled' && b.status !== 'rejected' && b.date >= today;
+  const canModify = b.status !== 'cancelled' && b.status !== 'rejected' && b.status !== 'completed' && b.date >= today;
   let actions = '';
   if (canModify) {
     actions += `<button class="btn btn-outline" onclick="showEdit()"><i class="fas fa-edit"></i> ${AR?'تعديل':'Edit'}</button>`;
