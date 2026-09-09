@@ -578,7 +578,7 @@
         <div class="stat-card"><div class="stat-val" id="rs-halls" style="font-size:1rem">-</div><div class="stat-label">أكثر مرحلة استخداماً</div></div>
         <div class="stat-card"><div class="stat-val" id="rs-month" style="font-size:1rem">-</div><div class="stat-label">أكثر شهر</div></div>
         <div class="stat-card"><div class="stat-val" id="rs-hours">-</div><div class="stat-label">إجمالي الحصص</div></div>
-        <div class="stat-card"><div class="stat-val" id="rs-period" style="font-size:1rem">-</div><div class="stat-label">أكثر حصة حجزاً</div></div>
+        <div class="stat-card"><div class="stat-val" id="rs-period" style="font-size:1rem">-</div><div class="stat-label">أعلى استخدام من معلم/ة</div></div>
         <div class="stat-card"><div class="stat-val" id="rs-cancelled-by" style="font-size:1rem">-</div><div class="stat-label">الأكثر إلغاءً</div></div>
       </div>
 
@@ -967,6 +967,7 @@ const I18N_EN = {
     "This cannot be undone — make sure the file downloaded successfully before continuing.",
   "أرشفة كل الحجوزات الأقدم من هذا التاريخ": "Archive all bookings older than this date",
   "معاينة": "Preview",
+  "أعلى استخدام من معلم/ة": "Highest usage by a teacher",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -2221,9 +2222,9 @@ async function loadReportStats() {
 
   const totalPeriods = data.length;
 
-  const periodCount = {};
-  data.forEach(b => { if (b.periodNumber) periodCount[b.periodNumber] = (periodCount[b.periodNumber]||0) + 1; });
-  const topPeriod = Object.entries(periodCount).sort((a,b)=>b[1]-a[1])[0];
+  const teacherCount = {};
+  data.forEach(b => { if (b.name) teacherCount[b.name] = (teacherCount[b.name]||0) + 1; });
+  const topTeacher = Object.entries(teacherCount).sort((a,b)=>b[1]-a[1])[0];
 
   const cancelledByTeacher = {};
   data.filter(b => b.status === 'cancelled').forEach(b => {
@@ -2237,7 +2238,7 @@ async function loadReportStats() {
   document.getElementById('rs-halls').textContent    = topHall ? stageDisplayName(topHall[0]) : '-';
   document.getElementById('rs-month').textContent    = topMonth ? topMonth[0].replace('-',' / ') : '-';
   document.getElementById('rs-hours').textContent    = totalPeriods;
-  document.getElementById('rs-period').textContent   = topPeriod ? `${t('الحصة')} ${topPeriod[0]} (${topPeriod[1]})` : '-';
+  document.getElementById('rs-period').textContent   = topTeacher ? `${topTeacher[0]} (${topTeacher[1]})` : '-';
   document.getElementById('rs-cancelled-by').textContent = topCancelled ? `${topCancelled[0]} (${topCancelled[1]})` : t('لا يوجد');
 
   if (!data.length) return;
