@@ -310,9 +310,12 @@ def api_cancel_by_user():
     b.action_date = datetime.utcnow()
     db.session.commit()
 
+    period = Period.query.get(b.period_id) if b.period_id else None
+    period_label = (period.label_ar if period else None) or (f'الحصة {b.period_number}' if b.period_number else '')
     email_ctx = {'reqId': req_id, 'name': b.name, 'email': b.email,
                  'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
-                 'section': b.section_name}
+                 'section': b.section_name, 'date': b.booking_date,
+                 'startTime': b.start_time, 'endTime': b.end_time, 'periodLabel': period_label}
     try:
         send_cancel(email_ctx)
     except Exception as e:
@@ -423,6 +426,24 @@ def api_amend_by_user():
 def api_teacher_names():
     names = [t.name for t in Teacher.query.order_by(Teacher.name).all()]
     return jsonify(names)
+
+
+@public_bp.route('/api/teacher-lookup')
+def api_teacher_lookup():
+    """Used by the booking form: when a name matches a teacher on the
+    roster, auto-fill their assigned stage/grade/section, if any."""
+    name = (request.args.get('name') or '').strip()
+    if not name:
+        return jsonify({'found': False})
+    teacher = Teacher.query.filter(Teacher.name.ilike(name)).first()
+    if not teacher:
+        return jsonify({'found': False})
+    return jsonify({
+        'found': True,
+        'stageId': teacher.stage_id,
+        'gradeId': teacher.grade_id,
+        'sectionId': teacher.section_id,
+    })
 
 
 # ── Laptop handover / checkout form (per approved booking) ────────────────
