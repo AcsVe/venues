@@ -204,7 +204,7 @@ async function renderCalendar() {
 
     if (filteredBks.length) {
       cell.classList.add('has-event');
-      const hasApproved = filteredBks.some(b => b.status === 'approved');
+      const hasApproved = filteredBks.some(b => b.status === 'approved' || b.status === 'completed');
       const hasPending  = filteredBks.some(b => b.status === 'pending');
       if (hasApproved) {
         cell.style.background = 'rgba(209,231,221,.4)';
@@ -217,7 +217,7 @@ async function renderCalendar() {
       dot.style.cssText = 'display:flex;gap:3px;flex-wrap:wrap;margin-top:3px';
       filteredBks.slice(0,8).forEach(function(bk) {
         const d = document.createElement('span');
-        const color = bk.status==='approved' ? '#27ae60' : bk.status==='pending' ? '#e67e22' : '#c0392b';
+        const color = (bk.status==='approved'||bk.status==='completed') ? '#27ae60' : bk.status==='pending' ? '#e67e22' : '#c0392b';
         d.style.cssText = 'width:8px;height:8px;border-radius:50%;display:inline-block;background:' + color;
         dot.appendChild(d);
       });
@@ -331,7 +331,7 @@ async function loadHalls() {
 }
 
 function statusLabel(s) {
-  const map = { approved: AR?'معتمد':'Approved', pending: AR?'قيد المراجعة':'Pending', rejected: AR?'مرفوض':'Rejected', cancelled: AR?'ملغي':'Cancelled' };
+  const map = { approved: AR?'معتمد':'Approved', completed: AR?'مكتمل':'Completed', pending: AR?'قيد المراجعة':'Pending', rejected: AR?'مرفوض':'Rejected', cancelled: AR?'ملغي':'Cancelled' };
   return map[s] || s;
 }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
