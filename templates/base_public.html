@@ -271,6 +271,9 @@
       <a href="?lang={{ 'en' if lang == 'ar' else 'ar' }}">
         <i class="fas fa-globe"></i> {{ 'EN' if lang == 'ar' else 'عربي' }}
       </a>
+      <a href="#" id="installAppBtn" onclick="handleInstallClick(event)" style="display:none">
+        <i class="fas fa-download"></i> {{ 'تثبيت' if lang == 'ar' else 'Install' }}
+      </a>
     </nav>
   </div>
 
@@ -279,5 +282,57 @@
   </div>
 
   {% block extra_scripts %}{% endblock %}
+
+  <script>
+    // ── PWA: service worker + Add-to-Home-Screen ──
+    const PWA_LANG_AR = {{ 'true' if lang == 'ar' else 'false' }};
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+      });
+    }
+
+    let deferredInstallPrompt = null;
+    const installBtn = document.getElementById('installAppBtn');
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                       || window.navigator.standalone === true;
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+    if (!isStandalone) {
+      if (isIOS) {
+        // iOS has no install prompt API — show the button, clicking it
+        // explains the manual Share > Add to Home Screen steps.
+        if (installBtn) installBtn.style.display = 'flex';
+      } else {
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredInstallPrompt = e;
+          if (installBtn) installBtn.style.display = 'flex';
+        });
+      }
+    }
+
+    function handleInstallClick(e) {
+      e.preventDefault();
+      if (isIOS) {
+        alert(PWA_LANG_AR
+          ? 'لإضافة الموقع للشاشة الرئيسية:\n١) اضغط زر المشاركة ⬆️ بأسفل الشاشة\n٢) اختر "Add to Home Screen"'
+          : 'To add this to your Home Screen:\n1) Tap the Share button ⬆️\n2) Choose "Add to Home Screen"');
+        return;
+      }
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        deferredInstallPrompt.userChoice.finally(() => {
+          deferredInstallPrompt = null;
+          if (installBtn) installBtn.style.display = 'none';
+        });
+      }
+    }
+
+    window.addEventListener('appinstalled', () => {
+      if (installBtn) installBtn.style.display = 'none';
+    });
+  </script>
 </body>
 </html>
