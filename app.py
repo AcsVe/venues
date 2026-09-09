@@ -48,6 +48,28 @@ def create_app():
     app.register_blueprint(public_bp)
     app.register_blueprint(admin_bp, url_prefix='/admin')
 
+    # Background job: nudge teachers who haven't submitted the device
+    # handover form a while after their approved period ended.
+    # NOTE: assumes a single worker process (WEB_CONCURRENCY=1) — running
+    # multiple gunicorn workers would start one scheduler per worker and
+    # could send duplicate reminders.
+    if os.environ.get('DISABLE_REMINDERS') != '1':
+        try:
+            from apscheduler.schedulers.background import BackgroundScheduler
+            from utils.reminders import check_and_send_reminders
+
+            scheduler = BackgroundScheduler(daemon=True)
+            scheduler.add_job(
+                func=lambda: check_and_send_reminders(app),
+                trigger='interval',
+                minutes=30,
+                id='checkout_reminders',
+                replace_existing=True,
+            )
+            scheduler.start()
+        except Exception as e:
+            print(f"[reminders] scheduler failed to start: {e}", flush=True)
+
     return app
 
 app = create_app()
