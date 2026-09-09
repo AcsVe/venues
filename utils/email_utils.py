@@ -119,48 +119,74 @@ def _class_label(data):
 
 def _base_html(content_ar, content_en, color='#247680'):
     """Bilingual email shell: Arabic (RTL) section on top, English (LTR)
-    section below, each with correct text direction."""
+    section below, each with correct text direction.
+
+    Uses a table with an explicit width attribute (not CSS max-width on a
+    div) because Outlook desktop's Word-based rendering engine frequently
+    ignores max-width/margin:auto on divs and stretches the email to fill
+    the reading pane — the table+width+align combo is the reliable
+    cross-client fix."""
     logo = _abs_logo_url()
     org_ar = current_app.config.get('ORG_AR', 'مدرسة الرائد العربي')
     org_en = current_app.config.get('ORG_EN', 'Al-Raed Al-Arabi School')
-    logo_html = f'<img src="{logo}" alt="logo" height="50" style="margin-bottom:8px;display:block;margin-left:auto;margin-right:auto"><br>' if logo else ''
+    logo_html = (f'<img src="{logo}" alt="logo" width="120" style="display:block;margin:0 auto 6px;max-width:120px;height:auto">'
+                 if logo else '')
 
     return f"""
-<div style="font-family:Tajawal,Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:12px;overflow:hidden">
-  <div style="background:{color};padding:20px 24px;text-align:center">
-    {logo_html}
-    <span style="color:#fff;font-size:18px;font-weight:700">{org_ar} — {org_en}</span>
-  </div>
-  <div dir="rtl" style="padding:24px 24px 12px;background:#fff;text-align:right">{content_ar}</div>
-  <div style="border-top:1px dashed #ddd;margin:0 24px"></div>
-  <div dir="ltr" style="padding:12px 24px 24px;background:#fff;text-align:left;font-family:Arial,sans-serif">{content_en}</div>
-  <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:11px;color:#888">
-    <div dir="rtl">هذا البريد مُرسَل تلقائياً من نظام حجز عربات الحواسيب — يُرجى عدم الرد عليه</div>
-    <div dir="ltr">This is an automated message from the laptop trolley booking system — please do not reply</div>
-  </div>
-</div>"""
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef1f2">
+  <tr><td align="center" style="padding:16px 10px">
+    <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0"
+           style="width:480px;max-width:480px;background:#fff;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;font-family:Tajawal,Arial,sans-serif;font-size:13px">
+      <tr><td style="background:{color};padding:12px 16px;text-align:center">
+        {logo_html}
+        <span style="color:#fff;font-size:13px;font-weight:700">{org_ar} — {org_en}</span>
+      </td></tr>
+      <tr><td dir="rtl" style="padding:14px 16px 6px;text-align:right">{content_ar}</td></tr>
+      <tr><td style="padding:0 16px"><div style="border-top:1px dashed #ddd"></div></td></tr>
+      <tr><td dir="ltr" style="padding:6px 16px 14px;text-align:left;font-family:Arial,sans-serif">{content_en}</td></tr>
+      <tr><td style="background:#f5f5f5;padding:8px 16px;text-align:center;font-size:10px;color:#888">
+        <div dir="rtl">هذا البريد مُرسَل تلقائياً من نظام حجز عربات الحواسيب — يُرجى عدم الرد عليه</div>
+        <div dir="ltr">This is an automated message from the laptop trolley booking system — please do not reply</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>"""
+
+
+def _build_rows(pairs, bg):
+    """Render only rows that actually have a value — a missing
+    stage/period/date shouldn't leave an awkward blank row in the email."""
+    out = []
+    for label, value in pairs:
+        if value is None or value == '':
+            continue
+        out.append(
+            f'<tr><td style="padding:6px 8px;background:{bg};font-weight:600;width:40%">{label}</td>'
+            f'<td style="padding:6px 8px;border-bottom:1px solid #eee">{value}</td></tr>'
+        )
+    return ''.join(out)
 
 
 def _rows_ar(data, bg='#f0f7f8'):
     date_label = _date_label(data.get('date'), data.get('startTime'), data.get('endTime'))
-    return f"""
-      <tr><td style="padding:8px;background:{bg};font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data.get('reqId','')}</strong></td></tr>
-      <tr><td style="padding:8px;background:{bg};font-weight:600">سبب الحجز</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
-      <tr><td style="padding:8px;background:{bg};font-weight:600">المرحلة / الصف / الشعبة</td><td style="padding:8px;border-bottom:1px solid #eee">{_class_label(data)}</td></tr>
-      <tr><td style="padding:8px;background:{bg};font-weight:600">الحصة</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('periodLabel','')}</td></tr>
-      <tr><td style="padding:8px;background:{bg};font-weight:600">التاريخ والوقت</td><td style="padding:8px">{date_label}</td></tr>
-    """
+    return _build_rows([
+        ('رقم الطلب', f'<strong style="color:#247680">{data.get("reqId","")}</strong>'),
+        ('سبب الحجز', data.get('title')),
+        ('المرحلة / الصف / الشعبة', _class_label(data)),
+        ('الحصة', data.get('periodLabel')),
+        ('التاريخ والوقت', date_label),
+    ], bg)
 
 
 def _rows_en(data, bg='#f0f7f8'):
     date_label = _date_label(data.get('date'), data.get('startTime'), data.get('endTime'))
-    return f"""
-      <tr><td style="padding:8px;background:{bg};font-weight:600;width:40%">Request ID</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data.get('reqId','')}</strong></td></tr>
-      <tr><td style="padding:8px;background:{bg};font-weight:600">Reason</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
-      <tr><td style="padding:8px;background:{bg};font-weight:600">Stage / Grade / Section</td><td style="padding:8px;border-bottom:1px solid #eee">{_class_label(data)}</td></tr>
-      <tr><td style="padding:8px;background:{bg};font-weight:600">Period</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('periodLabel','')}</td></tr>
-      <tr><td style="padding:8px;background:{bg};font-weight:600">Date & Time</td><td style="padding:8px">{date_label}</td></tr>
-    """
+    return _build_rows([
+        ('Request ID', f'<strong style="color:#247680">{data.get("reqId","")}</strong>'),
+        ('Reason', data.get('title')),
+        ('Stage / Grade / Section', _class_label(data)),
+        ('Period', data.get('periodLabel')),
+        ('Date & Time', date_label),
+    ], bg)
 
 
 def send_confirm(data):
@@ -220,20 +246,20 @@ def send_reject(data):
     content_ar = f"""
     <h2 style="color:#c0392b;margin-top:0">❌ اعتذار — تعذّر اعتماد طلب الحجز</h2>
     <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، نأسف لإخبارك بأنه تعذّر اعتماد طلب حجزك.</p>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px;background:#fdf0f0;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee">{data['reqId']}</td></tr>
-      <tr><td style="padding:8px;background:#fdf0f0;font-weight:600">سبب الحجز</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
-      <tr><td style="padding:8px;background:#fdf0f0;font-weight:600">سبب الرفض</td><td style="padding:8px;color:#c0392b;font-weight:600">{data.get('reason','')}</td></tr>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">
+      <tr><td style="padding:6px 8px;background:#fdf0f0;font-weight:600;width:40%">رقم الطلب</td><td style="padding:6px 8px;border-bottom:1px solid #eee">{data['reqId']}</td></tr>
+      <tr><td style="padding:6px 8px;background:#fdf0f0;font-weight:600">سبب الحجز</td><td style="padding:6px 8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
+      <tr><td style="padding:6px 8px;background:#fdf0f0;font-weight:600">سبب الرفض</td><td style="padding:6px 8px;color:#c0392b;font-weight:600">{data.get('reason','')}</td></tr>
     </table>
     <p style="color:#555">يمكنك تقديم طلب جديد باختيار تاريخ أو حصة أخرى. نعتذر عن الإزعاج.</p>
     """
     content_en = f"""
     <h2 style="color:#c0392b;margin-top:0">❌ Booking Could Not Be Approved</h2>
     <p>Dear <strong>{data['name']}</strong>, we're sorry to let you know your booking request could not be approved.</p>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px;background:#fdf0f0;font-weight:600;width:40%">Request ID</td><td style="padding:8px;border-bottom:1px solid #eee">{data['reqId']}</td></tr>
-      <tr><td style="padding:8px;background:#fdf0f0;font-weight:600">Reason for booking</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
-      <tr><td style="padding:8px;background:#fdf0f0;font-weight:600">Rejection reason</td><td style="padding:8px;color:#c0392b;font-weight:600">{data.get('reason','')}</td></tr>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">
+      <tr><td style="padding:6px 8px;background:#fdf0f0;font-weight:600;width:40%">Request ID</td><td style="padding:6px 8px;border-bottom:1px solid #eee">{data['reqId']}</td></tr>
+      <tr><td style="padding:6px 8px;background:#fdf0f0;font-weight:600">Reason for booking</td><td style="padding:6px 8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
+      <tr><td style="padding:6px 8px;background:#fdf0f0;font-weight:600">Rejection reason</td><td style="padding:6px 8px;color:#c0392b;font-weight:600">{data.get('reason','')}</td></tr>
     </table>
     <p style="color:#555">You're welcome to submit a new request with a different date or period. Sorry for the inconvenience.</p>
     """
@@ -246,20 +272,12 @@ def send_cancel(data):
     content_ar = f"""
     <h2 style="color:#e67e22;margin-top:0">🚫 تم إلغاء الحجز</h2>
     <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، تم إلغاء طلب الحجز التالي.</p>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee">{data['reqId']}</td></tr>
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">سبب الحجز</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">المرحلة / الصف / الشعبة</td><td style="padding:8px">{_class_label(data)}</td></tr>
-    </table>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_ar(data, bg='#fef9f0')}</table>
     """
     content_en = f"""
     <h2 style="color:#e67e22;margin-top:0">🚫 Booking Cancelled</h2>
     <p>Dear <strong>{data['name']}</strong>, the following booking request has been cancelled.</p>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600;width:40%">Request ID</td><td style="padding:8px;border-bottom:1px solid #eee">{data['reqId']}</td></tr>
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">Reason for booking</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
-      <tr><td style="padding:8px;background:#fef9f0;font-weight:600">Stage / Grade / Section</td><td style="padding:8px">{_class_label(data)}</td></tr>
-    </table>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_en(data, bg='#fef9f0')}</table>
     """
     return _send(data['email'], data['name'],
                  f"[الرائد العربي / Al-Raed] إلغاء الحجز #{data['reqId']}",
@@ -342,38 +360,31 @@ def send_staff_notification(event_type, data, contacts):
     }
     icon, color, title_ar, title_en = labels.get(event_type, ('📌', '#247680', 'إشعار حجز', 'Booking notification'))
 
-    reason_row_ar = (f'<tr><td style="padding:8px;background:#fdf0f0;font-weight:600">سبب الرفض</td>'
-                      f'<td style="padding:8px;color:#c0392b;font-weight:600">{data.get("reason","")}</td></tr>'
-                      if data.get("reason") else "")
-    reason_row_en = (f'<tr><td style="padding:8px;background:#fdf0f0;font-weight:600">Rejection reason</td>'
-                      f'<td style="padding:8px;color:#c0392b;font-weight:600">{data.get("reason","")}</td></tr>'
-                      if data.get("reason") else "")
-
     content_ar = f"""
     <h2 style="color:{color};margin-top:0">{icon} {title_ar}</h2>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600;width:40%">رقم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data.get('reqId','')}</strong></td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">مقدم الطلب</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('name','')}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">البريد</td><td style="padding:8px;border-bottom:1px solid #eee" dir="ltr">{data.get('email','')}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">سبب الحجز</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">المرحلة / الصف / الشعبة</td><td style="padding:8px;border-bottom:1px solid #eee">{_class_label(data)}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">الحصة</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('periodLabel','')}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">التاريخ</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('date','')}</td></tr>
-      {reason_row_ar}
-    </table>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_build_rows([
+        ('رقم الطلب', f'<strong style="color:#247680">{data.get("reqId","")}</strong>'),
+        ('مقدم الطلب', data.get('name')),
+        ('البريد', f'<span dir="ltr">{data.get("email","")}</span>' if data.get('email') else None),
+        ('سبب الحجز', data.get('title')),
+        ('المرحلة / الصف / الشعبة', _class_label(data)),
+        ('الحصة', data.get('periodLabel')),
+        ('التاريخ', data.get('date')),
+        ('سبب الرفض', f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
+    ], '#f0f7f8')}</table>
     """
     content_en = f"""
     <h2 style="color:{color};margin-top:0">{icon} {title_en}</h2>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0">
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600;width:40%">Request ID</td><td style="padding:8px;border-bottom:1px solid #eee"><strong style="color:#247680">{data.get('reqId','')}</strong></td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">Requested by</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('name','')}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">Email</td><td style="padding:8px;border-bottom:1px solid #eee" dir="ltr">{data.get('email','')}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">Reason for booking</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">Stage / Grade / Section</td><td style="padding:8px;border-bottom:1px solid #eee">{_class_label(data)}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">Period</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('periodLabel','')}</td></tr>
-      <tr><td style="padding:8px;background:#f0f7f8;font-weight:600">Date</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get('date','')}</td></tr>
-      {reason_row_en}
-    </table>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_build_rows([
+        ('Request ID', f'<strong style="color:#247680">{data.get("reqId","")}</strong>'),
+        ('Requested by', data.get('name')),
+        ('Email', f'<span dir="ltr">{data.get("email","")}</span>' if data.get('email') else None),
+        ('Reason for booking', data.get('title')),
+        ('Stage / Grade / Section', _class_label(data)),
+        ('Period', data.get('periodLabel')),
+        ('Date', data.get('date')),
+        ('Rejection reason', f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
+    ], '#f0f7f8')}</table>
     """
 
     subject_map = {
