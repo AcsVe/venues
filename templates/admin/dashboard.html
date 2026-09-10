@@ -1205,10 +1205,14 @@ async function api(url, body) {
 }
 
 // ── Bookings ──────────────────────────────────────────────────
+let bookingsReqSeq = 0;
 async function loadBookings() {
+  const mySeq = ++bookingsReqSeq;
   try {
     const res = await fetch('/admin/api/bookings?filter=' + curFilter);
-    allBookings = await res.json();
+    const data = await res.json();
+    if (mySeq !== bookingsReqSeq) return; // a newer filter click superseded this request
+    allBookings = data;
     renderTable();
     loadStats();
   } catch(e) { console.error(e); }
@@ -1915,13 +1919,18 @@ function gradeSectionLabel(kind, id) {
 }
 
 let selectedTeacherIds = new Set();
+let teachersReqSeq = 0;
 
 async function loadTeachers() {
   selectedTeacherIds.clear();
   updateTeacherBulkBar();
   const stageId = document.getElementById('tcFilterStage').value;
   const url = stageId ? `/admin/api/teachers?stageId=${stageId}` : '/admin/api/teachers';
+
+  const mySeq = ++teachersReqSeq;
   const list = await fetch(url).then(r => r.json());
+  if (mySeq !== teachersReqSeq) return; // a newer request (e.g. filter changed) already started — drop this stale one
+
   document.getElementById('teachersTable').innerHTML = list.map(tc => `
     <tr>
       <td><input type="checkbox" class="tc-row-check" data-id="${tc.id}" onchange="toggleTeacherSelect(${tc.id}, this)"></td>
@@ -2150,6 +2159,7 @@ async function bulkMoveSection() {
   else showToast(data.error || t('خطأ'), '#c0392b');
 }
 
+let studentsReqSeq = 0;
 async function loadStudents() {
   const sectionId = document.getElementById('stuFilterSection').value;
   const gradeId = document.getElementById('stuFilterGrade').value;
@@ -2158,7 +2168,10 @@ async function loadStudents() {
   if (sectionId) url += `?sectionId=${sectionId}`;
   else if (gradeId) url += `?gradeId=${gradeId}`;
   else if (stageId) url += `?stageId=${stageId}`;
+
+  const mySeq = ++studentsReqSeq;
   const list = await fetch(url).then(r => r.json());
+  if (mySeq !== studentsReqSeq) return; // a newer filter request superseded this one
 
   function labelFor(kind, id) {
     if (kind === 'stage') { const s = STRUCTURE.find(x=>x.id===id); return s ? (AR?s.nameAr:(s.nameEn||s.nameAr)) : ''; }
