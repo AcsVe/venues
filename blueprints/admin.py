@@ -675,6 +675,41 @@ def api_delete_teacher():
     return jsonify({'success': True})
 
 
+@admin_bp.route('/api/delete-teachers-bulk', methods=['POST'])
+@login_required
+def api_delete_teachers_bulk():
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'success': False, 'error': 'لم يتم تحديد أي معلم'}), 400
+    count = Teacher.query.filter(Teacher.id.in_(ids)).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify({'success': True, 'count': count})
+
+
+@admin_bp.route('/api/move-teachers-bulk', methods=['POST'])
+@login_required
+def api_move_teachers_bulk():
+    """Reassign a batch of teachers to a different stage. Clears any
+    grade/section they had, since those belonged to the old stage."""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    stage_id = data.get('stageId')
+    if not ids:
+        return jsonify({'success': False, 'error': 'لم يتم تحديد أي معلم'}), 400
+    stage = Stage.query.get(stage_id) if stage_id else None
+    if stage_id and not stage:
+        return jsonify({'success': False, 'error': 'المرحلة غير موجودة'}), 400
+
+    teachers = Teacher.query.filter(Teacher.id.in_(ids)).all()
+    for tch in teachers:
+        tch.stage_id = stage.id if stage else None
+        tch.grade_id = None
+        tch.section_id = None
+    db.session.commit()
+    return jsonify({'success': True, 'count': len(teachers)})
+
+
 # ── Students API ──────────────────────────────────────────────────────────
 @admin_bp.route('/api/students')
 @login_required
