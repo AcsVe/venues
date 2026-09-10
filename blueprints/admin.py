@@ -5,7 +5,8 @@ from flask import (Blueprint, render_template, request, jsonify,
 from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact,
                     Teacher, Student, BookingCheckout, CheckoutLine)
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
-                            get_all_contact_emails, check_conflict, check_blocked)
+                            get_all_contact_emails, check_conflict, check_blocked,
+                            resolve_stage_grade_section_by_name)
 from utils.email_utils import (send_approve, send_reject, send_cancel,
                                 send_pending, send_update, send_staff_notification)
 
@@ -616,24 +617,32 @@ def api_add_teacher():
 @login_required
 def api_bulk_add_teachers():
     """Bulk import from a pasted/uploaded CSV-like list.
-    Each item: {name, email, phone, stageId, gradeId, sectionId}"""
+    Each item: {name, email, phone, stage, grade, section} — stage/grade/
+    section are matched by NAME text (Arabic or English), so one file can
+    mix teachers from different stages/sections. All optional except name."""
     data  = request.get_json(silent=True) or {}
     items = data.get('list', [])
     added = 0
+    errors = []
     for item in items:
         name = (item.get('name') or '').strip()
         if not name:
             continue
+        stage, grade, section, err = resolve_stage_grade_section_by_name(
+            item.get('stage', ''), item.get('grade', ''), item.get('section', ''))
+        if err:
+            errors.append(f'{name}: {err}')
+            continue
         db.session.add(Teacher(
             name=name, email=sanitize_email(item.get('email', '')),
             phone=(item.get('phone') or '').strip(),
-            stage_id=item.get('stageId') or None,
-            grade_id=item.get('gradeId') or None,
-            section_id=item.get('sectionId') or None,
+            stage_id=stage.id if stage else None,
+            grade_id=grade.id if grade else None,
+            section_id=section.id if section else None,
         ))
         added += 1
     db.session.commit()
-    return jsonify({'success': True, 'count': added})
+    return jsonify({'success': True, 'count': added, 'errors': errors})
 
 
 @admin_bp.route('/api/update-teacher', methods=['POST'])
@@ -703,23 +712,38 @@ def api_add_student():
 @admin_bp.route('/api/bulk-add-students', methods=['POST'])
 @login_required
 def api_bulk_add_students():
-    """Each item: {name, sectionId}"""
+    """Each item: {name, sectionId} (manual add flow, unchanged) OR
+    {name, stage, grade, section} (CSV bulk import — matched by name text,
+    so one file can mix students from different sections)."""
     data  = request.get_json(silent=True) or {}
     items = data.get('list', [])
     added = 0
     errors = []
     for item in items:
         name = (item.get('name') or '').strip()
-        section_id = item.get('sectionId')
-        if not name or not section_id:
+        if not name:
             continue
-        section = Section.query.get(section_id)
-        if not section:
-            errors.append(name)
+
+        section_id = item.get('sectionId')
+        if section_id:
+            section = Section.query.get(section_id)
+            if not section:
+                errors.append(f'{name}: الشعبة غير موجودة')
+                continue
+            db.session.add(Student(
+                name=name, stage_id=section.grade.stage_id,
+                grade_id=section.grade_id, section_id=section.id,
+            ))
+            added += 1
+            continue
+
+        stage, grade, section, err = resolve_stage_grade_section_by_name(
+            item.get('stage', ''), item.get('grade', ''), item.get('section', ''))
+        if err or not section:
+            errors.append(f'{name}: {err or "الشعبة مطلوبة"}')
             continue
         db.session.add(Student(
-            name=name, stage_id=section.grade.stage_id,
-            grade_id=section.grade_id, section_id=section.id,
+            name=name, stage_id=stage.id, grade_id=grade.id, section_id=section.id,
         ))
         added += 1
     db.session.commit()
