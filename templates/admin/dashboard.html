@@ -522,14 +522,26 @@
       </div>
       <div class="card">
         <div class="card-title"><i class="fas fa-list"></i> قائمة المعلمين</div>
-        <div style="margin-bottom:10px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
           <select id="tcFilterStage" onchange="loadTeachers()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
             <option value="">كل المراحل</option>
           </select>
+          <span id="tcSelCount" style="font-size:.85rem;color:var(--muted)"></span>
+        </div>
+        <div id="tcBulkBar" style="display:none;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:12px;gap:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-red btn-sm" onclick="bulkDeleteTeachers()"><i class="fas fa-trash"></i> حذف المحدد</button>
+          <span style="color:var(--muted);font-size:.85rem">نقل المحدد إلى:</span>
+          <select id="tcBulkMoveStage" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+            <option value="">-- اختر مرحلة --</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="bulkMoveTeachers()"><i class="fas fa-exchange-alt"></i> نقل</button>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>الاسم</th><th>البريد</th><th>الجوال</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>تعديل</th><th>حذف</th></tr></thead>
+            <thead><tr>
+              <th><input type="checkbox" id="tcSelectAll" onchange="toggleSelectAllTeachers(this)"></th>
+              <th>الاسم</th><th>البريد</th><th>الجوال</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>تعديل</th><th>حذف</th>
+            </tr></thead>
             <tbody id="teachersTable"></tbody>
           </table>
         </div>
@@ -1027,6 +1039,9 @@ const I18N_EN = {
   "ملف CSV أو TXT — كل سطر بالترتيب: name,email,phone,stage,grade,section — كل الأعمدة بعد الاسم اختيارية.":
     "A CSV or TXT file — each line, in order: name,email,phone,stage,grade,section — every column after the name is optional.",
   "إلغاء هذا التذكير؟": "Cancel this reminder?",
+  "حذف كل المعلمين المحددين نهائياً؟": "Permanently delete all selected teachers?",
+  "نقل كل المعلمين المحددين للمرحلة المختارة؟ سيتم إلغاء تعيين الصف/الشعبة الحالي لهم.":
+    "Move all selected teachers to the chosen stage? Their current grade/section assignment will be cleared.",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1863,6 +1878,7 @@ async function loadTeachersTab() {
   populateStageSelects([
     document.getElementById('tcStage'),
     document.getElementById('tcFilterStage'),
+    document.getElementById('tcBulkMoveStage'),
   ]);
   loadTeachers();
 }
@@ -1898,12 +1914,17 @@ function gradeSectionLabel(kind, id) {
   return '';
 }
 
+let selectedTeacherIds = new Set();
+
 async function loadTeachers() {
+  selectedTeacherIds.clear();
+  updateTeacherBulkBar();
   const stageId = document.getElementById('tcFilterStage').value;
   const url = stageId ? `/admin/api/teachers?stageId=${stageId}` : '/admin/api/teachers';
   const list = await fetch(url).then(r => r.json());
   document.getElementById('teachersTable').innerHTML = list.map(tc => `
     <tr>
+      <td><input type="checkbox" class="tc-row-check" data-id="${tc.id}" onchange="toggleTeacherSelect(${tc.id}, this)"></td>
       <td>${esc(tc.name)}</td>
       <td dir="ltr">${esc(tc.email)}</td>
       <td dir="ltr">${esc(tc.phone)}</td>
@@ -1912,7 +1933,47 @@ async function loadTeachers() {
       <td>${esc(gradeSectionLabel('section', tc.sectionId))}</td>
       <td><button class="btn btn-sm btn-outline" onclick="openEditTeacher(${tc.id})" title="${t('تعديل')}"><i class="fas fa-edit"></i></button></td>
       <td><button class="btn btn-red btn-sm" onclick="deleteTeacher(${tc.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+  document.getElementById('tcSelectAll').checked = false;
+}
+
+function toggleTeacherSelect(id, checkbox) {
+  if (checkbox.checked) selectedTeacherIds.add(id);
+  else selectedTeacherIds.delete(id);
+  updateTeacherBulkBar();
+}
+
+function toggleSelectAllTeachers(headerCheckbox) {
+  document.querySelectorAll('.tc-row-check').forEach(cb => {
+    cb.checked = headerCheckbox.checked;
+    const id = parseInt(cb.dataset.id, 10);
+    if (headerCheckbox.checked) selectedTeacherIds.add(id);
+    else selectedTeacherIds.delete(id);
+  });
+  updateTeacherBulkBar();
+}
+
+function updateTeacherBulkBar() {
+  const n = selectedTeacherIds.size;
+  document.getElementById('tcBulkBar').style.display = n > 0 ? 'flex' : 'none';
+  document.getElementById('tcSelCount').textContent = n > 0 ? (AR ? `${n} محدد` : `${n} selected`) : '';
+}
+
+async function bulkDeleteTeachers() {
+  if (!selectedTeacherIds.size) return;
+  if (!confirmT('حذف كل المعلمين المحددين نهائياً؟')) return;
+  const data = await api('/admin/api/delete-teachers-bulk', {ids: [...selectedTeacherIds]});
+  if (data.success) { showToast(`${AR?'تم حذف':'Deleted'} ${data.count}`); loadTeachers(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function bulkMoveTeachers() {
+  if (!selectedTeacherIds.size) return;
+  const stageId = document.getElementById('tcBulkMoveStage').value || null;
+  if (!confirmT('نقل كل المعلمين المحددين للمرحلة المختارة؟ سيتم إلغاء تعيين الصف/الشعبة الحالي لهم.')) return;
+  const data = await api('/admin/api/move-teachers-bulk', {ids: [...selectedTeacherIds], stageId});
+  if (data.success) { showToast(`${AR?'تم نقل':'Moved'} ${data.count}`); loadTeachers(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
 }
 
 async function addTeacher() {
