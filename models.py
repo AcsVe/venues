@@ -109,6 +109,7 @@ class Booking(db.Model):
     __tablename__ = 'bookings'
     id            = db.Column(db.Integer, primary_key=True)
     req_id        = db.Column(db.String(32), unique=True, nullable=False)
+    action_token  = db.Column(db.String(43))  # secures one-click approve/reject links in staff emails
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     name          = db.Column(db.String(200), nullable=False)
     email         = db.Column(db.String(200), nullable=False)
@@ -324,6 +325,7 @@ def init_db(app):
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_reminder_sent BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE booking_reminders ADD COLUMN IF NOT EXISTS recipient_email VARCHAR(200)")
             conn.exec_driver_sql("ALTER TABLE booking_reminders ADD COLUMN IF NOT EXISTS kind VARCHAR(10) DEFAULT 'admin'")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS action_token VARCHAR(43)")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
             # Contacts can now repeat the same email across different stages —
