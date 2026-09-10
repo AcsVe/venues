@@ -56,7 +56,7 @@ def create_app():
     if os.environ.get('DISABLE_REMINDERS') != '1':
         try:
             from apscheduler.schedulers.background import BackgroundScheduler
-            from utils.reminders import check_and_send_reminders
+            from utils.reminders import check_and_send_reminders, check_and_send_scheduled_reminders
 
             scheduler = BackgroundScheduler(daemon=True)
             scheduler.add_job(
@@ -64,6 +64,15 @@ def create_app():
                 trigger='interval',
                 minutes=30,
                 id='checkout_reminders',
+                replace_existing=True,
+            )
+            # Custom admin/teacher reminders name an exact time, so this
+            # runs more often to actually fire close to that time.
+            scheduler.add_job(
+                func=lambda: check_and_send_scheduled_reminders(app),
+                trigger='interval',
+                minutes=5,
+                id='scheduled_reminders',
                 replace_existing=True,
             )
             scheduler.start()
