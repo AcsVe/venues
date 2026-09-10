@@ -448,7 +448,11 @@ def api_amend_by_user():
 # ── Teacher name autocomplete (for the booking form) ──────────────────────
 @public_bp.route('/api/teacher-names')
 def api_teacher_names():
-    names = [t.name for t in Teacher.query.order_by(Teacher.name).all()]
+    stage_id = request.args.get('stageId')
+    q = Teacher.query
+    if stage_id:
+        q = q.filter_by(stage_id=stage_id)
+    names = [t.name for t in q.order_by(Teacher.name).all()]
     return jsonify(names)
 
 
