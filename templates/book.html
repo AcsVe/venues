@@ -70,28 +70,6 @@
 
     <div id="alertBox"></div>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label>{{ 'اسم المعلم/ة' if lang == 'ar' else 'Teacher Name' }} <span class="req">*</span></label>
-        <input type="text" id="fullName" list="teacherNamesList" placeholder="{{ 'الاسم الرباعي' if lang == 'ar' else 'Enter full name' }}" onchange="onTeacherNameChange()">
-        <datalist id="teacherNamesList"></datalist>
-      </div>
-      <div class="form-group">
-        <label>{{ 'البريد الإلكتروني' if lang == 'ar' else 'Email' }} <span class="req">*</span></label>
-        <input type="email" id="email" placeholder="example@email.com" dir="ltr">
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>{{ 'الجوال' if lang == 'ar' else 'Phone' }}</label>
-        <input type="tel" id="phone" placeholder="+962 7x xxx xxxx" dir="ltr">
-      </div>
-      <div class="form-group">
-        <label>{{ 'سبب الحجز' if lang == 'ar' else 'Reason for Booking' }}</label>
-        <input type="text" id="eventTitle" placeholder="{{ 'مثال: حصة حاسوب' if lang == 'ar' else 'e.g. Computer class' }}">
-      </div>
-    </div>
-
     <div class="form-row quad">
       <div class="form-group">
         <label>{{ 'المرحلة' if lang == 'ar' else 'Stage' }} <span class="req">*</span></label>
@@ -119,6 +97,28 @@
           <option value="{{ p.id }}">{{ p.label_ar or ('الحصة ' ~ p.number) }}{% if p.start_time %} ({{ p.start_time }} - {{ p.end_time }}){% endif %}</option>
           {% endfor %}
         </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>{{ 'اسم المعلم/ة' if lang == 'ar' else 'Teacher Name' }} <span class="req">*</span></label>
+        <input type="text" id="fullName" list="teacherNamesList" placeholder="{{ 'اختر المرحلة أولاً' if lang == 'ar' else 'Select a stage first' }}" onchange="onTeacherNameChange()" disabled>
+        <datalist id="teacherNamesList"></datalist>
+      </div>
+      <div class="form-group">
+        <label>{{ 'البريد الإلكتروني' if lang == 'ar' else 'Email' }} <span class="req">*</span></label>
+        <input type="email" id="email" placeholder="example@email.com" dir="ltr">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>{{ 'الجوال' if lang == 'ar' else 'Phone' }}</label>
+        <input type="tel" id="phone" placeholder="+962 7x xxx xxxx" dir="ltr">
+      </div>
+      <div class="form-group">
+        <label>{{ 'سبب الحجز' if lang == 'ar' else 'Reason for Booking' }}</label>
+        <input type="text" id="eventTitle" placeholder="{{ 'مثال: حصة حاسوب' if lang == 'ar' else 'e.g. Computer class' }}">
       </div>
     </div>
 
@@ -220,6 +220,7 @@ function onStageChange() {
   const stageId = document.getElementById('stageSel').value;
   const gradeSel = document.getElementById('gradeSel');
   const sectionSel = document.getElementById('sectionSel');
+  const nameInput = document.getElementById('fullName');
   sectionSel.innerHTML = `<option value="">${AR ? '-- اختر الشعبة --' : '-- Select Section --'}</option>`;
   sectionSel.disabled = true;
 
@@ -230,12 +231,20 @@ function onStageChange() {
     gradeSel.innerHTML = `<option value="">${AR ? '-- اختر الصف --' : '-- Select Grade --'}</option>`;
     gradeSel.disabled = true;
     resetPeriodOptions();
+    nameInput.disabled = true;
+    nameInput.value = '';
+    nameInput.placeholder = AR ? 'اختر المرحلة أولاً' : 'Select a stage first';
+    document.getElementById('teacherNamesList').innerHTML = '';
     return;
   }
   gradeSel.innerHTML = `<option value="">${AR ? '-- اختر الصف --' : '-- Select Grade --'}</option>` +
     stage.grades.map(g => `<option value="${g.id}">${AR ? g.nameAr : (g.nameEn||g.nameAr)}</option>`).join('');
   gradeSel.disabled = false;
   refreshPeriodAvailability();
+
+  nameInput.disabled = false;
+  nameInput.placeholder = AR ? 'الاسم الرباعي' : 'Enter full name';
+  loadTeacherNames(stageId);
 }
 
 // ── Period availability (shows only open periods once stage + date are picked) ──
@@ -430,9 +439,10 @@ function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-async function loadTeacherNames() {
+async function loadTeacherNames(stageId) {
   try {
-    const res = await fetch('/api/teacher-names');
+    const url = stageId ? `/api/teacher-names?stageId=${stageId}` : '/api/teacher-names';
+    const res = await fetch(url);
     const names = await res.json();
     document.getElementById('teacherNamesList').innerHTML =
       names.map(n => `<option value="${esc(n)}">`).join('');
@@ -443,18 +453,19 @@ async function onTeacherNameChange() {
   const name = document.getElementById('fullName').value.trim();
   if (!name) return;
 
-  // Don't override a selection the teacher already made manually.
-  if (document.getElementById('stageSel').value) return;
+  // Stage is already chosen at this point (the name field only unlocks
+  // after picking one). Only auto-fill grade/section here, and only if
+  // the teacher hasn't already been given a manual grade selection.
+  if (document.getElementById('gradeSel').value) return;
 
   try {
     const res = await fetch('/api/teacher-lookup?name=' + encodeURIComponent(name));
     const data = await res.json();
     if (!data.found) return;
 
-    if (data.stageId) {
-      document.getElementById('stageSel').value = data.stageId;
-      onStageChange();
-    }
+    const currentStageId = document.getElementById('stageSel').value;
+    if (data.stageId && String(data.stageId) !== currentStageId) return; // belongs to a different stage — ignore
+
     if (data.gradeId) {
       document.getElementById('gradeSel').value = data.gradeId;
       onGradeChange();
@@ -466,6 +477,5 @@ async function onTeacherNameChange() {
 }
 
 loadStructure();
-loadTeacherNames();
 </script>
 {% endblock %}
