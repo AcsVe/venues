@@ -75,3 +75,43 @@ def check_and_send_reminders(app):
             from models import db
             db.session.commit()
             print(f"[reminders] sent {sent_count} checkout reminder(s)", flush=True)
+
+
+def check_and_send_scheduled_reminders(app):
+    """Runs periodically. Sends any admin-scheduled reminder (exact date +
+    time, set via the booking detail modal) once its time has arrived.
+    Compared in Jordan local time (UTC+3, no DST) — the same wall-clock
+    time the admin picked in the date/time field."""
+    with app.app_context():
+        from models import db, Booking, BookingReminder
+        from utils.email_utils import send_scheduled_reminder
+
+        jordan_now = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=3)
+
+        due = BookingReminder.query.filter(
+            BookingReminder.sent.is_(False),
+            BookingReminder.remind_at <= jordan_now,
+        ).all()
+
+        sent_count = 0
+        for reminder in due:
+            b = Booking.query.get(reminder.booking_id)
+            if b and reminder.recipient_email:
+                ctx = {
+                    'reqId': b.req_id, 'name': b.name, 'email': reminder.recipient_email,
+                    'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
+                    'section': b.section_name,
+                    'periodLabel': f'الحصة {b.period_number}' if b.period_number else '',
+                    'date': b.booking_date, 'startTime': b.start_time, 'endTime': b.end_time,
+                    'note': reminder.note or '',
+                }
+                try:
+                    send_scheduled_reminder(ctx)
+                except Exception as e:
+                    print(f"[email] scheduled reminder failed for {b.req_id}: {e}", flush=True)
+            reminder.sent = True
+            sent_count += 1
+
+        if sent_count:
+            db.session.commit()
+            print(f"[reminders] sent {sent_count} scheduled reminder(s)", flush=True)
