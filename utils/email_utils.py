@@ -375,6 +375,22 @@ def send_checkout_reminder(data):
                  _base_html(content_ar, content_en, '#e67e22'))
 
 
+def _action_buttons_html(data, lang):
+    """Approve/Reject buttons for the 'new booking' staff email — only
+    rendered when the caller supplied token-secured action URLs."""
+    approve_url = data.get('approveUrl')
+    reject_url = data.get('rejectUrl')
+    if not (approve_url and reject_url):
+        return ''
+    approve_label = 'اعتماد الحجز' if lang == 'ar' else 'Approve Booking'
+    reject_label = 'رفض الحجز' if lang == 'ar' else 'Reject Booking'
+    return f"""
+    <div style="text-align:center;margin:18px 0 6px">
+      <a href="{approve_url}" style="display:inline-block;background:#27ae60;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem;margin:0 4px 8px">{approve_label}</a>
+      <a href="{reject_url}" style="display:inline-block;background:#c0392b;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem;margin:0 4px 8px">{reject_label}</a>
+    </div>"""
+
+
 def send_staff_notification(event_type, data, contacts):
     """Send internal notification to all staff contacts."""
     if not contacts:
@@ -402,6 +418,7 @@ def send_staff_notification(event_type, data, contacts):
         ('التاريخ', data.get('date')),
         ('سبب الرفض', f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
     ], '#f0f7f8')}</table>
+    {_action_buttons_html(data, 'ar')}
     """
     content_en = f"""
     <h2 style="color:{color};margin-top:0">{icon} {title_en}</h2>
@@ -415,6 +432,7 @@ def send_staff_notification(event_type, data, contacts):
         ('Date', data.get('date')),
         ('Rejection reason', f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
     ], '#f0f7f8')}</table>
+    {_action_buttons_html(data, 'en')}
     """
 
     subject_map = {
