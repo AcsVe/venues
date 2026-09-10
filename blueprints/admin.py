@@ -3,7 +3,7 @@ from functools import wraps
 from flask import (Blueprint, render_template, request, jsonify,
                    session, redirect, url_for, current_app, send_file)
 from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact,
-                    Teacher, Student, BookingCheckout, CheckoutLine)
+                    Teacher, Student, BookingCheckout, CheckoutLine, BookingReminder)
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
                             get_all_contact_emails, check_conflict, check_blocked,
                             resolve_stage_grade_section_by_name)
@@ -953,3 +953,74 @@ def api_archive_delete():
     db.session.commit()
 
     return jsonify({'success': True, 'deletedBookings': deleted_count, 'deletedCheckouts': checkout_count})
+
+
+# ── Scheduled reminders (admin picks an exact date/time per booking) ──────
+@admin_bp.route('/api/booking-reminder')
+@login_required
+def api_get_booking_reminder():
+    """Return the pending (unsent) ADMIN reminder for a booking, if any —
+    a teacher's own reminder on the same booking is entirely separate and
+    never shown or touched here."""
+    req_id = request.args.get('reqId', '')
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'reminder': None})
+    reminder = (BookingReminder.query.filter_by(booking_id=b.id, sent=False, kind='admin')
+                .order_by(BookingReminder.remind_at.desc()).first())
+    return jsonify({'reminder': reminder.to_dict() if reminder else None})
+
+
+@admin_bp.route('/api/schedule-reminder', methods=['POST'])
+@login_required
+def api_schedule_reminder():
+    data = request.get_json(silent=True) or {}
+    req_id = data.get('reqId', '')
+    remind_at_str = data.get('remindAt', '')  # expected "YYYY-MM-DDTHH:MM" from <input type="datetime-local">
+    recipient_email = sanitize_email(data.get('recipientEmail', ''))
+    note = (data.get('note') or '').strip()
+
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'الحجز غير موجود'}), 404
+    if b.status not in ('approved', 'completed'):
+        return jsonify({'success': False, 'error': 'التذكير متاح فقط للحجوزات المعتمدة'}), 400
+    if not remind_at_str:
+        return jsonify({'success': False, 'error': 'التاريخ والوقت مطلوبان'}), 400
+    if not is_valid_email(recipient_email):
+        return jsonify({'success': False, 'error': 'بريد إلكتروني صحيح مطلوب لاستلام التذكير'}), 400
+
+    try:
+        remind_at = datetime.strptime(remind_at_str, '%Y-%m-%dT%H:%M')
+    except ValueError:
+        return jsonify({'success': False, 'error': 'صيغة التاريخ/الوقت غير صحيحة'}), 400
+
+    # The picker gives the admin's local wall-clock time (Jordan, UTC+3, no
+    # DST) — compare against local "now", not UTC, or every reminder would
+    # look 3 hours further in the future than the admin actually meant.
+    from datetime import timedelta
+    jordan_now = datetime.utcnow() + timedelta(hours=3)
+    if remind_at <= jordan_now:
+        return jsonify({'success': False, 'error': 'يجب أن يكون وقت التذكير بالمستقبل'}), 400
+
+    # Replace any existing pending ADMIN reminder for this booking — a
+    # teacher's own reminder on the same booking is untouched, by design.
+    BookingReminder.query.filter_by(booking_id=b.id, sent=False, kind='admin').delete()
+    db.session.add(BookingReminder(booking_id=b.id, remind_at=remind_at,
+                                    recipient_email=recipient_email, note=note, kind='admin'))
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/cancel-reminder', methods=['POST'])
+@login_required
+def api_cancel_reminder():
+    """Cancels the admin's own pending reminder only — never a teacher's."""
+    data = request.get_json(silent=True) or {}
+    req_id = data.get('reqId', '')
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'الحجز غير موجود'}), 404
+    BookingReminder.query.filter_by(booking_id=b.id, sent=False, kind='admin').delete()
+    db.session.commit()
+    return jsonify({'success': True})
