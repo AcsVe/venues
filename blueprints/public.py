@@ -501,12 +501,12 @@ def api_submit_checkout():
         try:
             laptop_number = int(laptop_number)
         except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'رقم لابتوب غير صحيح'}), 400
+            return jsonify({'success': False, 'error': 'رقم جهاز غير صحيح'}), 400
         if not (1 <= laptop_number <= LAPTOP_COUNT):
-            return jsonify({'success': False, 'error': f'رقم اللابتوب يجب أن يكون بين 1 و {LAPTOP_COUNT}'}), 400
+            return jsonify({'success': False, 'error': f'رقم الجهاز يجب أن يكون بين 1 و {LAPTOP_COUNT}'}), 400
         if laptop_number in seen_numbers:
             return jsonify({'success': False,
-                            'error': f'رقم اللابتوب {laptop_number} مستخدم لأكثر من طالب'}), 400
+                            'error': f'رقم الجهاز {laptop_number} مستخدم لأكثر من طالب'}), 400
         seen_numbers[laptop_number] = student_id
         clean_entries.append((student_id, laptop_number))
 
