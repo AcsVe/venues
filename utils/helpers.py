@@ -107,3 +107,60 @@ def get_blocked_for_date(booking_date):
             'hall': blk.hall or '',
         })
     return result
+
+
+def resolve_stage_grade_section_by_name(stage_name='', grade_name='', section_name=''):
+    """Look up Stage/Grade/Section by their Arabic or English display name
+    (case-insensitive, trimmed) — used for bulk CSV imports where the file
+    names things instead of using internal IDs. Returns (stage, grade,
+    section, error) where error is None on success, or a short message
+    naming exactly what wasn't found."""
+    from models import Stage, Grade, Section
+
+    stage_name = (stage_name or '').strip()
+    grade_name = (grade_name or '').strip()
+    section_name = (section_name or '').strip()
+
+    stage = grade = section = None
+
+    if stage_name:
+        stage = Stage.query.filter(
+            db_ilike(Stage.name_ar, stage_name) | db_ilike(Stage.name_en, stage_name)
+        ).first()
+        if not stage:
+            return None, None, None, f'المرحلة غير موجودة: {stage_name}'
+
+    if grade_name:
+        q = Grade.query.filter(
+            db_ilike(Grade.name_ar, grade_name) | db_ilike(Grade.name_en, grade_name)
+        )
+        if stage:
+            q = q.filter(Grade.stage_id == stage.id)
+        grade = q.first()
+        if not grade:
+            return None, None, None, f'الصف غير موجود: {grade_name}'
+        if not stage:
+            stage = Stage.query.get(grade.stage_id)
+
+    if section_name:
+        q = Section.query.filter(
+            db_ilike(Section.name_ar, section_name) | db_ilike(Section.name_en, section_name)
+        )
+        if grade:
+            q = q.filter(Section.grade_id == grade.id)
+        section = q.first()
+        if not section:
+            return None, None, None, f'الشعبة غير موجودة: {section_name}'
+        if not grade:
+            grade = Grade.query.get(section.grade_id)
+        if not stage:
+            stage = Stage.query.get(grade.stage_id)
+
+    return stage, grade, section, None
+
+
+def db_ilike(column, value):
+    """Case-insensitive exact match helper (works the same on SQLite and
+    Postgres, unlike raw ilike() which SQLite doesn't support natively)."""
+    from sqlalchemy import func
+    return func.lower(column) == value.lower()
