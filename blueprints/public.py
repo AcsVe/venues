@@ -1,381 +1,586 @@
-from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, date
+import os
+from datetime import date, datetime, timedelta
+from flask import (Blueprint, render_template, request, jsonify,
+                   redirect, url_for, send_from_directory, current_app)
+from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod,
+                    Student, Teacher, BookingCheckout, CheckoutLine, BookingReminder)
+from utils.helpers import (gen_req_id, check_conflict, check_blocked,
+                            save_upload, get_all_contact_emails,
+                            get_blocked_for_date, is_valid_email, sanitize_email)
+from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification
 
-db = SQLAlchemy()
-
-
-class Teacher(db.Model):
-    """Roster of teachers. stage/grade/section are all optional and
-    independently settable — a teacher can be tied to a whole stage, a
-    specific grade, or one exact section. Used both as a reference/contact
-    list and to auto-fill the booking form when a matching name is entered."""
-    __tablename__ = 'teachers'
-    id         = db.Column(db.Integer, primary_key=True)
-    name       = db.Column(db.String(200), nullable=False)
-    email      = db.Column(db.String(200))
-    phone      = db.Column(db.String(50))
-    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'))
-    grade_id   = db.Column(db.Integer, db.ForeignKey('grades.id'))
-    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def to_dict(self):
-        return {
-            'id': self.id, 'name': self.name, 'email': self.email or '',
-            'phone': self.phone or '', 'stageId': self.stage_id,
-            'gradeId': self.grade_id, 'sectionId': self.section_id,
-        }
+public_bp = Blueprint('public', __name__)
 
 
-class Student(db.Model):
-    """Roster of students, organized by stage/grade/section — used as the
-    prefilled source list for the laptop-checkout form (item 3/4)."""
-    __tablename__ = 'students'
-    id         = db.Column(db.Integer, primary_key=True)
-    name       = db.Column(db.String(200), nullable=False)
-    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'), nullable=False)
-    grade_id   = db.Column(db.Integer, db.ForeignKey('grades.id'), nullable=False)
-    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def to_dict(self):
-        return {
-            'id': self.id, 'name': self.name, 'stageId': self.stage_id,
-            'gradeId': self.grade_id, 'sectionId': self.section_id,
-        }
+# ── Serve uploaded files ──────────────────────────────────────────────────
+@public_bp.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
 
 
-class BookingReminder(db.Model):
-    """A one-off reminder email scheduled for an exact date/time. `kind`
-    keeps the admin's personal follow-up completely independent from a
-    teacher's own reminder about their booking — one has nothing to do
-    with the other, and setting one never touches or replaces the other."""
-    __tablename__ = 'booking_reminders'
-    id              = db.Column(db.Integer, primary_key=True)
-    booking_id      = db.Column(db.Integer, db.ForeignKey('bookings.id'), nullable=False)
-    kind            = db.Column(db.String(10), nullable=False, default='admin')  # 'admin' or 'teacher'
-    remind_at       = db.Column(db.DateTime, nullable=False)
-    recipient_email = db.Column(db.String(200), nullable=False)
-    note            = db.Column(db.Text)
-    sent            = db.Column(db.Boolean, default=False)
-    created_at      = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def to_dict(self):
-        return {
-            'id': self.id, 'bookingId': self.booking_id, 'kind': self.kind,
-            'remindAt': self.remind_at.strftime('%Y-%m-%dT%H:%M') if self.remind_at else '',
-            'recipientEmail': self.recipient_email or '',
-            'note': self.note or '', 'sent': self.sent,
-        }
+# ── Calendar ──────────────────────────────────────────────────────────────
+@public_bp.route('/')
+def index():
+    return redirect(url_for('public.calendar'))
 
 
-class BookingCheckout(db.Model):
-    """One laptop-handover manifest per booking, filled by the teacher after
-    the booking is approved. Submitting is not conditioned on filling every
-    row — a teacher can leave absent students blank."""
-    __tablename__ = 'booking_checkouts'
-    id           = db.Column(db.Integer, primary_key=True)
-    booking_id   = db.Column(db.Integer, db.ForeignKey('bookings.id'), unique=True, nullable=False)
-    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    lines = db.relationship('CheckoutLine', backref='checkout', cascade='all, delete-orphan',
-                             order_by='CheckoutLine.seq')
-
-    def to_dict(self):
-        return {
-            'id': self.id, 'bookingId': self.booking_id,
-            'submittedAt': self.submitted_at.isoformat() if self.submitted_at else '',
-            'lines': [l.to_dict() for l in self.lines],
-        }
+# ── Academic structure (stages → grades → sections) + periods ────────────
+@public_bp.route('/api/structure')
+def api_structure():
+    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
+    return jsonify([s.to_dict(with_grades=True) for s in stages])
 
 
-class CheckoutLine(db.Model):
-    __tablename__ = 'checkout_lines'
-    id             = db.Column(db.Integer, primary_key=True)
-    checkout_id    = db.Column(db.Integer, db.ForeignKey('booking_checkouts.id'), nullable=False)
-    seq            = db.Column(db.Integer, nullable=False)
-    student_id     = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
-    student_name   = db.Column(db.String(200))   # snapshot, survives roster edits/deletes
-    laptop_number  = db.Column(db.Integer)        # 1..25, nullable = not handed out
-
-    def to_dict(self):
-        return {
-            'seq': self.seq, 'studentId': self.student_id,
-            'studentName': self.student_name, 'laptopNumber': self.laptop_number,
-        }
+@public_bp.route('/api/stages-list')
+def api_stages_list():
+    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
+    return jsonify([s.to_dict() for s in stages])
 
 
-class Booking(db.Model):
-    __tablename__ = 'bookings'
-    id            = db.Column(db.Integer, primary_key=True)
-    req_id        = db.Column(db.String(32), unique=True, nullable=False)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
-    name          = db.Column(db.String(200), nullable=False)
-    email         = db.Column(db.String(200), nullable=False)
-    phone         = db.Column(db.String(50))
-    on_behalf     = db.Column(db.String(200))
-    event_title   = db.Column(db.String(300))
-    booking_date  = db.Column(db.String(10), nullable=False)   # yyyy-MM-dd
-
-    # ── Academic-structure fields (stage/grade/section/period) ─────────────
-    stage_id       = db.Column(db.Integer, db.ForeignKey('stages.id'))
-    grade_id       = db.Column(db.Integer, db.ForeignKey('grades.id'))
-    section_id     = db.Column(db.Integer, db.ForeignKey('sections.id'))
-    period_id      = db.Column(db.Integer, db.ForeignKey('periods.id'))
-    trolley_code   = db.Column(db.String(50))    # snapshot of the trolley identifier at booking time
-    stage_name     = db.Column(db.String(200))   # snapshot labels (survive later edits/deletes)
-    grade_name     = db.Column(db.String(100))
-    section_name   = db.Column(db.String(100))
-    period_number  = db.Column(db.Integer)
-    start_time     = db.Column(db.String(5))     # derived from the period, kept for display/reports
-    end_time       = db.Column(db.String(5))
-
-    # ── Legacy hall-booking fields (kept only so old records keep displaying) ──
-    hall          = db.Column(db.String(200))
-    end_date      = db.Column(db.String(10))
-    full_day      = db.Column(db.Boolean, default=False)
-
-    notes         = db.Column(db.Text)
-    attachments   = db.Column(db.Text)   # comma-separated URLs
-    status        = db.Column(db.String(20), default='pending')  # pending/approved/completed/rejected/cancelled
-    checkout_reminder_sent = db.Column(db.Boolean, default=False)
-    reject_reason = db.Column(db.Text)
-    cc_emails     = db.Column(db.Text)   # semicolon-separated
-    action_date   = db.Column(db.DateTime)
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'reqId': self.req_id,
-            'createdAt': self.created_at.isoformat() if self.created_at else '',
-            'name': self.name,
-            'email': self.email,
-            'phone': self.phone or '',
-            'behalf': self.on_behalf or '',
-            'title': self.event_title or '',
-            'stageId': self.stage_id,
-            'gradeId': self.grade_id,
-            'sectionId': self.section_id,
-            'periodId': self.period_id,
-            'trolleyCode': self.trolley_code or '',
-            'stage': self.stage_name or self.hall or '',
-            'grade': self.grade_name or '',
-            'section': self.section_name or '',
-            'periodNumber': self.period_number,
-            'date': self.booking_date,
-            'startTime': self.start_time or '',
-            'endTime': self.end_time or '',
-            'notes': self.notes or '',
-            'att': [a for a in (self.attachments or '').split(',') if a and '[DEL]' not in a],
-            'status': self.status,
-            'rejectReason': self.reject_reason or '',
-            'cc': self.cc_emails or '',
-        }
+@public_bp.route('/api/periods')
+def api_periods():
+    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
+    return jsonify([p.to_dict() for p in periods])
 
 
-class Stage(db.Model):
-    """A study stage (e.g. أساسي / ثانوي). Each stage owns exactly one laptop
-    trolley, identified by a unique trolley_code — this is the physical
-    resource being booked."""
-    __tablename__ = 'stages'
-    id           = db.Column(db.Integer, primary_key=True)
-    name_ar      = db.Column(db.String(200), nullable=False)
-    name_en      = db.Column(db.String(200))
-    trolley_code = db.Column(db.String(50), unique=True, nullable=False)
-    active       = db.Column(db.Boolean, default=True)
-    sort_order   = db.Column(db.Integer, default=0)
-
-    grades = db.relationship('Grade', backref='stage', cascade='all, delete-orphan',
-                              order_by='Grade.sort_order')
-
-    def to_dict(self, with_grades=False):
-        d = {
-            'id': self.id,
-            'nameAr': self.name_ar,
-            'nameEn': self.name_en or self.name_ar,
-            'trolleyCode': self.trolley_code,
-            'active': self.active,
-        }
-        if with_grades:
-            d['grades'] = [g.to_dict(with_sections=True) for g in self.grades]
-        return d
+@public_bp.route('/calendar')
+def calendar():
+    lang = request.args.get('lang', 'ar')
+    return render_template('calendar.html', lang=lang)
 
 
-class Grade(db.Model):
-    __tablename__ = 'grades'
-    id         = db.Column(db.Integer, primary_key=True)
-    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'), nullable=False)
-    name_ar    = db.Column(db.String(100), nullable=False)
-    name_en    = db.Column(db.String(100))
-    sort_order = db.Column(db.Integer, default=0)
-
-    sections = db.relationship('Section', backref='grade', cascade='all, delete-orphan',
-                                order_by='Section.sort_order')
-
-    def to_dict(self, with_sections=False):
-        d = {
-            'id': self.id,
-            'stageId': self.stage_id,
-            'nameAr': self.name_ar,
-            'nameEn': self.name_en or self.name_ar,
-        }
-        if with_sections:
-            d['sections'] = [s.to_dict() for s in self.sections]
-        return d
-
-
-class Section(db.Model):
-    __tablename__ = 'sections'
-    id         = db.Column(db.Integer, primary_key=True)
-    grade_id   = db.Column(db.Integer, db.ForeignKey('grades.id'), nullable=False)
-    name_ar    = db.Column(db.String(100), nullable=False)
-    name_en    = db.Column(db.String(100))
-    sort_order = db.Column(db.Integer, default=0)
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'gradeId': self.grade_id,
-            'nameAr': self.name_ar,
-            'nameEn': self.name_en or self.name_ar,
-        }
-
-
-class Period(db.Model):
-    """One of the 8 daily class periods, shared by both stages."""
-    __tablename__ = 'periods'
-    id         = db.Column(db.Integer, primary_key=True)
-    number     = db.Column(db.Integer, nullable=False, unique=True)  # 1..8
-    label_ar   = db.Column(db.String(100))
-    start_time = db.Column(db.String(5))
-    end_time   = db.Column(db.String(5))
-    active     = db.Column(db.Boolean, default=True)
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'number': self.number,
-            'label': self.label_ar or f'الحصة {self.number}',
-            'startTime': self.start_time or '',
-            'endTime': self.end_time or '',
-            'active': self.active,
-        }
-
-
-class BlockedPeriod(db.Model):
-    """A date/time range during which a stage's trolley (or all trolleys, if
-    left blank) cannot be booked."""
-    __tablename__ = 'blocked_periods'
-    id         = db.Column(db.Integer, primary_key=True)
-    from_date  = db.Column(db.String(10), nullable=False)
-    to_date    = db.Column(db.String(10), nullable=False)
-    hall       = db.Column(db.String(200))   # stores the trolley_code; empty = all stages
-    from_time  = db.Column(db.String(5))
-    to_time    = db.Column(db.String(5))
-    reason     = db.Column(db.String(300))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            's': self.from_date,
-            'e': self.to_date,
-            'hall': self.hall or '',
-            'fromT': self.from_time or '',
-            'toT': self.to_time or '',
-            'r': self.reason or '',
-        }
-
-
-class Contact(db.Model):
-    __tablename__ = 'contacts'
-    id         = db.Column(db.Integer, primary_key=True)
-    email      = db.Column(db.String(200), nullable=False)
-    name       = db.Column(db.String(200))
-    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'))  # null = all stages
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'email': self.email,
-            'name': self.name or '',
-            'stageId': self.stage_id,
-            'date': self.created_at.strftime('%Y-%m-%d') if self.created_at else '',
-        }
-
-
-def init_db(app):
-    """Create tables and seed default academic structure if empty."""
-    db.create_all()
-
-    # Migration: add new columns to existing tables if they don't exist yet
+@public_bp.route('/api/month-data')
+def month_data():
     try:
-        with db.engine.connect() as conn:
-            for col, coltype in [
-                ('stage_id', 'INTEGER'), ('grade_id', 'INTEGER'),
-                ('section_id', 'INTEGER'), ('period_id', 'INTEGER'),
-                ('trolley_code', 'VARCHAR(50)'), ('stage_name', 'VARCHAR(200)'),
-                ('grade_name', 'VARCHAR(100)'), ('section_name', 'VARCHAR(100)'),
-                ('period_number', 'INTEGER'),
-            ]:
-                conn.exec_driver_sql(f"ALTER TABLE bookings ADD COLUMN IF NOT EXISTS {col} {coltype}")
-            conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS stage_id INTEGER")
-            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_reminder_sent BOOLEAN DEFAULT FALSE")
-            conn.exec_driver_sql("ALTER TABLE booking_reminders ADD COLUMN IF NOT EXISTS recipient_email VARCHAR(200)")
-            conn.exec_driver_sql("ALTER TABLE booking_reminders ADD COLUMN IF NOT EXISTS kind VARCHAR(10) DEFAULT 'admin'")
-            conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
-            conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
-            # Contacts can now repeat the same email across different stages —
-            # drop the old single-column unique constraint if present.
-            try:
-                conn.exec_driver_sql("ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_email_key")
-            except Exception:
-                pass
-            conn.commit()
-    except Exception:
-        pass
+        y = int(request.args.get('y', date.today().year))
+        m = int(request.args.get('m', date.today().month))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'invalid params'}), 400
 
-    if Stage.query.count() == 0:
-        basic = Stage(name_ar='المرحلة الأساسية', name_en='Primary Stage',
-                       trolley_code='TROLLEY-A', active=True, sort_order=1)
-        secondary = Stage(name_ar='المرحلة الثانوية', name_en='Secondary Stage',
-                           trolley_code='TROLLEY-B', active=True, sort_order=2)
-        db.session.add_all([basic, secondary])
+    month_start = f'{y:04d}-{m:02d}-01'
+    if m == 12:
+        month_end = f'{y+1:04d}-01-01'
+    else:
+        month_end = f'{y:04d}-{m+1:02d}-01'
+
+    bookings = Booking.query.filter(
+        Booking.status.notin_(['rejected', 'cancelled']),
+        Booking.booking_date >= month_start,
+        Booking.booking_date < month_end,
+    ).all()
+
+    blocked_map = {}
+    for blk in BlockedPeriod.query.all():
+        cur = blk.from_date
+        while cur <= blk.to_date:
+            if month_start <= cur < month_end:
+                blocked_map.setdefault(cur, []).append({
+                    'reason': blk.reason or 'غير متاح',
+                    'fromTime': blk.from_time or '',
+                    'toTime': blk.to_time or '',
+                    'hall': blk.hall or '',
+                })
+            parts = cur.split('-')
+            d_obj = date(int(parts[0]), int(parts[1]), int(parts[2]))
+            from datetime import timedelta
+            d_obj += timedelta(days=1)
+            cur = d_obj.strftime('%Y-%m-%d')
+            if cur > blk.to_date:
+                break
+
+    # Public view: hide sensitive details for privacy
+    public_bookings = []
+    for b in bookings:
+        public_bookings.append({
+            'date': b.booking_date,
+            'hall': b.trolley_code or b.hall or '',
+            'stage': b.stage_name or '',
+            'startTime': b.start_time or '',
+            'endTime': b.end_time or '',
+            'periodNumber': b.period_number,
+            'status': b.status,
+        })
+    return jsonify({
+        'bookings': public_bookings,
+        'blocked': blocked_map,
+    })
+
+
+# ── Booking form ──────────────────────────────────────────────────────────
+@public_bp.route('/book')
+def book():
+    lang = request.args.get('lang', 'ar')
+    pre_date = request.args.get('date', '')
+    today = date.today().strftime('%Y-%m-%d')
+
+    if pre_date and pre_date < today:
+        msg = 'لا يمكن الحجز بتاريخ سابق' if lang == 'ar' else 'Cannot book a past date'
+        return render_template('error.html', msg=msg, lang=lang)
+
+    if pre_date:
+        blk = check_blocked(pre_date, '', '', '')
+        if blk['blocked'] and blk.get('fullBlock'):
+            msg = (f'هذا اليوم غير متاح بالكامل: {blk["reason"]}' if lang == 'ar'
+                   else f'This day is fully unavailable: {blk["reason"]}')
+            return render_template('error.html', msg=msg, lang=lang)
+
+    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
+    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
+    return render_template('book.html', lang=lang, pre_date=pre_date,
+                           stages=stages, periods=periods, today=today)
+
+
+def _resolve_selection(data):
+    """Look up Stage/Grade/Section/Period objects from posted ids.
+    Returns (stage, grade, section, period, error)."""
+    try:
+        stage_id  = int(data.get('stageId'))
+        grade_id  = int(data.get('gradeId'))
+        section_id = int(data.get('sectionId'))
+        period_id  = int(data.get('periodId'))
+    except (TypeError, ValueError):
+        return None, None, None, None, 'يرجى اختيار المرحلة والصف والشعبة والحصة'
+
+    stage = Stage.query.get(stage_id)
+    grade = Grade.query.get(grade_id)
+    section = Section.query.get(section_id)
+    period = Period.query.get(period_id)
+    if not (stage and grade and section and period):
+        return None, None, None, None, 'اختيار غير صحيح للمرحلة/الصف/الشعبة/الحصة'
+    if grade.stage_id != stage.id or section.grade_id != grade.id:
+        return None, None, None, None, 'اختيار غير متطابق للمرحلة/الصف/الشعبة'
+    return stage, grade, section, period, None
+
+
+@public_bp.route('/api/check-slot', methods=['POST'])
+def check_slot():
+    data = request.get_json(silent=True) or {}
+    bdate = data.get('date', '')
+    exclude = data.get('excludeReqId')
+
+    if not bdate:
+        return jsonify({'ok': False, 'error': 'بيانات ناقصة'})
+
+    stage, grade, section, period, err = _resolve_selection(data)
+    if err:
+        return jsonify({'ok': False, 'error': err})
+
+    blk = check_blocked(bdate, period.start_time or '', period.end_time or '', stage.trolley_code)
+    if blk['blocked']:
+        msg = f'التاريخ غير متاح: {blk["reason"]}'
+        if blk.get('blkFromT'):
+            msg += f' ({blk["blkFromT"]} - {blk["blkToT"]})'
+        return jsonify({'ok': False, 'error': msg})
+
+    conflict = check_conflict(stage.trolley_code, bdate, period.number, exclude)
+    if conflict:
+        return jsonify({'ok': False, 'error': conflict})
+
+    return jsonify({'ok': True})
+
+
+@public_bp.route('/api/submit-booking', methods=['POST'])
+def submit_booking():
+    today = date.today().strftime('%Y-%m-%d')
+
+    if request.content_type and ('multipart' in request.content_type or
+                                  'form' in request.content_type):
+        f = request.form
+        files = request.files.getlist('attachments')
+    else:
+        f = request.get_json(silent=True) or {}
+        files = []
+
+    required = ['fullName', 'email', 'bookingDate', 'stageId', 'gradeId', 'sectionId', 'periodId']
+    for field in required:
+        if not f.get(field):
+            return jsonify({'success': False, 'error': f'الحقل {field} مطلوب'}), 400
+
+    booking_date = f.get('bookingDate')
+    if booking_date < today:
+        return jsonify({'success': False, 'error': 'لا يمكن الحجز بتاريخ سابق'}), 400
+
+    stage, grade, section, period, err = _resolve_selection(f)
+    if err:
+        return jsonify({'success': False, 'error': err}), 400
+
+    blk = check_blocked(booking_date, period.start_time or '', period.end_time or '', stage.trolley_code)
+    if blk['blocked']:
+        msg = f'التاريخ غير متاح: {blk["reason"]}'
+        if blk.get('blkFromT'):
+            msg += f' ({blk["blkFromT"]} - {blk["blkToT"]})'
+        return jsonify({'success': False, 'error': msg}), 400
+
+    conflict = check_conflict(stage.trolley_code, booking_date, period.number)
+    if conflict:
+        return jsonify({'success': False, 'error': conflict}), 400
+
+    att_urls = []
+    for file_obj in files:
+        if file_obj and file_obj.filename:
+            url = save_upload(file_obj)
+            if url:
+                att_urls.append(url)
+
+    req_id = gen_req_id()
+    booking = Booking(
+        req_id        = req_id,
+        name          = f.get('fullName'),
+        email         = sanitize_email(f.get('email')),
+        phone         = f.get('phone', ''),
+        on_behalf     = f.get('onBehalf', ''),
+        event_title   = f.get('eventTitle', ''),
+        booking_date  = booking_date,
+        stage_id      = stage.id,
+        grade_id      = grade.id,
+        section_id    = section.id,
+        period_id     = period.id,
+        trolley_code  = stage.trolley_code,
+        stage_name    = stage.name_ar,
+        grade_name    = grade.name_ar,
+        section_name  = section.name_ar,
+        period_number = period.number,
+        start_time    = period.start_time or '',
+        end_time      = period.end_time or '',
+        notes         = f.get('notes', ''),
+        attachments   = ','.join(att_urls),
+        status        = 'pending',
+    )
+    db.session.add(booking)
+    db.session.commit()
+
+    # Optional: the teacher can ask to be reminded about their own booking
+    # at a specific date/time. Best-effort — an invalid/missing value is
+    # silently skipped rather than failing the whole booking submission.
+    reminder_at_str = (f.get('reminderAt') or '').strip()
+    if reminder_at_str:
+        try:
+            reminder_at = datetime.strptime(reminder_at_str, '%Y-%m-%dT%H:%M')
+            if reminder_at > datetime.utcnow() + timedelta(hours=3):  # Jordan local "now"
+                db.session.add(BookingReminder(
+                    booking_id=booking.id, remind_at=reminder_at,
+                    recipient_email=booking.email, kind='teacher',
+                ))
+                db.session.commit()
+        except ValueError:
+            pass
+
+    email_ctx = {
+        'reqId': req_id, 'name': booking.name, 'email': booking.email,
+        'title': booking.event_title, 'stage': stage.name_ar, 'grade': grade.name_ar,
+        'section': section.name_ar, 'periodLabel': period.label_ar or f'الحصة {period.number}',
+        'date': booking_date, 'startTime': booking.start_time, 'endTime': booking.end_time,
+    }
+    try:
+        contacts = [{'email': e} for e in get_all_contact_emails(stage.id)]
+        send_staff_notification('new', email_ctx, contacts)
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
+    try:
+        send_confirm(email_ctx)
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
+
+    return jsonify({'success': True, 'reqId': req_id})
+
+
+# ── Booking lookup / cancel / amend (public) ─────────────────────────────
+@public_bp.route('/lookup')
+def lookup():
+    lang = request.args.get('lang', 'ar')
+    stages = Stage.query.filter_by(active=True).order_by(Stage.sort_order).all()
+    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
+    return render_template('lookup.html', lang=lang, stages=stages, periods=periods)
+
+
+@public_bp.route('/api/lookup-booking', methods=['POST'])
+def api_lookup():
+    data = request.get_json(silent=True) or {}
+    req_id = data.get('reqId', '').strip()
+    email  = sanitize_email(data.get('email', ''))
+
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b or b.email.lower() != email.lower():
+        return jsonify({'success': False, 'error': 'لم يتم العثور على الحجز أو البريد غير مطابق'}), 404
+    if b.status == 'cancelled':
+        return jsonify({'success': False, 'error': 'هذا الحجز ملغي بالفعل'}), 400
+
+    return jsonify({'success': True, 'booking': b.to_dict()})
+
+
+@public_bp.route('/api/cancel-booking', methods=['POST'])
+def api_cancel_by_user():
+    data = request.get_json(silent=True) or {}
+    req_id = data.get('reqId', '').strip()
+    email  = sanitize_email(data.get('email', ''))
+
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b or b.email.lower() != email.lower():
+        return jsonify({'success': False, 'error': 'غير موجود أو البريد غير مطابق'}), 404
+    if b.status == 'cancelled':
+        return jsonify({'success': False, 'error': 'الحجز ملغي بالفعل'}), 400
+    if b.status == 'completed':
+        return jsonify({'success': False, 'error': 'لا يمكن إلغاء حجز مكتمل'}), 400
+
+    b.status      = 'cancelled'
+    b.action_date = datetime.utcnow()
+    db.session.commit()
+
+    period = Period.query.get(b.period_id) if b.period_id else None
+    period_label = (period.label_ar if period else None) or (f'الحصة {b.period_number}' if b.period_number else '')
+    email_ctx = {'reqId': req_id, 'name': b.name, 'email': b.email,
+                 'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
+                 'section': b.section_name, 'date': b.booking_date,
+                 'startTime': b.start_time, 'endTime': b.end_time, 'periodLabel': period_label}
+    try:
+        send_cancel(email_ctx)
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
+    try:
+        contacts = [{'email': e} for e in get_all_contact_emails(b.stage_id)]
+        send_staff_notification('cancel', email_ctx, contacts)
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
+
+    return jsonify({'success': True})
+
+
+@public_bp.route('/api/amend-booking', methods=['POST'])
+def api_amend_by_user():
+    if request.content_type and ('multipart' in request.content_type or
+                                  'form' in request.content_type):
+        f = request.form
+        files = request.files.getlist('attachments')
+    else:
+        f = request.get_json(silent=True) or {}
+        files = []
+
+    req_id = f.get('reqId', '').strip()
+    email  = sanitize_email(f.get('email', ''))
+
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b or b.email.lower() != email.lower():
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    if b.status == 'cancelled':
+        return jsonify({'success': False, 'error': 'الحجز ملغي'}), 400
+    if b.status == 'completed':
+        return jsonify({'success': False, 'error': 'لا يمكن تعديل حجز مكتمل'}), 400
+
+    booking_date = f.get('bookingDate', b.booking_date)
+
+    if f.get('stageId') or f.get('gradeId') or f.get('sectionId') or f.get('periodId'):
+        stage, grade, section, period, err = _resolve_selection({
+            'stageId': f.get('stageId') or b.stage_id,
+            'gradeId': f.get('gradeId') or b.grade_id,
+            'sectionId': f.get('sectionId') or b.section_id,
+            'periodId': f.get('periodId') or b.period_id,
+        })
+        if err:
+            return jsonify({'success': False, 'error': err}), 400
+    else:
+        stage = Stage.query.get(b.stage_id)
+        grade = Grade.query.get(b.grade_id)
+        section = Section.query.get(b.section_id)
+        period = Period.query.get(b.period_id)
+        if not (stage and grade and section and period):
+            return jsonify({'success': False, 'error': 'تعذر إيجاد بيانات الحجز الأصلية'}), 400
+
+    conflict = check_conflict(stage.trolley_code, booking_date, period.number, req_id)
+    if conflict:
+        return jsonify({'success': False, 'error': conflict}), 400
+
+    was_approved = b.status == 'approved'
+    b.name          = f.get('fullName', b.name)
+    b.phone         = f.get('phone', b.phone or '')
+    b.on_behalf     = f.get('onBehalf', b.on_behalf or '')
+    b.event_title   = f.get('eventTitle', b.event_title or '')
+    b.booking_date  = booking_date
+    b.stage_id      = stage.id
+    b.grade_id      = grade.id
+    b.section_id    = section.id
+    b.period_id     = period.id
+    b.trolley_code  = stage.trolley_code
+    b.stage_name    = stage.name_ar
+    b.grade_name    = grade.name_ar
+    b.section_name  = section.name_ar
+    b.period_number = period.number
+    b.start_time    = period.start_time or ''
+    b.end_time      = period.end_time or ''
+    b.notes         = f.get('notes', b.notes or '')
+    b.action_date   = datetime.utcnow()
+    if was_approved:
+        b.status = 'pending'
+
+    for file_obj in files:
+        if file_obj and file_obj.filename:
+            url = save_upload(file_obj)
+            if url:
+                b.attachments = (b.attachments or '') + ',' + url
+
+    db.session.commit()
+
+    email_ctx = {'reqId': req_id, 'name': b.name, 'email': b.email,
+                 'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
+                 'section': b.section_name,
+                 'periodLabel': period.label_ar or f'الحصة {period.number}',
+                 'date': booking_date, 'startTime': b.start_time, 'endTime': b.end_time}
+    try:
+        send_update(email_ctx)
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
+    try:
+        contacts = [{'email': e} for e in get_all_contact_emails(b.stage_id)]
+        send_staff_notification('update', email_ctx, contacts)
+    except Exception as e:
+        print(f"[email] notification failed: {e}", flush=True)
+
+    return jsonify({'success': True})
+
+
+# ── Teacher name autocomplete (for the booking form) ──────────────────────
+@public_bp.route('/api/teacher-names')
+def api_teacher_names():
+    names = [t.name for t in Teacher.query.order_by(Teacher.name).all()]
+    return jsonify(names)
+
+
+@public_bp.route('/api/teacher-lookup')
+def api_teacher_lookup():
+    """Used by the booking form: when a name matches a teacher on the
+    roster, auto-fill their assigned stage/grade/section, if any."""
+    name = (request.args.get('name') or '').strip()
+    if not name:
+        return jsonify({'found': False})
+    teacher = Teacher.query.filter(Teacher.name.ilike(name)).first()
+    if not teacher:
+        return jsonify({'found': False})
+    return jsonify({
+        'found': True,
+        'stageId': teacher.stage_id,
+        'gradeId': teacher.grade_id,
+        'sectionId': teacher.section_id,
+    })
+
+
+# ── Laptop handover / checkout form (per approved booking) ────────────────
+LAPTOP_COUNT = 25
+
+@public_bp.route('/checkout/<req_id>')
+def checkout_form(req_id):
+    lang = request.args.get('lang', 'ar')
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        msg = 'رقم الحجز غير موجود' if lang == 'ar' else 'Booking number not found'
+        return render_template('error.html', msg=msg, lang=lang)
+    if b.status not in ('approved', 'completed'):
+        msg = ('نموذج تسليم الأجهزة متاح فقط بعد اعتماد الحجز من الإدارة' if lang == 'ar'
+               else 'The device handover form is only available after the booking is approved')
+        return render_template('error.html', msg=msg, lang=lang)
+
+    students = (Student.query.filter_by(section_id=b.section_id)
+                .order_by(Student.name).all())
+
+    existing = BookingCheckout.query.filter_by(booking_id=b.id).first()
+    existing_map = {}
+    if existing:
+        for line in existing.lines:
+            existing_map[line.student_id] = line.laptop_number
+
+    return render_template('checkout.html', b=b, students=students, lang=lang,
+                           existing_map=existing_map, laptop_count=LAPTOP_COUNT)
+
+
+@public_bp.route('/api/submit-checkout', methods=['POST'])
+def api_submit_checkout():
+    data = request.get_json(silent=True) or {}
+    req_id = data.get('reqId', '')
+    entries = data.get('entries', [])  # [{studentId, laptopNumber}]
+
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'الحجز غير موجود'}), 404
+    if b.status not in ('approved', 'completed'):
+        return jsonify({'success': False, 'error': 'الحجز غير معتمد بعد'}), 400
+
+    # Validate laptop numbers: within range, and no duplicate assignment
+    seen_numbers = {}
+    clean_entries = []
+    for e in entries:
+        try:
+            student_id = int(e.get('studentId'))
+        except (TypeError, ValueError):
+            continue
+        laptop_number = e.get('laptopNumber')
+        if laptop_number in (None, '', 'null'):
+            clean_entries.append((student_id, None))
+            continue
+        try:
+            laptop_number = int(laptop_number)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'رقم جهاز غير صحيح'}), 400
+        if not (1 <= laptop_number <= LAPTOP_COUNT):
+            return jsonify({'success': False, 'error': f'رقم الجهاز يجب أن يكون بين 1 و {LAPTOP_COUNT}'}), 400
+        if laptop_number in seen_numbers:
+            return jsonify({'success': False,
+                            'error': f'رقم الجهاز {laptop_number} مستخدم لأكثر من طالب'}), 400
+        seen_numbers[laptop_number] = student_id
+        clean_entries.append((student_id, laptop_number))
+
+    checkout = BookingCheckout.query.filter_by(booking_id=b.id).first()
+    if checkout:
+        CheckoutLine.query.filter_by(checkout_id=checkout.id).delete()
+    else:
+        checkout = BookingCheckout(booking_id=b.id)
+        db.session.add(checkout)
         db.session.flush()
+    checkout.submitted_at = datetime.utcnow()
 
-        for i, num in enumerate([5, 6]):
-            db.session.add(Grade(stage_id=basic.id, name_ar=f'الصف {_ordinal_ar_m(num)}',
-                                  name_en=f'Grade {num}', sort_order=i))
-        for i, num in enumerate(range(7, 13)):
-            db.session.add(Grade(stage_id=secondary.id, name_ar=f'الصف {_ordinal_ar_m(num)}',
-                                  name_en=f'Grade {num}', sort_order=i))
-        db.session.commit()
+    students_map = {s.id: s.name for s in Student.query.filter(
+        Student.id.in_([sid for sid, _ in clean_entries])).all()}
 
-        # One default section (أ) per grade — admin can add more from the panel
-        for g in Grade.query.all():
-            db.session.add(Section(grade_id=g.id, name_ar='أ', name_en='A', sort_order=0))
-        db.session.commit()
+    for i, (student_id, laptop_number) in enumerate(clean_entries, start=1):
+        db.session.add(CheckoutLine(
+            checkout_id=checkout.id, seq=i, student_id=student_id,
+            student_name=students_map.get(student_id, ''),
+            laptop_number=laptop_number,
+        ))
 
-    if Period.query.count() == 0:
-        for n in range(1, 9):
-            db.session.add(Period(number=n, label_ar=f'الحصة {_ordinal_ar(n)}', active=True))
-        db.session.commit()
+    db.session.commit()
+    return jsonify({'success': True})
 
 
-_ORDINALS_AR_F = {  # feminine — used for الحصة (period)
-    1: 'الأولى', 2: 'الثانية', 3: 'الثالثة', 4: 'الرابعة', 5: 'الخامسة',
-    6: 'السادسة', 7: 'السابعة', 8: 'الثامنة', 9: 'التاسعة', 10: 'العاشرة',
-    11: 'الحادية عشرة', 12: 'الثانية عشرة',
-}
-_ORDINALS_AR_M = {  # masculine — used for الصف (grade)
-    1: 'الأول', 2: 'الثاني', 3: 'الثالث', 4: 'الرابع', 5: 'الخامس',
-    6: 'السادس', 7: 'السابع', 8: 'الثامن', 9: 'التاسع', 10: 'العاشر',
-    11: 'الحادي عشر', 12: 'الثاني عشر',
-}
+# ── Available periods for a given stage + date (avoid failed submissions) ──
+@public_bp.route('/api/available-periods')
+def api_available_periods():
+    stage_id = request.args.get('stageId')
+    booking_date = request.args.get('date', '')
 
-def _ordinal_ar(n):
-    return _ORDINALS_AR_F.get(n, str(n))
+    if not stage_id or not booking_date:
+        return jsonify({'error': 'بيانات ناقصة'}), 400
 
-def _ordinal_ar_m(n):
-    return _ORDINALS_AR_M.get(n, str(n))
+    stage = Stage.query.get(stage_id)
+    if not stage:
+        return jsonify({'error': 'المرحلة غير موجودة'}), 400
+
+    periods = Period.query.filter_by(active=True).order_by(Period.number).all()
+
+    booked_numbers = {
+        b.period_number for b in Booking.query.filter(
+            Booking.trolley_code == stage.trolley_code,
+            Booking.booking_date == booking_date,
+            Booking.status.notin_(['rejected', 'cancelled'])
+        ).all()
+    }
+
+    result = []
+    for p in periods:
+        blk = check_blocked(booking_date, p.start_time or '', p.end_time or '', stage.trolley_code)
+        available = (p.number not in booked_numbers) and not blk['blocked']
+        result.append({
+            'id': p.id, 'number': p.number,
+            'label': p.label_ar or f'الحصة {p.number}',
+            'startTime': p.start_time or '', 'endTime': p.end_time or '',
+            'available': available,
+        })
+
+    return jsonify(result)
