@@ -137,6 +137,14 @@
       <textarea id="notes" placeholder="{{ 'أي شيء تودون إبلاغنا به بخصوص هذا الحجز...' if lang == 'ar' else 'Anything you would like to tell us about this booking...' }}"></textarea>
     </div>
 
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+        <input type="checkbox" id="wantReminder" onchange="toggleReminderField()" style="width:18px;height:18px;accent-color:var(--primary)">
+        {{ 'ذكّرني بهذا الحجز بتاريخ ووقت محدد (اختياري)' if lang == 'ar' else 'Remind me about this booking at a specific date and time (optional)' }}
+      </label>
+      <input type="datetime-local" id="reminderAt" style="display:none;margin-top:10px">
+    </div>
+
     <!-- File upload -->
     <div class="form-group">
       <label>{{ 'المرفقات' if lang == 'ar' else 'Attachments' }}</label>
@@ -381,6 +389,9 @@ async function submitBooking() {
     fd.append('periodId', periodId);
     fd.append('bookingDate', bdate);
     fd.append('notes', document.getElementById('notes').value.trim());
+    if (document.getElementById('wantReminder').checked) {
+      fd.append('reminderAt', document.getElementById('reminderAt').value);
+    }
     for (const f of selectedFiles) fd.append('attachments', f);
 
     const res  = await fetch('/api/submit-booking', { method: 'POST', body: fd });
@@ -399,6 +410,19 @@ async function submitBooking() {
     showAlert(AR ? 'خطأ في الاتصال' : 'Connection error', 'error');
     btn.disabled = false;
     btn.innerHTML = `<i class="fas fa-paper-plane"></i> ${AR ? 'إرسال طلب الحجز' : 'Submit Booking Request'}`;
+  }
+}
+
+function toggleReminderField() {
+  const checked = document.getElementById('wantReminder').checked;
+  const field = document.getElementById('reminderAt');
+  field.style.display = checked ? 'block' : 'none';
+  if (checked && !field.value) {
+    // Default to 1 hour before the currently-selected date, or 1 hour from now if no date picked yet.
+    const bdate = document.getElementById('bookingDate').value;
+    const base = bdate ? new Date(bdate + 'T09:00') : new Date(Date.now() + 3600000);
+    const pad = n => String(n).padStart(2, '0');
+    field.value = `${base.getFullYear()}-${pad(base.getMonth()+1)}-${pad(base.getDate())}T${pad(base.getHours())}:${pad(base.getMinutes())}`;
   }
 }
 
