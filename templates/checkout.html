@@ -47,12 +47,12 @@
   <div id="alertBox"></div>
   {% if students %}
   <p class="co-hint">
-    {{ 'اختر رقم اللابتوب لكل طالب استلم جهازاً. اترك الحقل فارغاً للطالب الغائب أو الذي لم يستلم جهازاً — التعبئة غير مشروطة بالعدد.' if lang == 'ar' else 'Select the laptop number for each student who received a device. Leave it blank for an absent student or one who did not receive a device — filling every row is not required.' }}
+    {{ 'اختر رقم الجهاز لكل طالب استلم جهازاً. اترك الحقل فارغاً للطالب الغائب أو الذي لم يستلم جهازاً — التعبئة غير مشروطة بالعدد.' if lang == 'ar' else 'Select the device number for each student who received a device. Leave it blank for an absent student or one who did not receive a device — filling every row is not required.' }}
   </p>
   <div style="overflow-x:auto">
   <table class="co-table">
     <thead>
-      <tr><th class="seq-col">#</th><th>{{ 'اسم الطالب' if lang == 'ar' else 'Student Name' }}</th><th>{{ 'رقم اللابتوب' if lang == 'ar' else 'Laptop Number' }}</th></tr>
+      <tr><th class="seq-col">#</th><th>{{ 'اسم الطالب' if lang == 'ar' else 'Student Name' }}</th><th>{{ 'رقم الجهاز' if lang == 'ar' else 'Device Number' }}</th></tr>
     </thead>
     <tbody>
       {% for s in students %}
