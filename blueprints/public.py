@@ -1,4 +1,5 @@
 import os
+import secrets
 from datetime import date, datetime, timedelta
 from flask import (Blueprint, render_template, request, jsonify,
                    redirect, url_for, send_from_directory, current_app)
@@ -7,7 +8,7 @@ from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod,
 from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
                             get_blocked_for_date, is_valid_email, sanitize_email)
-from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification
+from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification, send_approve, send_reject
 
 public_bp = Blueprint('public', __name__)
 
@@ -223,8 +224,10 @@ def submit_booking():
                 att_urls.append(url)
 
     req_id = gen_req_id()
+    action_token = secrets.token_urlsafe(32)
     booking = Booking(
         req_id        = req_id,
+        action_token  = action_token,
         name          = f.get('fullName'),
         email         = sanitize_email(f.get('email')),
         phone         = f.get('phone', ''),
@@ -271,9 +274,14 @@ def submit_booking():
         'section': section.name_ar, 'periodLabel': period.label_ar or f'الحصة {period.number}',
         'date': booking_date, 'startTime': booking.start_time, 'endTime': booking.end_time,
     }
+    base_url = current_app.config.get('BASE_URL', '')
+    staff_ctx = dict(email_ctx)
+    if base_url and action_token:
+        staff_ctx['approveUrl'] = f"{base_url}/action/approve/{req_id}?token={action_token}"
+        staff_ctx['rejectUrl']  = f"{base_url}/action/reject/{req_id}?token={action_token}"
     try:
         contacts = [{'email': e} for e in get_all_contact_emails(stage.id)]
-        send_staff_notification('new', email_ctx, contacts)
+        send_staff_notification('new', staff_ctx, contacts)
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
     try:
@@ -584,3 +592,142 @@ def api_available_periods():
         })
 
     return jsonify(result)
+
+
+# ── One-click approve/reject from the staff notification email ────────────
+# No admin login required — secured by a per-booking random token instead,
+# so an admin can act straight from their inbox without opening the panel.
+def _booking_action_ctx(b, **extra):
+    ctx = {
+        'reqId': b.req_id, 'name': b.name, 'email': b.email,
+        'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
+        'section': b.section_name, 'date': b.booking_date,
+        'startTime': b.start_time, 'endTime': b.end_time,
+    }
+    period = Period.query.get(b.period_id) if b.period_id else None
+    ctx['periodLabel'] = (period.label_ar if period else None) or (
+        f'الحصة {b.period_number}' if b.period_number else '')
+    ctx.update(extra)
+    return ctx
+
+
+def _action_result_page(title_ar, title_en, msg_ar, msg_en, color='#27ae60'):
+    return f"""<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title_ar}</title>
+<style>
+  body{{font-family:Tajawal,Arial,sans-serif;background:#eef3f5;margin:0;min-height:100vh;
+       display:flex;align-items:center;justify-content:center;padding:20px}}
+  .box{{background:#fff;border-radius:16px;padding:36px 28px;text-align:center;max-width:420px;
+       box-shadow:0 8px 30px rgba(0,0,0,.1)}}
+  h1{{font-size:1.2rem;color:{color};margin-bottom:10px}}
+  p{{color:#555;font-size:.92rem;line-height:1.7}}
+  .en{{color:#888;font-size:.82rem;margin-top:6px;direction:ltr}}
+</style></head><body>
+<div class="box">
+  <h1>{title_ar}</h1>
+  <p>{msg_ar}</p>
+  <p class="en">{msg_en}</p>
+</div></body></html>"""
+
+
+def _action_error_page(msg_ar, msg_en):
+    return _action_result_page('تعذّر تنفيذ الإجراء', 'Action Failed', msg_ar, msg_en, '#c0392b')
+
+
+@public_bp.route('/action/approve/<req_id>')
+def quick_approve(req_id):
+    token = request.args.get('token', '')
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b or not b.action_token or token != b.action_token:
+        return _action_error_page('رابط غير صالح أو منتهي الصلاحية.', 'Invalid or expired link.'), 403
+
+    if b.status != 'pending':
+        return _action_result_page(
+            'تم التعامل مع هذا الحجز مسبقاً', 'Already Handled',
+            f'حالة الحجز الحالية: {b.status}. لا حاجة لأي إجراء إضافي.',
+            f'Current status: {b.status}. No further action needed.', '#247680')
+
+    base_url = current_app.config.get('BASE_URL', '')
+    checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url else ''
+
+    b.status = 'approved'
+    b.action_date = datetime.utcnow()
+    db.session.commit()
+
+    try:
+        send_staff_notification('approve', _booking_action_ctx(b), [{'email': e} for e in get_all_contact_emails(b.stage_id)])
+    except Exception as e:
+        print(f"[email] quick-approve staff notification failed: {e}", flush=True)
+    try:
+        send_approve(_booking_action_ctx(b, checkoutUrl=checkout_url))
+    except Exception as e:
+        print(f"[email] quick-approve teacher email failed: {e}", flush=True)
+
+    return _action_result_page(
+        'تم اعتماد الحجز ✓', 'Booking Approved ✓',
+        f'تم اعتماد الحجز رقم {b.req_id} بنجاح، وتم إشعار {b.name}.',
+        f'Booking #{b.req_id} has been approved, and {b.name} has been notified.')
+
+
+@public_bp.route('/action/reject/<req_id>', methods=['GET', 'POST'])
+def quick_reject(req_id):
+    token = request.args.get('token', '')
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b or not b.action_token or token != b.action_token:
+        return _action_error_page('رابط غير صالح أو منتهي الصلاحية.', 'Invalid or expired link.'), 403
+
+    if b.status != 'pending':
+        return _action_result_page(
+            'تم التعامل مع هذا الحجز مسبقاً', 'Already Handled',
+            f'حالة الحجز الحالية: {b.status}. لا حاجة لأي إجراء إضافي.',
+            f'Current status: {b.status}. No further action needed.', '#247680')
+
+    if request.method == 'GET':
+        return f"""<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>رفض الحجز</title>
+<style>
+  body{{font-family:Tajawal,Arial,sans-serif;background:#eef3f5;margin:0;min-height:100vh;
+       display:flex;align-items:center;justify-content:center;padding:20px}}
+  .box{{background:#fff;border-radius:16px;padding:30px 26px;max-width:440px;width:100%;
+       box-shadow:0 8px 30px rgba(0,0,0,.1)}}
+  h1{{font-size:1.1rem;color:#c0392b;margin-bottom:14px}}
+  p{{color:#555;font-size:.88rem;margin-bottom:16px;line-height:1.6}}
+  textarea{{width:100%;min-height:90px;padding:10px;border:1.5px solid #cfe0e3;border-radius:9px;
+           font-family:inherit;font-size:.9rem;box-sizing:border-box;margin-bottom:14px}}
+  button{{background:#c0392b;color:#fff;border:none;padding:11px 26px;border-radius:9px;
+         font-family:inherit;font-size:.9rem;font-weight:700;cursor:pointer;width:100%}}
+</style></head><body>
+<div class="box">
+  <h1>رفض الحجز #{b.req_id}</h1>
+  <p>يرجى كتابة سبب الرفض ليُرسَل للمعلم/ة <strong>{b.name}</strong>.<br>
+     <span style="direction:ltr;display:inline-block;color:#888;font-size:.8rem">Please enter a rejection reason to send to the teacher.</span></p>
+  <form method="POST">
+    <textarea name="reason" required placeholder="سبب الرفض..."></textarea>
+    <button type="submit">تأكيد الرفض</button>
+  </form>
+</div></body></html>"""
+
+    reason = (request.form.get('reason') or '').strip()
+    if not reason:
+        return _action_error_page('سبب الرفض مطلوب.', 'A rejection reason is required.')
+
+    b.status = 'rejected'
+    b.reject_reason = reason
+    b.action_date = datetime.utcnow()
+    db.session.commit()
+
+    try:
+        send_staff_notification('reject', _booking_action_ctx(b, reason=reason), [{'email': e} for e in get_all_contact_emails(b.stage_id)])
+    except Exception as e:
+        print(f"[email] quick-reject staff notification failed: {e}", flush=True)
+    try:
+        send_reject(_booking_action_ctx(b, reason=reason))
+    except Exception as e:
+        print(f"[email] quick-reject teacher email failed: {e}", flush=True)
+
+    return _action_result_page(
+        'تم رفض الحجز', 'Booking Rejected',
+        f'تم رفض الحجز رقم {b.req_id} وإشعار {b.name} بالسبب.',
+        f'Booking #{b.req_id} has been rejected, and {b.name} has been notified.', '#c0392b')
