@@ -320,6 +320,36 @@ def send_pending(data):
                  bcc_list=data.get('bcc', []))
 
 
+def send_scheduled_reminder(data):
+    """A one-off reminder scheduled for a specific date/time — either an
+    admin's personal follow-up note to themselves, or a teacher's own
+    reminder about their booking. Kept neutral in wording since either
+    audience may receive it; the teacher's name is shown as a row so an
+    admin reading it always knows which booking/teacher it's about."""
+    note = data.get('note', '')
+    note_ar = f'<p style="background:#fef9f0;border-radius:8px;padding:10px 12px;color:#333">{note}</p>' if note else ''
+    note_en = f'<p style="background:#fef9f0;border-radius:8px;padding:10px 12px;color:#333">{note}</p>' if note else ''
+
+    teacher_row_ar = f'<tr><td style="padding:8px;background:#f0f7f8;font-weight:600;width:40%">المعلم/ة</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get("name","")}</td></tr>'
+    teacher_row_en = f'<tr><td style="padding:8px;background:#f0f7f8;font-weight:600;width:40%">Teacher</td><td style="padding:8px;border-bottom:1px solid #eee">{data.get("name","")}</td></tr>'
+
+    content_ar = f"""
+    <h2 style="color:#247680;margin-top:0">🔔 تذكير مجدول</h2>
+    <p>هذا تذكير بخصوص الحجز التالي.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">{teacher_row_ar}{_rows_ar(data)}</table>
+    {note_ar}
+    """
+    content_en = f"""
+    <h2 style="color:#247680;margin-top:0">🔔 Scheduled Reminder</h2>
+    <p>This is a reminder about the following booking.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">{teacher_row_en}{_rows_en(data)}</table>
+    {note_en}
+    """
+    return _send(data['email'], data.get('name', ''),
+                 f"[الرائد العربي / Al-Raed] تذكير مجدول #{data['reqId']}",
+                 _base_html(content_ar, content_en))
+
+
 def send_checkout_reminder(data):
     """Sent automatically a short while after an approved booking's period
     ends, if the device-handover form is still empty."""
