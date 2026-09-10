@@ -212,7 +212,7 @@ def send_approve(data):
     checkout_ar = f"""
     <div style="background:#eef7f0;border:1.5px solid #cfead6;border-radius:10px;padding:14px 16px;margin:16px 0">
       <div style="font-weight:700;color:#1f7a44;margin-bottom:6px">📋 نموذج تسليم الأجهزة</div>
-      <div style="font-size:.9rem;color:#333;margin-bottom:10px">بعد استخدام العربة، يُرجى تعبئة نموذج تسليم الأجهزة لتسجيل رقم اللابتوب الذي استلمه كل طالب.</div>
+      <div style="font-size:.9rem;color:#333;margin-bottom:10px">بعد استخدام العربة، يُرجى تعبئة نموذج تسليم الأجهزة لتسجيل رقم الجهاز الذي استلمه كل طالب.</div>
       <a href="{checkout_url}" style="display:inline-block;background:#27ae60;color:#fff;padding:9px 20px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem">فتح نموذج تسليم الأجهزة</a>
     </div>""" if checkout_url else ''
     checkout_en = f"""
