@@ -733,6 +733,7 @@
     <div class="modal-title" id="bkModalTitle"></div>
     <div id="bkModalAlert"></div>
     <div id="bkModalBody"></div>
+    <div id="bkReminderPanel"></div>
     <div class="modal-footer" id="bkModalFooter"></div>
   </div>
 </div>
@@ -1025,6 +1026,7 @@ const I18N_EN = {
     "Two ways: pick the stage/grade/section below and upload a file with one student name per line (for a single section), or upload a file with name,stage,grade,section per line (can mix several sections in one file).",
   "ملف CSV أو TXT — كل سطر بالترتيب: name,email,phone,stage,grade,section — كل الأعمدة بعد الاسم اختيارية.":
     "A CSV or TXT file — each line, in order: name,email,phone,stage,grade,section — every column after the name is optional.",
+  "إلغاء هذا التذكير؟": "Cancel this reminder?",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1310,6 +1312,73 @@ async function confirmReject() {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 
+// ── Personal scheduled reminder (admin follow-up on an approved booking) ──
+async function loadReminderPanel(reqId) {
+  const panel = document.getElementById('bkReminderPanel');
+  panel.innerHTML = `<div style="color:var(--muted);font-size:.85rem;margin-top:10px">${AR?'جاري التحميل...':'Loading...'}</div>`;
+  try {
+    const data = await fetch(`/admin/api/booking-reminder?reqId=${reqId}`).then(r => r.json());
+    renderReminderPanel(reqId, data.reminder);
+  } catch (e) {
+    panel.innerHTML = '';
+  }
+}
+
+function renderReminderPanel(reqId, reminder) {
+  const panel = document.getElementById('bkReminderPanel');
+  const lastEmail = localStorage.getItem('lastReminderEmail') || '';
+
+  if (reminder) {
+    panel.innerHTML = `
+      <div style="margin-top:14px;background:#eef7fb;border:1.5px solid #cfe0e3;border-radius:10px;padding:12px 14px">
+        <div style="font-weight:700;color:#247680;margin-bottom:8px"><i class="fas fa-bell"></i> ${AR?'تذكير مجدول':'Scheduled Reminder'}</div>
+        <div style="font-size:.85rem;color:#333;display:flex;flex-direction:column;gap:4px">
+          <span><b>${AR?'الوقت':'When'}:</b> ${reminder.remindAt.replace('T',' ')}</span>
+          <span><b>${AR?'إلى':'To'}:</b> <span dir="ltr">${esc(reminder.recipientEmail)}</span></span>
+          ${reminder.note ? `<span><b>${AR?'ملاحظة':'Note'}:</b> ${esc(reminder.note)}</span>` : ''}
+        </div>
+        <button class="btn btn-red btn-sm" style="margin-top:10px" onclick="cancelReminder('${reqId}')"><i class="fas fa-times"></i> ${AR?'إلغاء التذكير':'Cancel Reminder'}</button>
+      </div>`;
+    return;
+  }
+
+  panel.innerHTML = `
+    <div style="margin-top:14px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px">
+      <div style="font-weight:700;color:var(--primary);margin-bottom:8px"><i class="fas fa-bell"></i> ${AR?'جدولة تذكير شخصي للمتابعة':'Schedule a Personal Follow-up Reminder'}</div>
+      <div class="form-grid">
+        <div class="form-group"><label>${AR?'التاريخ والوقت':'Date & time'}</label><input type="datetime-local" id="remAt"></div>
+        <div class="form-group"><label>${AR?'يصل إلى (بريدك)':'Send to (your email)'}</label><input type="email" id="remEmail" dir="ltr" value="${esc(lastEmail)}"></div>
+      </div>
+      <div class="form-group"><label>${AR?'ملاحظة (اختياري)':'Note (optional)'}</label><input type="text" id="remNote" placeholder="${AR?'مثال: تابع مع المعلم بخصوص تسليم الأجهزة':'e.g. Follow up with the teacher about the device handover'}"></div>
+      <button class="btn btn-primary btn-sm" onclick="saveReminder('${reqId}')"><i class="fas fa-save"></i> ${AR?'حفظ التذكير':'Save Reminder'}</button>
+    </div>`;
+}
+
+async function saveReminder(reqId) {
+  const remindAt = document.getElementById('remAt').value;
+  const recipientEmail = document.getElementById('remEmail').value.trim();
+  const note = document.getElementById('remNote').value.trim();
+  if (!remindAt || !recipientEmail) {
+    showToast(AR?'التاريخ/الوقت والبريد مطلوبان':'Date/time and email are required', '#c0392b');
+    return;
+  }
+  const data = await api('/admin/api/schedule-reminder', {reqId, remindAt, recipientEmail, note});
+  if (data.success) {
+    localStorage.setItem('lastReminderEmail', recipientEmail);
+    showToast(AR?'تم جدولة التذكير ✓':'Reminder scheduled ✓');
+    loadReminderPanel(reqId);
+  } else {
+    showToast(data.error || t('خطأ'), '#c0392b');
+  }
+}
+
+async function cancelReminder(reqId) {
+  if (!confirmT('إلغاء هذا التذكير؟')) return;
+  const data = await api('/admin/api/cancel-reminder', {reqId});
+  if (data.success) { showToast(AR?'تم الإلغاء':'Cancelled'); loadReminderPanel(reqId); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
 function openDetail(reqId) {
   const b = allBookings.find(x => x.reqId === reqId);
   if (!b) return;
@@ -1350,6 +1419,12 @@ function openDetail(reqId) {
           <tbody>${rows}</tbody>
         </table>`;
     }).catch(() => {});
+  }
+
+  if (b.status === 'approved' || b.status === 'completed') {
+    loadReminderPanel(b.reqId);
+  } else {
+    document.getElementById('bkReminderPanel').innerHTML = '';
   }
 
   let footer = '';
