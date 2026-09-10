@@ -1,9 +1,9 @@
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from flask import (Blueprint, render_template, request, jsonify,
                    redirect, url_for, send_from_directory, current_app)
 from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod,
-                    Student, Teacher, BookingCheckout, CheckoutLine)
+                    Student, Teacher, BookingCheckout, CheckoutLine, BookingReminder)
 from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
                             get_blocked_for_date, is_valid_email, sanitize_email)
@@ -248,6 +248,22 @@ def submit_booking():
     )
     db.session.add(booking)
     db.session.commit()
+
+    # Optional: the teacher can ask to be reminded about their own booking
+    # at a specific date/time. Best-effort — an invalid/missing value is
+    # silently skipped rather than failing the whole booking submission.
+    reminder_at_str = (f.get('reminderAt') or '').strip()
+    if reminder_at_str:
+        try:
+            reminder_at = datetime.strptime(reminder_at_str, '%Y-%m-%dT%H:%M')
+            if reminder_at > datetime.utcnow() + timedelta(hours=3):  # Jordan local "now"
+                db.session.add(BookingReminder(
+                    booking_id=booking.id, remind_at=reminder_at,
+                    recipient_email=booking.email, kind='teacher',
+                ))
+                db.session.commit()
+        except ValueError:
+            pass
 
     email_ctx = {
         'reqId': req_id, 'name': booking.name, 'email': booking.email,
