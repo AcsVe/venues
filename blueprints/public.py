@@ -459,7 +459,7 @@ def api_teacher_names():
 @public_bp.route('/api/teacher-lookup')
 def api_teacher_lookup():
     """Used by the booking form: when a name matches a teacher on the
-    roster, auto-fill their assigned stage/grade/section, if any."""
+    roster, auto-fill their email and assigned stage/grade/section, if any."""
     name = (request.args.get('name') or '').strip()
     if not name:
         return jsonify({'found': False})
@@ -468,6 +468,7 @@ def api_teacher_lookup():
         return jsonify({'found': False})
     return jsonify({
         'found': True,
+        'email': teacher.email or '',
         'stageId': teacher.stage_id,
         'gradeId': teacher.grade_id,
         'sectionId': teacher.section_id,
