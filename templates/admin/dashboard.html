@@ -592,9 +592,9 @@
       <div class="card" style="border:1.5px solid #8e44ad">
         <div class="card-title" style="color:#8e44ad"><i class="fas fa-magic"></i> استيراد شامل من نظام خارجي (ينشئ الصفوف تلقائياً)</div>
         <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">
-          لملفات فيها عمودين فقط بالضبط: <code>الاسم,رمز الصف</code> (مثال: <code>Ahmad Ali,8CSA</code>) — بدون سطر عناوين.
-          يتعرّف تلقائياً على رقم الصف من بداية الرمز، وينشئ أي صف أو شعبة غير موجودة بنفس الاسم، ويربط الطلاب فوراً.
-          الصفوف الموجودة أصلاً (بنفس الرقم) تُستخدم كما هي دون تكرار.
+          يقبل النظام صيغتين دون سطر عناوين: عمودين (الاسم، ورمز الصف، مثل Ahmad Ali,8CSA)، أو أربعة أعمدة (الاسم، والمرحلة، والصف، والشعبة).
+          يتعرّف تلقائياً على رقم الصف، وينشئ أي صف أو شعبة غير موجودة بالاسم نفسه، ويربط الطلاب فوراً.
+          أما الصفوف الموجودة مسبقاً فتُستخدم كما هي دون تكرار.
         </p>
         <div class="form-group">
           <label>حد المرحلة الأساسية (آخر رقم صف يُحسب أساسي، وما بعده ثانوي)</label>
@@ -1080,6 +1080,8 @@ const I18N_EN = {
   "-- اختر مرحلة --": "-- Select a stage --",
   "تفعيل إشعارات الحجوزات الجديدة": "Enable New Booking Notifications",
   "استيراد شامل من نظام خارجي (ينشئ الصفوف تلقائياً)": "Bulk Import From External System (Auto-Creates Grades)",
+  "يقبل النظام صيغتين دون سطر عناوين: عمودين (الاسم، ورمز الصف، مثل Ahmad Ali,8CSA)، أو أربعة أعمدة (الاسم، والمرحلة، والصف، والشعبة). يتعرّف تلقائياً على رقم الصف، وينشئ أي صف أو شعبة غير موجودة بالاسم نفسه، ويربط الطلاب فوراً. أما الصفوف الموجودة مسبقاً فتُستخدم كما هي دون تكرار.":
+    "The system accepts two formats with no header row: two columns (name and class code, e.g. Ahmad Ali,8CSA), or four columns (name, stage, grade, and section). It automatically detects the grade number, creates any grade or section that doesn't already exist under that same name, and links the students immediately. Grades that already exist are reused as-is, never duplicated.",
   "حد المرحلة الأساسية (آخر رقم صف يُحسب أساسي، وما بعده ثانوي)": "Primary stage cutoff (last grade counted as primary; anything after is secondary)",
 };
 
@@ -2427,6 +2429,27 @@ async function deleteStudent(id) {
   else showToast(data.error || t('خطأ'), '#c0392b');
 }
 
+function parseCsvLine(line) {
+  // Handles quoted fields (with embedded commas) — a naive split(',') breaks
+  // on values like "Secondary Stage","Grade 9","CSA".
+  const fields = [];
+  let cur = '', inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { cur += c; }
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { fields.push(cur.trim()); cur = ''; }
+      else cur += c;
+    }
+  }
+  fields.push(cur.trim());
+  return fields;
+}
+
 async function uploadRosterAutocreate(input) {
   const file = input.files[0];
   if (!file) return;
@@ -2437,13 +2460,20 @@ async function uploadRosterAutocreate(input) {
   const text = await file.text();
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const list = lines.map(l => {
-    const idx = l.indexOf(',');
-    if (idx === -1) return null;
-    return { name: l.slice(0, idx).trim(), classCode: l.slice(idx + 1).trim() };
-  }).filter(x => x && x.name && x.classCode);
+    const fields = parseCsvLine(l);
+    if (fields.length >= 4) {
+      // name, stage, grade, section — explicit columns
+      return { name: fields[0], stage: fields[1], grade: fields[2], section: fields[3] };
+    }
+    if (fields.length === 2) {
+      // name, classCode — e.g. "8CSA"
+      return { name: fields[0], classCode: fields[1] };
+    }
+    return null;
+  }).filter(x => x && x.name && (x.classCode || (x.grade && x.section)));
 
   if (!list.length) {
-    resultEl.innerHTML = `<div class="alert alert-error">${AR?'لم يتم العثور على أي صفوف صالحة بالملف':'No valid rows found in the file'}</div>`;
+    resultEl.innerHTML = `<div class="alert alert-error">${AR?'لم يتم العثور على أي صفوف صالحة بالملف — تأكد إن كل سطر فيه عمودين (الاسم، رمز الصف) أو أربعة أعمدة (الاسم، المرحلة، الصف، الشعبة)':'No valid rows found — make sure every line has either 2 columns (name, class code) or 4 columns (name, stage, grade, section)'}</div>`;
     input.value = '';
     return;
   }
