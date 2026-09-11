@@ -41,6 +41,19 @@ def create_app():
     app.config['MS_CLIENT_SECRET'] = os.environ.get('MS_CLIENT_SECRET', '')
     app.config['MS_SENDER_EMAIL']  = os.environ.get('MS_SENDER_EMAIL', '')
 
+    # Web Push (VAPID) — lets the server send real push notifications that
+    # arrive even when the admin's browser/PWA is fully closed. A working
+    # key pair ships by default so this needs no extra setup; override via
+    # env vars if you want your own keys.
+    app.config['VAPID_PRIVATE_KEY'] = os.environ.get('VAPID_PRIVATE_KEY', """-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg2ovCMiqrEluskjI5
+qXlX0w2G814mqR4PxzhqSHHfdQWhRANCAAROV1WoRapPaAcYMgkZMIGk65s+IZpk
+XEqPZq2IE3k9g455XAokrxI6N2LhLDhtu3SMlEulXPw9IcShiKeKf2xO
+-----END PRIVATE KEY-----""")
+    app.config['VAPID_PUBLIC_KEY'] = os.environ.get(
+        'VAPID_PUBLIC_KEY', 'BE5XVahFqk9oBxgyCRkwgaTrmz4hmmRcSo9mrYgTeT2DjnlcCiSvEjo3YuEsOG27dIyUS6Vc_D0hxKGIp4p_bE4')
+    app.config['VAPID_CLAIMS_EMAIL'] = os.environ.get('VAPID_CLAIMS_EMAIL', 'mailto:admin@example.com')
+
     db.init_app(app)
     with app.app_context():
         init_db(app)
