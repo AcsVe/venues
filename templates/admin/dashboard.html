@@ -1765,14 +1765,14 @@ function renderStagesTree() {
       </div>
 
       <div style="display:flex;flex-wrap:wrap;gap:10px">
-        ${s.grades.map(g => `
+        ${[...s.grades].sort((a,b) => (AR?a.nameAr:(a.nameEn||a.nameAr)).localeCompare(AR?b.nameAr:(b.nameEn||b.nameAr), AR?'ar':'en')).map(g => `
           <div style="background:#f7fbfb;border:1px solid var(--border);border-radius:8px;padding:10px;min-width:180px;flex:1">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <strong style="font-size:.88rem">${esc(g.nameAr)}</strong>
               <button class="btn btn-red btn-sm" style="padding:2px 6px" onclick="deleteGrade(${g.id})" title="${t('حذف')}"><i class="fas fa-trash" style="font-size:.7rem"></i></button>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
-              ${g.sections.map(sec => `
+              ${[...g.sections].sort((a,b) => (AR?a.nameAr:(a.nameEn||a.nameAr)).localeCompare(AR?b.nameAr:(b.nameEn||b.nameAr), AR?'ar':'en')).map(sec => `
                 <span style="background:#e8f4f5;border-radius:12px;padding:2px 10px;font-size:.78rem;display:inline-flex;align-items:center;gap:5px">
                   ${esc(sec.nameAr)}
                   <button onclick="deleteSection(${sec.id})" title="${t('حذف')}" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:.8rem">✕</button>
