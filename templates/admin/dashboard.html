@@ -589,6 +589,20 @@
           <input type="file" id="stuFile" accept=".csv,.txt" onchange="uploadStudents(this)">
         </div>
       </div>
+      <div class="card" style="border:1.5px solid #8e44ad">
+        <div class="card-title" style="color:#8e44ad"><i class="fas fa-magic"></i> استيراد شامل من نظام خارجي (ينشئ الصفوف تلقائياً)</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">
+          لملفات فيها عمودين فقط بالضبط: <code>الاسم,رمز الصف</code> (مثال: <code>Ahmad Ali,8CSA</code>) — بدون سطر عناوين.
+          يتعرّف تلقائياً على رقم الصف من بداية الرمز، وينشئ أي صف أو شعبة غير موجودة بنفس الاسم، ويربط الطلاب فوراً.
+          الصفوف الموجودة أصلاً (بنفس الرقم) تُستخدم كما هي دون تكرار.
+        </p>
+        <div class="form-group">
+          <label>حد المرحلة الأساسية (آخر رقم صف يُحسب أساسي، وما بعده ثانوي)</label>
+          <input type="number" id="rosterPrimaryMax" value="6" min="1" max="12" style="max-width:120px">
+        </div>
+        <input type="file" id="rosterFile" accept=".csv,.txt" onchange="uploadRosterAutocreate(this)">
+        <div id="rosterImportResult" style="margin-top:12px"></div>
+      </div>
       <div class="card" style="border:1.5px solid #1B3358">
         <div class="card-title" style="color:#1B3358"><i class="fas fa-exchange-alt"></i> نقل شعبة كاملة</div>
         <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">
@@ -1065,6 +1079,8 @@ const I18N_EN = {
   "نقل المحدد إلى:": "Move selected to:",
   "-- اختر مرحلة --": "-- Select a stage --",
   "تفعيل إشعارات الحجوزات الجديدة": "Enable New Booking Notifications",
+  "استيراد شامل من نظام خارجي (ينشئ الصفوف تلقائياً)": "Bulk Import From External System (Auto-Creates Grades)",
+  "حد المرحلة الأساسية (آخر رقم صف يُحسب أساسي، وما بعده ثانوي)": "Primary stage cutoff (last grade counted as primary; anything after is secondary)",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -2409,6 +2425,41 @@ async function deleteStudent(id) {
   const data = await api('/admin/api/delete-student', {id});
   if (data.success) { showToast(t('تم الحذف')); loadStudents(); }
   else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function uploadRosterAutocreate(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const primaryMaxGrade = parseInt(document.getElementById('rosterPrimaryMax').value, 10) || 6;
+  const resultEl = document.getElementById('rosterImportResult');
+  resultEl.innerHTML = `<div class="alert alert-info">${AR?'جاري الاستيراد...':'Importing...'}</div>`;
+
+  const text = await file.text();
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const list = lines.map(l => {
+    const idx = l.indexOf(',');
+    if (idx === -1) return null;
+    return { name: l.slice(0, idx).trim(), classCode: l.slice(idx + 1).trim() };
+  }).filter(x => x && x.name && x.classCode);
+
+  if (!list.length) {
+    resultEl.innerHTML = `<div class="alert alert-error">${AR?'لم يتم العثور على أي صفوف صالحة بالملف':'No valid rows found in the file'}</div>`;
+    input.value = '';
+    return;
+  }
+
+  const data = await api('/admin/api/import-roster-autocreate', { list, primaryMaxGrade });
+  if (data.success) {
+    let html = `<div class="alert alert-success">${AR?'تم استيراد':'Imported'} ${data.count} ${AR?'طالب/ة بنجاح':'student(s) successfully'}</div>`;
+    if (data.errors && data.errors.length) {
+      html += `<div class="alert alert-error" style="margin-top:8px">${AR?'تعذّر':'Failed'}: ${data.errors.length}<br><small>${data.errors.slice(0,10).map(esc).join('<br>')}</small></div>`;
+    }
+    resultEl.innerHTML = html;
+    loadStudentsTab();
+  } else {
+    resultEl.innerHTML = `<div class="alert alert-error">${esc(data.error || t('خطأ'))}</div>`;
+  }
+  input.value = '';
 }
 
 async function uploadStudents(input) {
