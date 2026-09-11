@@ -61,6 +61,17 @@ XEqPZq2IE3k9g455XAokrxI6N2LhLDhtu3SMlEulXPw9IcShiKeKf2xO
     app.register_blueprint(public_bp)
     app.register_blueprint(admin_bp, url_prefix='/admin')
 
+    # Served at the ROOT (not /static/sw.js) so its default scope covers the
+    # whole site — a service worker's scope is limited to its own directory
+    # unless served from root, which is why /admin/ never saw it as "ready".
+    @app.route('/sw.js')
+    def service_worker():
+        from flask import send_from_directory, make_response
+        resp = make_response(send_from_directory(app.static_folder, 'sw.js'))
+        resp.headers['Content-Type'] = 'application/javascript'
+        resp.headers['Service-Worker-Allowed'] = '/'
+        return resp
+
     # Background job: nudge teachers who haven't submitted the device
     # handover form a while after their approved period ended.
     # NOTE: assumes a single worker process (WEB_CONCURRENCY=1) — running
