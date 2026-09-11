@@ -448,7 +448,7 @@ def api_amend_by_user():
 # ── Teacher name autocomplete (for the booking form) ──────────────────────
 @public_bp.route('/api/teacher-names')
 def api_teacher_names():
-    stage_id = request.args.get('stageId')
+    stage_id = request.args.get('stageId', type=int)
     q = Teacher.query
     if stage_id:
         q = q.filter_by(stage_id=stage_id)
@@ -564,7 +564,7 @@ def api_submit_checkout():
 # ── Available periods for a given stage + date (avoid failed submissions) ──
 @public_bp.route('/api/available-periods')
 def api_available_periods():
-    stage_id = request.args.get('stageId')
+    stage_id = request.args.get('stageId', type=int)
     booking_date = request.args.get('date', '')
 
     if not stage_id or not booking_date:
