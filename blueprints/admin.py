@@ -913,6 +913,18 @@ def api_delete_student():
     return jsonify({'success': True})
 
 
+@admin_bp.route('/api/delete-students-bulk', methods=['POST'])
+@login_required
+def api_delete_students_bulk():
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'success': False, 'error': 'لم يتم تحديد أي طالب'}), 400
+    count = Student.query.filter(Student.id.in_(ids)).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify({'success': True, 'count': count})
+
+
 @admin_bp.route('/api/move-student', methods=['POST'])
 @login_required
 def api_move_student():
