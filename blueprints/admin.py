@@ -309,6 +309,28 @@ def api_update_booking():
     return jsonify({'success': True})
 
 
+def _delete_bookings_safely(bookings):
+    """Deletes bookings along with everything that references them
+    (device-handover records and scheduled reminders) — Postgres enforces
+    the foreign keys strictly, so deleting a Booking directly while a
+    BookingCheckout or BookingReminder still points to it raises an
+    IntegrityError and aborts the whole request."""
+    booking_ids = [b.id for b in bookings]
+    if not booking_ids:
+        return 0
+
+    checkouts = BookingCheckout.query.filter(BookingCheckout.booking_id.in_(booking_ids)).all()
+    for co in checkouts:
+        CheckoutLine.query.filter_by(checkout_id=co.id).delete()
+        db.session.delete(co)
+
+    BookingReminder.query.filter(BookingReminder.booking_id.in_(booking_ids)).delete(synchronize_session=False)
+
+    count = len(booking_ids)
+    Booking.query.filter(Booking.id.in_(booking_ids)).delete(synchronize_session=False)
+    return count
+
+
 @admin_bp.route('/api/delete-booking', methods=['POST'])
 @login_required
 def api_delete_booking():
@@ -317,7 +339,7 @@ def api_delete_booking():
     b = Booking.query.filter_by(req_id=req_id).first()
     if not b:
         return jsonify({'success': False, 'error': 'غير موجود'}), 404
-    db.session.delete(b)
+    _delete_bookings_safely([b])
     db.session.commit()
     return jsonify({'success': True})
 
@@ -329,9 +351,10 @@ def api_bulk_delete():
     ids  = data.get('ids', [])
     if not ids:
         return jsonify({'success': False, 'error': 'لا توجد حجوزات محددة'}), 400
-    Booking.query.filter(Booking.req_id.in_(ids)).delete(synchronize_session=False)
+    bookings = Booking.query.filter(Booking.req_id.in_(ids)).all()
+    count = _delete_bookings_safely(bookings)
     db.session.commit()
-    return jsonify({'success': True, 'count': len(ids)})
+    return jsonify({'success': True, 'count': count})
 
 
 # ── Academic structure API (stages / grades / sections / periods) ─────────
