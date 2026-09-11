@@ -591,7 +591,7 @@ def api_report_data():
 @admin_bp.route('/api/teachers')
 @login_required
 def api_teachers():
-    stage_id = request.args.get('stageId')
+    stage_id = request.args.get('stageId', type=int)
     q = Teacher.query
     if stage_id:
         q = q.filter_by(stage_id=stage_id)
@@ -714,9 +714,9 @@ def api_move_teachers_bulk():
 @admin_bp.route('/api/students')
 @login_required
 def api_students():
-    section_id = request.args.get('sectionId')
-    grade_id = request.args.get('gradeId')
-    stage_id = request.args.get('stageId')
+    section_id = request.args.get('sectionId', type=int)
+    grade_id = request.args.get('gradeId', type=int)
+    stage_id = request.args.get('stageId', type=int)
     q = Student.query
     if section_id:
         q = q.filter_by(section_id=section_id)
