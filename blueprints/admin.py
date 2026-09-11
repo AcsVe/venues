@@ -449,6 +449,20 @@ def api_add_grade():
     return jsonify({'success': True, 'id': g.id})
 
 
+@admin_bp.route('/api/update-grade', methods=['POST'])
+@login_required
+def api_update_grade():
+    data = request.get_json(silent=True) or {}
+    g = Grade.query.get(data.get('id'))
+    if not g:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    if data.get('nameAr'):
+        g.name_ar = data['nameAr']
+    g.name_en = data.get('nameEn', g.name_en or '')
+    db.session.commit()
+    return jsonify({'success': True})
+
+
 @admin_bp.route('/api/delete-grade', methods=['POST'])
 @login_required
 def api_delete_grade():
@@ -485,6 +499,20 @@ def api_add_section():
     db.session.add(sec)
     db.session.commit()
     return jsonify({'success': True, 'id': sec.id})
+
+
+@admin_bp.route('/api/update-section', methods=['POST'])
+@login_required
+def api_update_section():
+    data = request.get_json(silent=True) or {}
+    sec = Section.query.get(data.get('id'))
+    if not sec:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    if data.get('nameAr'):
+        sec.name_ar = data['nameAr']
+    sec.name_en = data.get('nameEn', sec.name_en or '')
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 @admin_bp.route('/api/delete-section', methods=['POST'])
