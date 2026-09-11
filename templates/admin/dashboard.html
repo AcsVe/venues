@@ -2600,6 +2600,22 @@ function renderCal() {
       const b = info.event.extendedProps;
       openEdit(b.reqId);
     },
+    eventDidMount: function(info) {
+      const b = info.event.extendedProps;
+      const sLabels = {approved:t('معتمد'), completed:t('مكتمل'), pending:t('قيد المراجعة'), rejected:t('مرفوض'), cancelled:t('ملغي')};
+      const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime?` (${b.startTime} - ${b.endTime})`:'')) : '';
+      const lines = [
+        `${t('رقم الطلب')}: ${b.reqId}`,
+        `${t('الاسم')}: ${b.name}`,
+        `${t('المرحلة')}: ${stageDisplayName(b.stage)||'-'}`,
+        `${t('الصف')}: ${b.grade||'-'}`,
+        `${t('الشعبة')}: ${b.section||'-'}`,
+        periodStr ? `${t('الحصة')}: ${periodStr.replace(t('الحصة')+' ','')}` : '',
+        b.title ? `${t('سبب الحجز')}: ${b.title}` : '',
+        `${t('الحالة')}: ${sLabels[b.status]||b.status}`,
+      ].filter(Boolean);
+      info.el.setAttribute('title', lines.join('\n'));
+    },
     height: 'auto'
   });
   adminCalInstance.render();
