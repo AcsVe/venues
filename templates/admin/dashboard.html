@@ -1136,6 +1136,7 @@ const I18N_EN = {
   "اختر من جهات الاتصال أعلاه من تريد وصوله إيميل تلقائي فور إتمام أي معلم/ة لنموذج تسليم الأجهزة. الباقي لا يصلهم شيء لهذا الإشعار تحديداً.":
     "Pick which of the contacts above should get an automatic email as soon as any teacher completes the device handover form. Everyone else won't receive this specific notification.",
   "حفظ المستلمين": "Save Recipients",
+  "إيصال تسليم": "Delivery Receipt",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1357,6 +1358,35 @@ function notifyNewBooking(count) {
   }
 }
 
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function subscribeToPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const { publicKey } = await fetch('/admin/api/vapid-public-key').then(r => r.json());
+      if (!publicKey) return false;
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+    }
+    const subJson = sub.toJSON();
+    await api('/admin/api/push-subscribe', { endpoint: subJson.endpoint, keys: subJson.keys });
+    return true;
+  } catch (e) {
+    console.warn('Push subscription failed:', e);
+    return false;
+  }
+}
+
 async function requestNotifyPermission() {
   if (!window.Notification) {
     showToast(AR ? 'المتصفح لا يدعم الإشعارات' : 'Browser does not support notifications', '#c0392b');
@@ -1365,7 +1395,10 @@ async function requestNotifyPermission() {
   const perm = await Notification.requestPermission();
   const btn = document.getElementById('notifyBellBtn');
   if (perm === 'granted') {
-    showToast(AR ? 'تم تفعيل الإشعارات ✓' : 'Notifications enabled ✓');
+    const pushOk = await subscribeToPush();
+    showToast(AR
+      ? (pushOk ? 'تم تفعيل الإشعارات — ستصلك حتى لو أغلقت التطبيق ✓' : 'تم تفعيل الإشعارات بالتطبيق المفتوح ✓')
+      : (pushOk ? 'Notifications enabled — you\'ll get them even with the app closed ✓' : 'Notifications enabled while the app is open ✓'));
     if (btn) btn.classList.add('active');
   } else {
     showToast(AR ? 'لم يتم منح إذن الإشعارات' : 'Notification permission not granted', '#c0392b');
@@ -1631,6 +1664,9 @@ function openDetail(reqId) {
   if (b.status === 'approved') {
     footer += `<button class="btn btn-blue" onclick="quickComplete('${b.reqId}');closeModal('bkModal')"><i class="fas fa-flag-checkered"></i> ${t('اكتمل الحجز')}</button>`;
   }
+  if (b.status === 'approved' || b.status === 'completed') {
+    footer += `<button class="btn btn-outline" onclick="printDeliveryReceipt('${b.reqId}')" title="${t('إيصال تسليم')}"><i class="fas fa-receipt"></i> ${t('إيصال تسليم')}</button>`;
+  }
   if (b.status !== 'cancelled' && b.status !== 'rejected' && b.status !== 'completed') {
     footer += `<button class="btn btn-orange" onclick="quickCancel('${b.reqId}');closeModal('bkModal')"><i class="fas fa-ban"></i> إلغاء</button>`;
   }
@@ -1642,6 +1678,71 @@ function openDetail(reqId) {
   footer += `<button class="btn btn-outline" onclick="closeModal('bkModal')">إغلاق</button>`;
   document.getElementById('bkModalFooter').innerHTML = footer;
   openModal('bkModal');
+}
+
+function printDeliveryReceipt(reqId) {
+  const b = allBookings.find(x => x.reqId === reqId);
+  if (!b) return;
+  const periodStr = b.periodNumber
+    ? `${t('الحصة')} ${b.periodNumber}${b.startTime && b.endTime ? ` (${b.startTime}–${b.endTime})` : ''}`
+    : '-';
+  const now = new Date();
+  const printedAt = now.toLocaleString(AR ? 'ar' : 'en-US', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn'
+  });
+  const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
+  const title = AR ? `إيصال تسليم — ${b.reqId}` : `Delivery Receipt — ${b.reqId}`;
+  const logoImg = ORG_LOGO_URL ? `<img src="${ORG_LOGO_URL}" alt="${AR?'شعار المدرسة':'School logo'}" style="height:34px;display:block">` : '';
+
+  const rows = [
+    [t('رقم الطلب'), b.reqId],
+    [t('الاسم'), b.name],
+    [t('المرحلة'), stageDisplayName(b.stage) || '-'],
+    [t('الصف'), b.grade || '-'],
+    [t('الشعبة'), b.section || '-'],
+    [t('الحصة'), periodStr],
+    [t('التاريخ'), b.date],
+  ].map(([k, v]) => `
+    <tr>
+      <td style="padding:9px 10px;font-weight:700;width:38%;border:1px solid #999">${k}</td>
+      <td style="padding:9px 10px;border:1px solid #999">${esc(String(v))}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html ${dirAttr}><head>
+<meta charset="UTF-8"><title>${title}</title>
+<style>
+  @page { margin: 12mm; }
+  body { font-family: Arial, sans-serif; color:#111; margin:0; padding:0; font-size:15px; }
+  .header { display:flex; align-items:center; gap:10px; border-bottom:1.5px solid #333; padding-bottom:8px; margin-bottom:14px; }
+  .header .names { font-weight:700; font-size:13px; line-height:1.4; }
+  .header .names .en { font-weight:400; color:#444; font-size:11px; }
+  h2 { font-size:16px; margin:0 0 10px; }
+  table { width:100%; border-collapse:collapse; }
+  .status-line { margin-top:14px; font-size:13px; color:#333; }
+  .footer { margin-top:20px; padding-top:8px; border-top:1px solid #ccc; font-size:10px; color:#666; display:flex; justify-content:space-between; }
+  .print-btn { background:#1B3358; color:#fff; border:none; padding:7px 16px; border-radius:6px; cursor:pointer; margin-bottom:14px; font-size:12px; }
+  @media print { .print-btn { display:none; } }
+</style></head><body>
+  <div class="header">
+    ${logoImg}
+    <div class="names">
+      <div>${ORG_AR_NAME}</div>
+      <div class="en">${ORG_EN_NAME}</div>
+    </div>
+  </div>
+  <button class="print-btn" onclick="window.print()">${AR?'طباعة':'Print'}</button>
+  <h2>${AR?'إيصال تسليم عربة الحواسيب':'Laptop Trolley Delivery Receipt'}</h2>
+  <table>${rows}</table>
+  <p class="status-line">${AR?'الحالة: معتمد ✓':'Status: Approved ✓'}</p>
+  <div class="footer">
+    <span>${AR?'تاريخ الطباعة':'Printed on'}: ${printedAt}</span>
+    <span>${ORG_AR_NAME}</span>
+  </div>
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
 }
 
 function printBooking(reqId) {
