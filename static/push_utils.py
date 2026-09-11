@@ -15,6 +15,7 @@ def send_push_to_all(app, title, body, url='/admin/'):
 
     subs = PushSubscription.query.all()
     if not subs:
+        print("[push] no subscriptions registered — nothing to send", flush=True)
         return 0
 
     vapid_private_key = app.config.get('VAPID_PRIVATE_KEY', '')
@@ -45,4 +46,5 @@ def send_push_to_all(app, title, body, url='/admin/'):
         PushSubscription.query.filter(PushSubscription.id.in_(stale_ids)).delete(synchronize_session=False)
         db.session.commit()
 
+    print(f"[push] sent to {sent}/{len(subs)} device(s)", flush=True)
     return sent
