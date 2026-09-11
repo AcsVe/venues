@@ -45,6 +45,21 @@ class Student(db.Model):
         }
 
 
+class PushSubscription(db.Model):
+    """A browser's Web Push subscription (from the admin's installed PWA),
+    so the server can send a real push notification — one that arrives
+    even if the app/browser is fully closed — when a new booking comes in."""
+    __tablename__ = 'push_subscriptions'
+    id         = db.Column(db.Integer, primary_key=True)
+    endpoint   = db.Column(db.Text, nullable=False, unique=True)
+    p256dh     = db.Column(db.String(255), nullable=False)
+    auth       = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_push_dict(self):
+        return {'endpoint': self.endpoint, 'keys': {'p256dh': self.p256dh, 'auth': self.auth}}
+
+
 class BookingReminder(db.Model):
     """A one-off reminder email scheduled for an exact date/time. `kind`
     keeps the admin's personal follow-up completely independent from a
