@@ -152,6 +152,7 @@
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .form-grid.quad { grid-template-columns: repeat(4, 1fr); }
     input[type=text], input[type=email], input[type=tel], input[type=date], input[type=time],
+    input[type=number], input[type=datetime-local],
     select, textarea {
       width: 100%; padding: 8px 11px; border: 1.5px solid var(--border);
       border-radius: 8px; font-family: inherit; font-size: .88rem;
@@ -630,11 +631,33 @@
           <select id="stuFilterSection" onchange="loadStudents()"><option value="">كل الشعب</option></select>
           <div></div>
         </div>
+        <div id="stuBulkBar" style="display:none;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:12px;gap:16px;flex-wrap:wrap;align-items:center">
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn btn-red btn-sm" onclick="bulkDeleteStudents()"><i class="fas fa-trash"></i> حذف المحدد</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-inline-start:16px;border-inline-start:1.5px solid var(--border)">
+            <span style="color:var(--muted);font-size:.85rem;white-space:nowrap">نقل المحدد إلى:</span>
+            <select id="stuBulkMoveStage" onchange="onStuBulkMoveStageChange()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+              <option value="">المرحلة</option>
+            </select>
+            <select id="stuBulkMoveGrade" onchange="onStuBulkMoveGradeChange()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+              <option value="">الصف</option>
+            </select>
+            <select id="stuBulkMoveSection" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+              <option value="">الشعبة</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="bulkMoveSelectedStudents()"><i class="fas fa-exchange-alt"></i> نقل</button>
+          </div>
+        </div>
         <div class="table-wrap">
           <table>
             <thead><tr>
+              <th><input type="checkbox" id="stuSelectAll" onchange="toggleSelectAllStudents(this)"></th>
               <th onclick="sortStudents('name')" style="cursor:pointer">الاسم<span id="stuArrow-name"></span></th>
-              <th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>نقل</th><th>حذف</th>
+              <th onclick="sortStudents('_stageLabel')" style="cursor:pointer">المرحلة<span id="stuArrow-_stageLabel"></span></th>
+              <th onclick="sortStudents('_gradeLabel')" style="cursor:pointer">الصف<span id="stuArrow-_gradeLabel"></span></th>
+              <th onclick="sortStudents('_sectionLabel')" style="cursor:pointer">الشعبة<span id="stuArrow-_sectionLabel"></span></th>
+              <th>نقل</th><th>حذف</th>
             </tr></thead>
             <tbody id="studentsTable"></tbody>
           </table>
@@ -1083,6 +1106,8 @@ const I18N_EN = {
   "يقبل النظام صيغتين دون سطر عناوين: عمودين (الاسم، ورمز الصف، مثل Ahmad Ali,8CSA)، أو أربعة أعمدة (الاسم، والمرحلة، والصف، والشعبة). يتعرّف تلقائياً على رقم الصف، وينشئ أي صف أو شعبة غير موجودة بالاسم نفسه، ويربط الطلاب فوراً. أما الصفوف الموجودة مسبقاً فتُستخدم كما هي دون تكرار.":
     "The system accepts two formats with no header row: two columns (name and class code, e.g. Ahmad Ali,8CSA), or four columns (name, stage, grade, and section). It automatically detects the grade number, creates any grade or section that doesn't already exist under that same name, and links the students immediately. Grades that already exist are reused as-is, never duplicated.",
   "حد المرحلة الأساسية (آخر رقم صف يُحسب أساسي، وما بعده ثانوي)": "Primary stage cutoff (last grade counted as primary; anything after is secondary)",
+  "حذف كل الطلاب المحددين نهائياً؟": "Permanently delete all selected students?",
+  "نقل كل الطلاب المحددين للشعبة المختارة؟": "Move all selected students to the chosen section?",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -2261,12 +2286,16 @@ function sectionsForGrade(stageId, gradeId) {
   return g ? g.sections : [];
 }
 function fillGradeSelect(sel, stageId, keepFirstLabel) {
+  const items = [...gradesForStage(stageId)].sort((a, b) =>
+    (AR ? a.nameAr : (a.nameEn||a.nameAr)).localeCompare(AR ? b.nameAr : (b.nameEn||b.nameAr), AR ? 'ar' : 'en'));
   sel.innerHTML = `<option value="">${keepFirstLabel}</option>` +
-    gradesForStage(stageId).map(g => `<option value="${g.id}">${AR ? g.nameAr : (g.nameEn||g.nameAr)}</option>`).join('');
+    items.map(g => `<option value="${g.id}">${AR ? g.nameAr : (g.nameEn||g.nameAr)}</option>`).join('');
 }
 function fillSectionSelect(sel, stageId, gradeId, keepFirstLabel) {
+  const items = [...sectionsForGrade(stageId, gradeId)].sort((a, b) =>
+    (AR ? a.nameAr : (a.nameEn||a.nameAr)).localeCompare(AR ? b.nameAr : (b.nameEn||b.nameAr), AR ? 'ar' : 'en'));
   sel.innerHTML = `<option value="">${keepFirstLabel}</option>` +
-    sectionsForGrade(stageId, gradeId).map(s => `<option value="${s.id}">${AR ? s.nameAr : (s.nameEn||s.nameAr)}</option>`).join('');
+    items.map(s => `<option value="${s.id}">${AR ? s.nameAr : (s.nameEn||s.nameAr)}</option>`).join('');
 }
 
 function onStuStageChange() {
@@ -2301,6 +2330,7 @@ async function loadStudentsTab() {
     document.getElementById('stuFilterStage'),
     document.getElementById('bulkMoveFromStage'),
     document.getElementById('bulkMoveToStage'),
+    document.getElementById('stuBulkMoveStage'),
   ]);
   loadStudents();
 }
@@ -2346,6 +2376,16 @@ async function bulkMoveSection() {
 let studentsReqSeq = 0;
 let lastStudentsList = [];
 let studentsSort = {key: null, dir: 'asc'};
+let selectedStudentIds = new Set();
+
+function labelForStruct(kind, id) {
+  if (kind === 'stage') { const s = STRUCTURE.find(x=>x.id===id); return s ? (AR?s.nameAr:(s.nameEn||s.nameAr)) : ''; }
+  for (const s of STRUCTURE) {
+    if (kind === 'grade') { const g = s.grades.find(x=>x.id===id); if (g) return AR?g.nameAr:(g.nameEn||g.nameAr); }
+    if (kind === 'section') { for (const g of s.grades) { const sec = g.sections.find(x=>x.id===id); if (sec) return AR?sec.nameAr:(sec.nameEn||sec.nameAr); } }
+  }
+  return '';
+}
 
 async function loadStudents() {
   const sectionId = document.getElementById('stuFilterSection').value;
@@ -2360,7 +2400,17 @@ async function loadStudents() {
   const list = await fetch(url).then(r => r.json());
   if (mySeq !== studentsReqSeq) return; // a newer filter request superseded this one
 
+  // Pre-compute display labels once so sorting by Stage/Grade/Section
+  // sorts by what's actually shown, not by internal IDs.
+  list.forEach(s => {
+    s._stageLabel = labelForStruct('stage', s.stageId);
+    s._gradeLabel = labelForStruct('grade', s.gradeId);
+    s._sectionLabel = labelForStruct('section', s.sectionId);
+  });
+
   lastStudentsList = list;
+  selectedStudentIds.clear();
+  updateStudentBulkBar();
   renderStudentsTable();
 }
 
@@ -2370,28 +2420,79 @@ function sortStudents(key) {
 }
 
 function renderStudentsTable() {
-  const el = document.getElementById('stuArrow-name');
-  if (el) el.textContent = sortArrow(studentsSort, 'name');
+  ['name','_stageLabel','_gradeLabel','_sectionLabel'].forEach(k => {
+    const el = document.getElementById('stuArrow-' + k);
+    if (el) el.textContent = sortArrow(studentsSort, k);
+  });
   const list = studentsSort.key ? genericSort(lastStudentsList, studentsSort.key, studentsSort.dir) : lastStudentsList;
-
-  function labelFor(kind, id) {
-    if (kind === 'stage') { const s = STRUCTURE.find(x=>x.id===id); return s ? (AR?s.nameAr:(s.nameEn||s.nameAr)) : ''; }
-    for (const s of STRUCTURE) {
-      if (kind === 'grade') { const g = s.grades.find(x=>x.id===id); if (g) return AR?g.nameAr:(g.nameEn||g.nameAr); }
-      if (kind === 'section') { for (const g of s.grades) { const sec = g.sections.find(x=>x.id===id); if (sec) return AR?sec.nameAr:(sec.nameEn||sec.nameAr); } }
-    }
-    return '';
-  }
 
   document.getElementById('studentsTable').innerHTML = list.map(s => `
     <tr>
+      <td><input type="checkbox" class="stu-row-check" data-id="${s.id}" ${selectedStudentIds.has(s.id)?'checked':''} onchange="toggleStudentSelect(${s.id}, this)"></td>
       <td>${esc(s.name)}</td>
-      <td>${esc(labelFor('stage', s.stageId))}</td>
-      <td>${esc(labelFor('grade', s.gradeId))}</td>
-      <td>${esc(labelFor('section', s.sectionId))}</td>
+      <td>${esc(s._stageLabel)}</td>
+      <td>${esc(s._gradeLabel)}</td>
+      <td>${esc(s._sectionLabel)}</td>
       <td><button class="btn btn-sm btn-outline" onclick="openMoveStudent(${s.id}, ${s.stageId}, ${s.gradeId})" title="${t('نقل')}"><i class="fas fa-exchange-alt"></i></button></td>
       <td><button class="btn btn-red btn-sm" onclick="deleteStudent(${s.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
-    </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+  document.getElementById('stuSelectAll').checked = list.length > 0 && list.every(s => selectedStudentIds.has(s.id));
+}
+
+function toggleStudentSelect(id, checkbox) {
+  if (checkbox.checked) selectedStudentIds.add(id);
+  else selectedStudentIds.delete(id);
+  updateStudentBulkBar();
+}
+
+function toggleSelectAllStudents(headerCheckbox) {
+  document.querySelectorAll('.stu-row-check').forEach(cb => {
+    cb.checked = headerCheckbox.checked;
+    const id = parseInt(cb.dataset.id, 10);
+    if (headerCheckbox.checked) selectedStudentIds.add(id);
+    else selectedStudentIds.delete(id);
+  });
+  updateStudentBulkBar();
+}
+
+function updateStudentBulkBar() {
+  document.getElementById('stuBulkBar').style.display = selectedStudentIds.size > 0 ? 'flex' : 'none';
+}
+
+async function bulkDeleteStudents() {
+  if (!selectedStudentIds.size) return;
+  if (!confirmT('حذف كل الطلاب المحددين نهائياً؟')) return;
+  const data = await api('/admin/api/delete-students-bulk', {ids: [...selectedStudentIds]});
+  if (data.success) { showToast(`${AR?'تم حذف':'Deleted'} ${data.count}`); loadStudents(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+function onStuBulkMoveStageChange() {
+  fillGradeSelect(document.getElementById('stuBulkMoveGrade'), document.getElementById('stuBulkMoveStage').value, AR?'الصف':'Grade');
+  document.getElementById('stuBulkMoveSection').innerHTML = `<option value="">${AR?'الشعبة':'Section'}</option>`;
+}
+function onStuBulkMoveGradeChange() {
+  const stageId = document.getElementById('stuBulkMoveStage').value;
+  const gradeId = document.getElementById('stuBulkMoveGrade').value;
+  fillSectionSelect(document.getElementById('stuBulkMoveSection'), stageId, gradeId, AR?'الشعبة':'Section');
+}
+
+async function bulkMoveSelectedStudents() {
+  if (!selectedStudentIds.size) return;
+  const sectionId = document.getElementById('stuBulkMoveSection').value;
+  if (!sectionId) {
+    showToast(AR?'يرجى اختيار المرحلة/الصف/الشعبة الوجهة بالكامل':'Please fully select the destination stage/grade/section', '#c0392b');
+    return;
+  }
+  if (!confirmT('نقل كل الطلاب المحددين للشعبة المختارة؟')) return;
+  const ids = [...selectedStudentIds];
+  let okCount = 0;
+  for (const id of ids) {
+    const r = await api('/admin/api/move-student', {id, sectionId});
+    if (r.success) okCount++;
+  }
+  showToast(`${AR?'تم نقل':'Moved'} ${okCount}/${ids.length}`, okCount === ids.length ? '#FF5733' : '#e67e22');
+  loadStudents();
 }
 
 async function openMoveStudent(studentId) {
