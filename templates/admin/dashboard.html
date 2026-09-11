@@ -16,7 +16,6 @@
   <meta name="mobile-web-app-capable" content="yes">
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -372,15 +371,15 @@
             <thead>
               <tr>
                 <th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
-                <th>رقم الطلب</th>
-                <th>الاسم</th>
-                <th>الموضوع</th>
-                <th>المرحلة</th>
+                <th onclick="sortBookings('reqId')" style="cursor:pointer">رقم الطلب<span id="bkArrow-reqId"></span></th>
+                <th onclick="sortBookings('name')" style="cursor:pointer">الاسم<span id="bkArrow-name"></span></th>
+                <th onclick="sortBookings('title')" style="cursor:pointer">سبب الحجز<span id="bkArrow-title"></span></th>
+                <th onclick="sortBookings('stage')" style="cursor:pointer">المرحلة<span id="bkArrow-stage"></span></th>
                 <th>الصف</th>
                 <th>الشعبة</th>
                 <th>الحصة</th>
-                <th>التاريخ</th>
-                <th>الحالة</th>
+                <th onclick="sortBookings('date')" style="cursor:pointer">التاريخ<span id="bkArrow-date"></span></th>
+                <th onclick="sortBookings('status')" style="cursor:pointer">الحالة<span id="bkArrow-status"></span></th>
                 <th>الإجراءات</th>
               </tr>
             </thead>
@@ -479,13 +478,17 @@
       <div class="card">
         <div class="card-title"><i class="fas fa-list"></i> قائمة جهات الاتصال</div>
         <div style="margin-bottom:10px">
-          <select id="ctFilterStage" onchange="loadContacts()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+          <select id="ctFilterStage" onchange="renderContactsTable()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
             <option value="">كل المراحل</option>
           </select>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>البريد الإلكتروني</th><th>الاسم</th><th>المرحلة</th><th>تاريخ الإضافة</th><th>حذف</th></tr></thead>
+            <thead><tr>
+              <th onclick="sortContacts('email')" style="cursor:pointer">البريد الإلكتروني<span id="ctArrow-email"></span></th>
+              <th onclick="sortContacts('name')" style="cursor:pointer">الاسم<span id="ctArrow-name"></span></th>
+              <th>المرحلة</th><th>تاريخ الإضافة</th><th>حذف</th>
+            </tr></thead>
             <tbody id="contactsTable"></tbody>
           </table>
         </div>
@@ -540,7 +543,10 @@
           <table>
             <thead><tr>
               <th><input type="checkbox" id="tcSelectAll" onchange="toggleSelectAllTeachers(this)"></th>
-              <th>الاسم</th><th>البريد</th><th>الجوال</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>تعديل</th><th>حذف</th>
+              <th onclick="sortTeachers('name')" style="cursor:pointer">الاسم<span id="tcArrow-name"></span></th>
+              <th onclick="sortTeachers('email')" style="cursor:pointer">البريد<span id="tcArrow-email"></span></th>
+              <th onclick="sortTeachers('phone')" style="cursor:pointer">الجوال<span id="tcArrow-phone"></span></th>
+              <th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>تعديل</th><th>حذف</th>
             </tr></thead>
             <tbody id="teachersTable"></tbody>
           </table>
@@ -601,7 +607,10 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>الاسم</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>نقل</th><th>حذف</th></tr></thead>
+            <thead><tr>
+              <th onclick="sortStudents('name')" style="cursor:pointer">الاسم<span id="stuArrow-name"></span></th>
+              <th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>نقل</th><th>حذف</th>
+            </tr></thead>
             <tbody id="studentsTable"></tbody>
           </table>
         </div>
@@ -1124,6 +1133,7 @@ function showTab(name) {
       n.classList.add('active');
     }
   });
+  history.replaceState(null, '', '#' + name);
   const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), archive:t('الأرشفة'), calview:t('التقويم المرئي')};
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
@@ -1246,12 +1256,24 @@ function filterByStat(f) {
 
 function searchBk(q) { curSearch = q.toLowerCase(); renderTable(); }
 
+let bookingsSort = {key: null, dir: 'asc'};
+
+function sortBookings(key) {
+  toggleSortState(bookingsSort, key);
+  renderTable();
+}
+
 function renderTable() {
   const tbody = document.getElementById('bkTable');
   let rows = allBookings;
   if (curSearch) rows = rows.filter(b =>
     (b.reqId + b.name + (b.title||'') + (b.stage||'') + (b.grade||'') + (b.section||'') + b.email).toLowerCase().includes(curSearch)
   );
+  ['reqId','name','title','stage','date','status'].forEach(k => {
+    const el = document.getElementById('bkArrow-' + k);
+    if (el) el.textContent = sortArrow(bookingsSort, k);
+  });
+  if (bookingsSort.key) rows = genericSort(rows, bookingsSort.key, bookingsSort.dir);
   const sLabels = {approved:t('معتمد'),completed:t('مكتمل'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
   tbody.innerHTML = rows.map(b => `
     <tr>
@@ -1803,6 +1825,30 @@ async function loadContactsTab() {
   loadContacts();
 }
 
+// ── Generic column sorting (reused across Bookings/Teachers/Students/Contacts) ──
+function genericSort(list, key, dir) {
+  return [...list].sort((a, b) => {
+    let av = a[key], bv = b[key];
+    if (av === null || av === undefined) av = '';
+    if (bv === null || bv === undefined) bv = '';
+    if (typeof av === 'string') av = av.toLowerCase();
+    if (typeof bv === 'string') bv = bv.toLowerCase();
+    if (av < bv) return dir === 'asc' ? -1 : 1;
+    if (av > bv) return dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+}
+
+function sortArrow(state, key) {
+  if (state.key !== key) return '';
+  return state.dir === 'asc' ? ' ▲' : ' ▼';
+}
+
+function toggleSortState(state, key) {
+  if (state.key === key) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+  else { state.key = key; state.dir = 'asc'; }
+}
+
 function stageLabelById(id) {
   if (!id) return AR ? 'كل المراحل' : 'All stages';
   const s = STRUCTURE.find(x => String(x.id) === String(id));
@@ -1815,11 +1861,30 @@ function stageDisplayName(arabicName) {
   return s ? (AR ? s.nameAr : (s.nameEn || s.nameAr)) : arabicName;
 }
 
+let lastContactsList = [];
+let contactsSort = {key: null, dir: 'asc'};
+
 async function loadContacts() {
-  const filterStageId = document.getElementById('ctFilterStage').value;
   const data = await fetch('/admin/api/contacts').then(r => r.json());
-  const filtered = filterStageId ? data.filter(c => String(c.stageId) === filterStageId) : data;
-  document.getElementById('contactsTable').innerHTML = filtered.map(c => `
+  lastContactsList = data;
+  renderContactsTable();
+}
+
+function sortContacts(key) {
+  toggleSortState(contactsSort, key);
+  renderContactsTable();
+}
+
+function renderContactsTable() {
+  ['email','name'].forEach(k => {
+    const el = document.getElementById('ctArrow-' + k);
+    if (el) el.textContent = sortArrow(contactsSort, k);
+  });
+  const filterStageId = document.getElementById('ctFilterStage').value;
+  let list = filterStageId ? lastContactsList.filter(c => String(c.stageId) === filterStageId) : lastContactsList;
+  if (contactsSort.key) list = genericSort(list, contactsSort.key, contactsSort.dir);
+
+  document.getElementById('contactsTable').innerHTML = list.map(c => `
     <tr>
       <td dir="ltr">${esc(c.email)}</td>
       <td>${esc(c.name||'-')}</td>
@@ -1920,6 +1985,8 @@ function gradeSectionLabel(kind, id) {
 
 let selectedTeacherIds = new Set();
 let teachersReqSeq = 0;
+let lastTeachersList = [];
+let teachersSort = {key: null, dir: 'asc'};
 
 async function loadTeachers() {
   selectedTeacherIds.clear();
@@ -1931,9 +1998,25 @@ async function loadTeachers() {
   const list = await fetch(url).then(r => r.json());
   if (mySeq !== teachersReqSeq) return; // a newer request (e.g. filter changed) already started — drop this stale one
 
+  lastTeachersList = list;
+  renderTeachersTable();
+}
+
+function sortTeachers(key) {
+  toggleSortState(teachersSort, key);
+  renderTeachersTable();
+}
+
+function renderTeachersTable() {
+  ['name','email','phone'].forEach(k => {
+    const el = document.getElementById('tcArrow-' + k);
+    if (el) el.textContent = sortArrow(teachersSort, k);
+  });
+  const list = teachersSort.key ? genericSort(lastTeachersList, teachersSort.key, teachersSort.dir) : lastTeachersList;
+
   document.getElementById('teachersTable').innerHTML = list.map(tc => `
     <tr>
-      <td><input type="checkbox" class="tc-row-check" data-id="${tc.id}" onchange="toggleTeacherSelect(${tc.id}, this)"></td>
+      <td><input type="checkbox" class="tc-row-check" data-id="${tc.id}" ${selectedTeacherIds.has(tc.id)?'checked':''} onchange="toggleTeacherSelect(${tc.id}, this)"></td>
       <td>${esc(tc.name)}</td>
       <td dir="ltr">${esc(tc.email)}</td>
       <td dir="ltr">${esc(tc.phone)}</td>
@@ -1943,7 +2026,7 @@ async function loadTeachers() {
       <td><button class="btn btn-sm btn-outline" onclick="openEditTeacher(${tc.id})" title="${t('تعديل')}"><i class="fas fa-edit"></i></button></td>
       <td><button class="btn btn-red btn-sm" onclick="deleteTeacher(${tc.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
     </tr>`).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
-  document.getElementById('tcSelectAll').checked = false;
+  document.getElementById('tcSelectAll').checked = list.length > 0 && list.every(tc => selectedTeacherIds.has(tc.id));
 }
 
 function toggleTeacherSelect(id, checkbox) {
@@ -2160,6 +2243,9 @@ async function bulkMoveSection() {
 }
 
 let studentsReqSeq = 0;
+let lastStudentsList = [];
+let studentsSort = {key: null, dir: 'asc'};
+
 async function loadStudents() {
   const sectionId = document.getElementById('stuFilterSection').value;
   const gradeId = document.getElementById('stuFilterGrade').value;
@@ -2172,6 +2258,20 @@ async function loadStudents() {
   const mySeq = ++studentsReqSeq;
   const list = await fetch(url).then(r => r.json());
   if (mySeq !== studentsReqSeq) return; // a newer filter request superseded this one
+
+  lastStudentsList = list;
+  renderStudentsTable();
+}
+
+function sortStudents(key) {
+  toggleSortState(studentsSort, key);
+  renderStudentsTable();
+}
+
+function renderStudentsTable() {
+  const el = document.getElementById('stuArrow-name');
+  if (el) el.textContent = sortArrow(studentsSort, 'name');
+  const list = studentsSort.key ? genericSort(lastStudentsList, studentsSort.key, studentsSort.dir) : lastStudentsList;
 
   function labelFor(kind, id) {
     if (kind === 'stage') { const s = STRUCTURE.find(x=>x.id===id); return s ? (AR?s.nameAr:(s.nameEn||s.nameAr)) : ''; }
@@ -2789,6 +2889,14 @@ function exportPrint() {
 loadBookings();
 loadHalls();
 loadPeriods();
+
+// Restore whichever tab the URL hash points to (so refresh/reload/shared
+// links keep the same tab instead of always resetting to Bookings).
+const validTabs = ['bookings','halls','blocked','contacts','teachers','students','reports','archive','calview'];
+const initialTab = location.hash.replace('#', '');
+if (validTabs.includes(initialTab)) {
+  showTab(initialTab);
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
