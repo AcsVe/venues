@@ -453,15 +453,21 @@ async function onTeacherNameChange() {
   const name = document.getElementById('fullName').value.trim();
   if (!name) return;
 
-  // Stage is already chosen at this point (the name field only unlocks
-  // after picking one). Only auto-fill grade/section here, and only if
-  // the teacher hasn't already been given a manual grade selection.
-  if (document.getElementById('gradeSel').value) return;
-
   try {
     const res = await fetch('/api/teacher-lookup?name=' + encodeURIComponent(name));
     const data = await res.json();
     if (!data.found) return;
+
+    // Auto-fill the email if the teacher hasn't already typed one manually.
+    const emailField = document.getElementById('email');
+    if (data.email && !emailField.value.trim()) {
+      emailField.value = data.email;
+    }
+
+    // Stage is already chosen at this point (the name field only unlocks
+    // after picking one). Only auto-fill grade/section here, and only if
+    // the teacher hasn't already been given a manual grade selection.
+    if (document.getElementById('gradeSel').value) return;
 
     const currentStageId = document.getElementById('stageSel').value;
     if (data.stageId && String(data.stageId) !== currentStageId) return; // belongs to a different stage — ignore
