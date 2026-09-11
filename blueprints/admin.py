@@ -788,14 +788,14 @@ def api_bulk_add_students():
 @admin_bp.route('/api/import-roster-autocreate', methods=['POST'])
 @login_required
 def api_import_roster_autocreate():
-    """One-time bulk import for external rosters (e.g. RasjoNet exports)
-    that use their own class-code format like '8CSA' or '11AS Literary'
-    instead of this system's stage/grade/section names. Splits each code
-    into a grade number + section code, auto-creates any missing Grade or
-    Section (matched to the correct stage by grade-number range), and
-    creates the student under it. Existing grades/sections (matched by
-    grade number, not by exact code) are reused rather than duplicated."""
+    """One-time bulk import for external rosters (e.g. RasjoNet exports).
+    Accepts EITHER shape per row:
+      - {name, classCode}                  e.g. classCode='8CSA'
+      - {name, stage, grade, section}      e.g. stage='Secondary Stage', grade='Grade 9', section='CSA'
+    Either way, any missing Stage/Grade/Section is auto-created and reused
+    on repeat matches — nothing is ever duplicated across rows."""
     import re
+    from sqlalchemy import func
 
     ARABIC_ORDINALS = {
         1: 'الأول', 2: 'الثاني', 3: 'الثالث', 4: 'الرابع', 5: 'الخامس',
@@ -810,35 +810,72 @@ def api_import_roster_autocreate():
     stages = Stage.query.order_by(Stage.sort_order).all()
     if len(stages) < 2:
         return jsonify({'success': False, 'error': 'يجب أن يكون هناك مرحلتان على الأقل'}), 400
-    primary_stage, secondary_stage = stages[0], stages[1]
+    default_primary, default_secondary = stages[0], stages[1]
 
-    grade_cache = {}    # (stage_id, grade_num) -> Grade
-    section_cache = {}  # (grade_id, code) -> Section
+    def find_stage_by_text(text):
+        return Stage.query.filter(
+            (func.lower(Stage.name_ar) == text.lower()) | (func.lower(Stage.name_en) == text.lower())
+        ).first()
+
+    grade_cache = {}    # (stage_id, key) -> Grade
+    section_cache = {}  # (grade_id, key) -> Section
     added = 0
     errors = []
 
     for item in items:
         name = (item.get('name') or '').strip()
         class_code = (item.get('classCode') or '').strip()
-        if not name or not class_code:
+        stage_text = (item.get('stage') or '').strip()
+        grade_text = (item.get('grade') or '').strip()
+        section_text = (item.get('section') or '').strip()
+        if not name:
             continue
 
-        m = re.match(r'^(\d{1,2})(.*)$', class_code)
-        if not m:
-            errors.append(f'{name}: تعذّر فهم رمز الصف "{class_code}"')
+        grade_num = None
+        section_code = None
+
+        if class_code:
+            m = re.match(r'^(\d{1,2})(.*)$', class_code)
+            if not m:
+                errors.append(f'{name}: تعذّر فهم رمز الصف "{class_code}"')
+                continue
+            grade_num = int(m.group(1))
+            section_code = m.group(2).strip() or 'عام'
+            grade_label = grade_num  # used only to build the default name_ar/name_en below
+        elif grade_text and section_text:
+            num_match = re.search(r'\d{1,2}', grade_text)
+            grade_num = int(num_match.group()) if num_match else None
+            section_code = section_text
+            grade_label = grade_text
+        else:
+            errors.append(f'{name}: بيانات الصف ناقصة (لا رمز صف ولا مرحلة/صف/شعبة كاملة)')
             continue
-        grade_num = int(m.group(1))
-        section_code = m.group(2).strip() or 'عام'
 
-        stage = primary_stage if grade_num <= primary_max else secondary_stage
+        if stage_text:
+            stage = find_stage_by_text(stage_text)
+            if not stage:
+                errors.append(f'{name}: المرحلة غير موجودة: {stage_text}')
+                continue
+        elif grade_num is not None:
+            stage = default_primary if grade_num <= primary_max else default_secondary
+        else:
+            errors.append(f'{name}: تعذّر تحديد المرحلة لعدم وجود رقم صف واضح')
+            continue
 
-        gkey = (stage.id, grade_num)
+        gkey = (stage.id, grade_text or grade_num)
         grade = grade_cache.get(gkey)
         if not grade:
-            grade_name_ar = f'الصف {ARABIC_ORDINALS.get(grade_num, grade_num)}'
-            grade = Grade.query.filter_by(stage_id=stage.id, name_ar=grade_name_ar).first()
+            if grade_num is not None and grade_num in ARABIC_ORDINALS:
+                grade_name_ar = f'الصف {ARABIC_ORDINALS[grade_num]}'
+            else:
+                grade_name_ar = grade_label if isinstance(grade_label, str) else str(grade_label)
+            grade_name_en = grade_text if grade_text else f'Grade {grade_num}'
+
+            grade = Grade.query.filter_by(stage_id=stage.id).filter(
+                (Grade.name_ar == grade_name_ar) | (Grade.name_en == grade_name_en)
+            ).first()
             if not grade:
-                grade = Grade(stage_id=stage.id, name_ar=grade_name_ar, name_en=f'Grade {grade_num}',
+                grade = Grade(stage_id=stage.id, name_ar=grade_name_ar, name_en=grade_name_en,
                               sort_order=Grade.query.filter_by(stage_id=stage.id).count())
                 db.session.add(grade)
                 db.session.flush()
@@ -847,7 +884,9 @@ def api_import_roster_autocreate():
         skey = (grade.id, section_code)
         section = section_cache.get(skey)
         if not section:
-            section = Section.query.filter_by(grade_id=grade.id, name_ar=section_code).first()
+            section = Section.query.filter_by(grade_id=grade.id).filter(
+                (Section.name_ar == section_code) | (Section.name_en == section_code)
+            ).first()
             if not section:
                 section = Section(grade_id=grade.id, name_ar=section_code, name_en=section_code,
                                    sort_order=Section.query.filter_by(grade_id=grade.id).count())
