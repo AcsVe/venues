@@ -473,10 +473,6 @@
             <select id="ctStage"><option value="">-- كل المراحل --</option></select>
           </div>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;font-weight:600;font-size:.88rem">
-          <input type="checkbox" id="ctNotifyHandover" style="width:17px;height:17px">
-          إشعار عند تسليم الأجهزة (يصل إيميل تلقائي عند إتمام أي معلم/ة لنموذج تسليم الأجهزة بهذي المرحلة)
-        </label>
         <button class="btn btn-primary" onclick="addContact()"><i class="fas fa-plus"></i> إضافة</button>
       </div>
       <div class="card">
@@ -499,11 +495,20 @@
             <thead><tr>
               <th onclick="sortContacts('email')" style="cursor:pointer">البريد الإلكتروني<span id="ctArrow-email"></span></th>
               <th onclick="sortContacts('name')" style="cursor:pointer">الاسم<span id="ctArrow-name"></span></th>
-              <th>المرحلة</th><th>إشعار تسليم الأجهزة</th><th>تاريخ الإضافة</th><th>حذف</th>
+              <th>المرحلة</th><th>تاريخ الإضافة</th><th>حذف</th>
             </tr></thead>
             <tbody id="contactsTable"></tbody>
           </table>
         </div>
+      </div>
+
+      <div class="card" style="border:1.5px solid #8e44ad">
+        <div class="card-title" style="color:#8e44ad"><i class="fas fa-bell"></i> مستلمو إشعار تسليم الأجهزة</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:12px">
+          اختر من جهات الاتصال أعلاه من تريد وصوله إيميل تلقائي فور إتمام أي معلم/ة لنموذج تسليم الأجهزة. الباقي لا يصلهم شيء لهذا الإشعار تحديداً.
+        </p>
+        <select id="handoverRecipientsSelect" multiple size="6" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;margin-bottom:12px"></select>
+        <button class="btn btn-primary btn-sm" onclick="saveHandoverRecipients()"><i class="fas fa-save"></i> حفظ المستلمين</button>
       </div>
     </div>
 
@@ -1127,6 +1132,10 @@ const I18N_EN = {
   "إشعار عند تسليم الأجهزة (يصل إيميل تلقائي عند إتمام أي معلم/ة لنموذج تسليم الأجهزة بهذي المرحلة)":
     "Notify on device handover (an automatic email is sent whenever any teacher completes the device handover form for this stage)",
   "إشعار تسليم الأجهزة": "Handover Notification",
+  "مستلمو إشعار تسليم الأجهزة": "Device Handover Notification Recipients",
+  "اختر من جهات الاتصال أعلاه من تريد وصوله إيميل تلقائي فور إتمام أي معلم/ة لنموذج تسليم الأجهزة. الباقي لا يصلهم شيء لهذا الإشعار تحديداً.":
+    "Pick which of the contacts above should get an automatic email as soon as any teacher completes the device handover form. Everyone else won't receive this specific notification.",
+  "حفظ المستلمين": "Save Recipients",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1769,12 +1778,16 @@ function renderStagesTree() {
           <div style="background:#f7fbfb;border:1px solid var(--border);border-radius:8px;padding:10px;min-width:180px;flex:1">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <strong style="font-size:.88rem">${esc(g.nameAr)}</strong>
-              <button class="btn btn-red btn-sm" style="padding:2px 6px" onclick="deleteGrade(${g.id})" title="${t('حذف')}"><i class="fas fa-trash" style="font-size:.7rem"></i></button>
+              <span>
+                <button class="btn btn-sm btn-outline" style="padding:2px 6px" onclick="openEditGrade(${g.id}, '${esc(g.nameAr).replace(/'/g,"\\'")}', '${esc(g.nameEn||'').replace(/'/g,"\\'")}')" title="${t('تعديل')}"><i class="fas fa-edit" style="font-size:.7rem"></i></button>
+                <button class="btn btn-red btn-sm" style="padding:2px 6px" onclick="deleteGrade(${g.id})" title="${t('حذف')}"><i class="fas fa-trash" style="font-size:.7rem"></i></button>
+              </span>
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
               ${[...g.sections].sort((a,b) => (AR?a.nameAr:(a.nameEn||a.nameAr)).localeCompare(AR?b.nameAr:(b.nameEn||b.nameAr), AR?'ar':'en')).map(sec => `
                 <span style="background:#e8f4f5;border-radius:12px;padding:2px 10px;font-size:.78rem;display:inline-flex;align-items:center;gap:5px">
                   ${esc(sec.nameAr)}
+                  <button onclick="openEditSection(${sec.id}, '${esc(sec.nameAr).replace(/'/g,"\\'")}', '${esc(sec.nameEn||'').replace(/'/g,"\\'")}')" title="${t('تعديل')}" style="background:none;border:none;cursor:pointer;color:#247680;font-size:.8rem"><i class="fas fa-edit"></i></button>
                   <button onclick="deleteSection(${sec.id})" title="${t('حذف')}" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:.8rem">✕</button>
                 </span>`).join('') || `<span style="color:var(--muted);font-size:.78rem">${t('لا توجد شعب')}</span>`}
             </div>
@@ -1789,6 +1802,26 @@ function renderStagesTree() {
         </div>
       </div>
     </div>`).join('');
+}
+
+async function openEditGrade(id, curAr, curEn) {
+  const nameAr = prompt(AR ? 'الاسم العربي للصف:' : 'Arabic name:', curAr);
+  if (nameAr === null) return;
+  const nameEn = prompt(AR ? 'الاسم الإنجليزي للصف:' : 'English name:', curEn || curAr);
+  if (nameEn === null) return;
+  const data = await api('/admin/api/update-grade', {id, nameAr: nameAr.trim(), nameEn: nameEn.trim()});
+  if (data.success) { showToast(t('تم الحفظ ✓')); loadHalls(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function openEditSection(id, curAr, curEn) {
+  const nameAr = prompt(AR ? 'الاسم العربي للشعبة:' : 'Arabic name:', curAr);
+  if (nameAr === null) return;
+  const nameEn = prompt(AR ? 'الاسم الإنجليزي للشعبة:' : 'English name:', curEn || curAr);
+  if (nameEn === null) return;
+  const data = await api('/admin/api/update-section', {id, nameAr: nameAr.trim(), nameEn: nameEn.trim()});
+  if (data.success) { showToast(t('تم الحفظ ✓')); loadHalls(); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
 }
 
 async function addHall() {
@@ -1842,7 +1875,9 @@ async function addGrade(stageId) {
   const input = document.getElementById('newGrade_' + stageId);
   const nameAr = input.value.trim();
   if (!nameAr) { showToast('اسم الصف مطلوب', '#c0392b'); return; }
-  const data = await api('/admin/api/add-grade', {stageId, nameAr});
+  const nameEn = prompt(AR ? 'الاسم الإنجليزي للصف (يظهر عند التبديل للإنجليزية):' : 'English name for the grade (shown when switched to English):', nameAr);
+  if (nameEn === null) return; // cancelled
+  const data = await api('/admin/api/add-grade', {stageId, nameAr, nameEn: nameEn.trim() || nameAr});
   if (data.success) { input.value=''; showToast('تمت الإضافة'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
 }
@@ -1857,7 +1892,9 @@ async function addSection(gradeId) {
   const input = document.getElementById('newSec_' + gradeId);
   const nameAr = input.value.trim();
   if (!nameAr) { showToast('اسم الشعبة مطلوب', '#c0392b'); return; }
-  const data = await api('/admin/api/add-section', {gradeId, nameAr});
+  const nameEn = prompt(AR ? 'الاسم الإنجليزي للشعبة (يظهر عند التبديل للإنجليزية):' : 'English name for the section (shown when switched to English):', nameAr);
+  if (nameEn === null) return; // cancelled
+  const data = await api('/admin/api/add-section', {gradeId, nameAr, nameEn: nameEn.trim() || nameAr});
   if (data.success) { input.value=''; showToast('تمت الإضافة'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
 }
@@ -2044,39 +2081,48 @@ function renderContactsTable() {
       <td dir="ltr">${esc(c.email)}</td>
       <td>${esc(c.name||'-')}</td>
       <td>${esc(stageLabelById(c.stageId))}</td>
-      <td style="text-align:center"><input type="checkbox" ${c.notifyHandover?'checked':''} onchange="toggleContactNotifyHandover(${c.id}, this.checked)"></td>
       <td>${c.date}</td>
       <td><button class="btn btn-red btn-sm" onclick="deleteContact(${c.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
     </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد جهات اتصال')}</td></tr>`;
+
+  renderHandoverRecipientsSelect();
+}
+
+function renderHandoverRecipientsSelect() {
+  const sel = document.getElementById('handoverRecipientsSelect');
+  if (!sel) return;
+  sel.innerHTML = lastContactsList.map(c =>
+    `<option value="${c.id}" ${c.notifyHandover ? 'selected' : ''}>${esc(c.name || c.email)} — ${esc(c.email)}</option>`
+  ).join('') || `<option disabled>${t('لا توجد جهات اتصال')}</option>`;
+}
+
+async function saveHandoverRecipients() {
+  const sel = document.getElementById('handoverRecipientsSelect');
+  const selectedIds = new Set(Array.from(sel.selectedOptions).map(o => parseInt(o.value, 10)));
+  let okCount = 0;
+  for (const c of lastContactsList) {
+    const shouldNotify = selectedIds.has(c.id);
+    if (shouldNotify === !!c.notifyHandover) continue; // no change needed
+    const data = await api('/admin/api/update-contact', {id: c.id, notifyHandover: shouldNotify});
+    if (data.success) { c.notifyHandover = shouldNotify; okCount++; }
+  }
+  showToast(AR ? 'تم حفظ قائمة المستلمين ✓' : 'Recipient list saved ✓');
 }
 
 async function addContact() {
   const email = document.getElementById('ctEmail').value.trim();
   const name  = document.getElementById('ctName').value.trim();
   const stageId = document.getElementById('ctStage').value || null;
-  const notifyHandover = document.getElementById('ctNotifyHandover').checked;
   if (!email) { showToast('البريد مطلوب', '#c0392b'); return; }
-  const data = await api('/admin/api/add-contacts', {list: [{email, name, stageId, notifyHandover}]});
+  const data = await api('/admin/api/add-contacts', {list: [{email, name, stageId}]});
   if (data.success) {
     showToast(`تمت الإضافة (${data.count})`);
     document.getElementById('ctEmail').value = '';
     document.getElementById('ctName').value = '';
-    document.getElementById('ctNotifyHandover').checked = false;
     loadContacts();
   } else showToast(data.error || 'خطأ', '#c0392b');
 }
 
-async function toggleContactNotifyHandover(id, checked) {
-  const data = await api('/admin/api/update-contact', {id, notifyHandover: checked});
-  if (data.success) {
-    const c = lastContactsList.find(x => x.id === id);
-    if (c) c.notifyHandover = checked;
-    showToast(checked ? (AR?'تم تفعيل الإشعار':'Notification enabled') : (AR?'تم إيقاف الإشعار':'Notification disabled'));
-  } else {
-    showToast(data.error || t('خطأ'), '#c0392b');
-    renderContactsTable(); // revert the visual checkbox state on failure
-  }
-}
 
 async function deleteContact(id) {
   if (!confirmT('حذف جهة الاتصال هذه؟')) return;
