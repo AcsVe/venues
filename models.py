@@ -290,11 +290,12 @@ class BlockedPeriod(db.Model):
 
 class Contact(db.Model):
     __tablename__ = 'contacts'
-    id         = db.Column(db.Integer, primary_key=True)
-    email      = db.Column(db.String(200), nullable=False)
-    name       = db.Column(db.String(200))
-    stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'))  # null = all stages
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    id              = db.Column(db.Integer, primary_key=True)
+    email           = db.Column(db.String(200), nullable=False)
+    name            = db.Column(db.String(200))
+    stage_id        = db.Column(db.Integer, db.ForeignKey('stages.id'))  # null = all stages
+    notify_handover = db.Column(db.Boolean, default=False)  # auto-notified when a teacher submits a device handover for this stage
+    created_at      = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
         return {
@@ -302,6 +303,7 @@ class Contact(db.Model):
             'email': self.email,
             'name': self.name or '',
             'stageId': self.stage_id,
+            'notifyHandover': self.notify_handover or False,
             'date': self.created_at.strftime('%Y-%m-%d') if self.created_at else '',
         }
 
@@ -326,6 +328,7 @@ def init_db(app):
             conn.exec_driver_sql("ALTER TABLE booking_reminders ADD COLUMN IF NOT EXISTS recipient_email VARCHAR(200)")
             conn.exec_driver_sql("ALTER TABLE booking_reminders ADD COLUMN IF NOT EXISTS kind VARCHAR(10) DEFAULT 'admin'")
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS action_token VARCHAR(43)")
+            conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notify_handover BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
             # Contacts can now repeat the same email across different stages —
