@@ -559,10 +559,23 @@ def api_add_contacts():
         if is_valid_email(em):
             exists = Contact.query.filter_by(email=em, stage_id=stage_id).first()
             if not exists:
-                db.session.add(Contact(email=em, name=item.get('name', ''), stage_id=stage_id))
+                db.session.add(Contact(email=em, name=item.get('name', ''), stage_id=stage_id,
+                                        notify_handover=bool(item.get('notifyHandover'))))
                 added += 1
     db.session.commit()
     return jsonify({'success': True, 'count': added})
+
+
+@admin_bp.route('/api/update-contact', methods=['POST'])
+@login_required
+def api_update_contact():
+    data = request.get_json(silent=True) or {}
+    c = Contact.query.get(data.get('id'))
+    if not c:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    c.notify_handover = bool(data.get('notifyHandover'))
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 @admin_bp.route('/api/delete-contact', methods=['POST'])
@@ -1011,6 +1024,29 @@ def api_checkout_report():
     } for b in missing]
 
     return jsonify({'lines': lines_out, 'missing': missing_out})
+
+
+@admin_bp.route('/api/send-checkout-report', methods=['POST'])
+@login_required
+def api_send_checkout_report():
+    data = request.get_json(silent=True) or {}
+    emails = data.get('emails', [])
+    lines = data.get('lines', [])
+
+    valid_emails = [sanitize_email(e) for e in emails if is_valid_email(sanitize_email(e))]
+    if not valid_emails:
+        return jsonify({'success': False, 'error': 'لا يوجد بريد إلكتروني صحيح'}), 400
+    if not lines:
+        return jsonify({'success': False, 'error': 'لا توجد بيانات لإرسالها'}), 400
+
+    from utils.email_utils import send_checkout_report_email
+    try:
+        ok = send_checkout_report_email(valid_emails, lines)
+    except Exception as e:
+        print(f"[email] send_checkout_report_email failed: {e}", flush=True)
+        ok = False
+
+    return jsonify({'success': ok, 'error': None if ok else 'تعذّر إرسال البريد — تأكد من إعدادات البريد بالخادم'})
 
 
 # ── Archive old data (export-then-delete, to stay within storage limits) ──
