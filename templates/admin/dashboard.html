@@ -1368,7 +1368,8 @@ function urlBase64ToUint8Array(base64String) {
 async function subscribeToPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
+    const reg = await Promise.race([navigator.serviceWorker.ready, timeout(5000)]);
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       const { publicKey } = await fetch('/admin/api/vapid-public-key').then(r => r.json());
@@ -1392,16 +1393,21 @@ async function requestNotifyPermission() {
     showToast(AR ? 'المتصفح لا يدعم الإشعارات' : 'Browser does not support notifications', '#c0392b');
     return;
   }
-  const perm = await Notification.requestPermission();
-  const btn = document.getElementById('notifyBellBtn');
-  if (perm === 'granted') {
-    const pushOk = await subscribeToPush();
-    showToast(AR
-      ? (pushOk ? 'تم تفعيل الإشعارات — ستصلك حتى لو أغلقت التطبيق ✓' : 'تم تفعيل الإشعارات بالتطبيق المفتوح ✓')
-      : (pushOk ? 'Notifications enabled — you\'ll get them even with the app closed ✓' : 'Notifications enabled while the app is open ✓'));
-    if (btn) btn.classList.add('active');
-  } else {
-    showToast(AR ? 'لم يتم منح إذن الإشعارات' : 'Notification permission not granted', '#c0392b');
+  try {
+    const perm = await Notification.requestPermission();
+    const btn = document.getElementById('notifyBellBtn');
+    if (perm === 'granted') {
+      const pushOk = await subscribeToPush();
+      showToast(AR
+        ? (pushOk ? 'تم تفعيل الإشعارات — ستصلك حتى لو أغلقت التطبيق ✓' : 'تم تفعيل الإشعارات بالتطبيق المفتوح ✓')
+        : (pushOk ? 'Notifications enabled — you\'ll get them even with the app closed ✓' : 'Notifications enabled while the app is open ✓'));
+      if (btn) btn.classList.add('active');
+    } else {
+      showToast(AR ? 'لم يتم منح إذن الإشعارات' : 'Notification permission not granted', '#c0392b');
+    }
+  } catch (e) {
+    console.error('requestNotifyPermission failed:', e);
+    showToast(AR ? 'حدث خطأ غير متوقع أثناء التفعيل' : 'Unexpected error while enabling notifications', '#c0392b');
   }
 }
 
