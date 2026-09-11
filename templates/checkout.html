@@ -60,7 +60,7 @@
         <td class="seq-col">{{ loop.index }}</td>
         <td>{{ s.name }}</td>
         <td>
-          <select data-student-id="{{ s.id }}">
+          <select data-student-id="{{ s.id }}" onchange="updateDeviceAvailability()">
             <option value="">-- {{ 'لم يُسلَّم' if lang == 'ar' else 'Not handed out' }} --</option>
             {% for n in range(1, laptop_count + 1) %}
             <option value="{{ n }}" {% if existing_map.get(s.id) == n %}selected{% endif %}>{{ n }}</option>
@@ -72,6 +72,7 @@
     </tbody>
   </table>
   </div>
+
   <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:20px" onclick="submitCheckout()" id="submitBtn">
     <i class="fas fa-paper-plane"></i> {{ 'إرسال' if lang == 'ar' else 'Submit' }}
   </button>
@@ -98,6 +99,21 @@ function showAlert(msg, type) {
     `<div class="alert alert-${type}"><i class="fas fa-${type==='error'?'exclamation-circle':'check-circle'}"></i> ${msg}</div>`;
 }
 
+function updateDeviceAvailability() {
+  const selects = Array.from(document.querySelectorAll('select[data-student-id]'));
+  const usedByOthers = {}; // value -> the select currently holding it
+  selects.forEach(sel => {
+    if (sel.value) usedByOthers[sel.value] = sel;
+  });
+  selects.forEach(sel => {
+    Array.from(sel.options).forEach(opt => {
+      if (!opt.value) return; // keep "Not handed out" always enabled
+      const holder = usedByOthers[opt.value];
+      opt.disabled = !!(holder && holder !== sel);
+    });
+  });
+}
+
 async function submitCheckout() {
   const btn = document.getElementById('submitBtn');
   const rows = document.querySelectorAll('select[data-student-id]');
@@ -118,6 +134,13 @@ async function submitCheckout() {
     const data = await res.json();
     if (data.success) {
       showAlert(AR ? 'تم إرسال قائمة تسليم الأجهزة بنجاح ✓' : 'Handover list submitted successfully ✓', 'success');
+      const alertBox = document.getElementById('alertBox');
+      const returnBtn = document.createElement('a');
+      returnBtn.href = `/calendar?lang=${LANG}`;
+      returnBtn.className = 'btn btn-outline';
+      returnBtn.style.cssText = 'display:flex;justify-content:center;margin-top:10px;text-decoration:none';
+      returnBtn.innerHTML = `<i class="fas fa-arrow-${AR?'right':'left'}"></i> ${AR ? 'العودة للروزنامة' : 'Return to Calendar'}`;
+      alertBox.appendChild(returnBtn);
     } else {
       showAlert(data.error || (AR ? 'حدث خطأ' : 'An error occurred'), 'error');
     }
@@ -127,5 +150,7 @@ async function submitCheckout() {
   btn.disabled = false;
   btn.innerHTML = `<i class="fas fa-paper-plane"></i> ${AR ? 'إرسال' : 'Submit'}`;
 }
+
+updateDeviceAvailability();
 </script>
 {% endblock %}
