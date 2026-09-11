@@ -3,7 +3,7 @@ from functools import wraps
 from flask import (Blueprint, render_template, request, jsonify,
                    session, redirect, url_for, current_app, send_file)
 from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact,
-                    Teacher, Student, BookingCheckout, CheckoutLine, BookingReminder)
+                    Teacher, Student, BookingCheckout, CheckoutLine, BookingReminder, PushSubscription)
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
                             get_all_contact_emails, check_conflict, check_blocked,
                             resolve_stage_grade_section_by_name)
@@ -84,6 +84,38 @@ def api_bookings():
         q = q.filter_by(status=filt)
     bookings = q.order_by(Booking.created_at.desc()).all()
     return jsonify([b.to_dict() for b in bookings])
+
+
+@admin_bp.route('/api/vapid-public-key')
+@login_required
+def api_vapid_public_key():
+    return jsonify({'publicKey': current_app.config.get('VAPID_PUBLIC_KEY', '')})
+
+
+@admin_bp.route('/api/push-subscribe', methods=['POST'])
+@login_required
+def api_push_subscribe():
+    data = request.get_json(silent=True) or {}
+    endpoint = data.get('endpoint', '')
+    keys = data.get('keys', {})
+    if not endpoint or not keys.get('p256dh') or not keys.get('auth'):
+        return jsonify({'success': False, 'error': 'بيانات الاشتراك غير مكتملة'}), 400
+
+    existing = PushSubscription.query.filter_by(endpoint=endpoint).first()
+    if not existing:
+        db.session.add(PushSubscription(endpoint=endpoint, p256dh=keys['p256dh'], auth=keys['auth']))
+        db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/push-unsubscribe', methods=['POST'])
+@login_required
+def api_push_unsubscribe():
+    data = request.get_json(silent=True) or {}
+    endpoint = data.get('endpoint', '')
+    PushSubscription.query.filter_by(endpoint=endpoint).delete()
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 @admin_bp.route('/api/stats')
