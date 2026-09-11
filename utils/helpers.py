@@ -93,6 +93,16 @@ def get_all_contact_emails(stage_id=None):
     return [c.email for c in q.all() if is_valid_email(c.email)]
 
 
+def get_handover_notify_emails(stage_id=None):
+    """Contacts the admin has specifically opted in to be notified whenever
+    a teacher submits a device handover form for this stage."""
+    from models import Contact
+    q = Contact.query.filter_by(notify_handover=True)
+    if stage_id is not None:
+        q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
+    return [c.email for c in q.all() if is_valid_email(c.email)]
+
+
 def get_blocked_for_date(booking_date):
     """Return list of blocked info dicts for a given date."""
     from models import BlockedPeriod
