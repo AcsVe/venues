@@ -1366,47 +1366,59 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 async function subscribeToPush() {
+  console.log('[notify-debug] subscribeToPush: serviceWorker in navigator?', 'serviceWorker' in navigator, '| PushManager in window?', 'PushManager' in window);
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
   try {
     const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
     const reg = await Promise.race([navigator.serviceWorker.ready, timeout(5000)]);
+    console.log('[notify-debug] service worker ready, scope =', reg.scope);
     let sub = await reg.pushManager.getSubscription();
+    console.log('[notify-debug] existing subscription found?', !!sub);
     if (!sub) {
       const { publicKey } = await fetch('/admin/api/vapid-public-key').then(r => r.json());
+      console.log('[notify-debug] fetched VAPID public key, length =', publicKey ? publicKey.length : 0);
       if (!publicKey) return false;
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
+      console.log('[notify-debug] new subscription created:', sub.endpoint);
     }
     const subJson = sub.toJSON();
-    await api('/admin/api/push-subscribe', { endpoint: subJson.endpoint, keys: subJson.keys });
+    const saveResult = await api('/admin/api/push-subscribe', { endpoint: subJson.endpoint, keys: subJson.keys });
+    console.log('[notify-debug] save-to-server result:', saveResult);
     return true;
   } catch (e) {
-    console.warn('Push subscription failed:', e);
+    console.error('[notify-debug] Push subscription EXCEPTION:', e.name, e.message, e);
     return false;
   }
 }
 
 async function requestNotifyPermission() {
+  console.log('[notify-debug] step 1: window.Notification exists?', !!window.Notification);
   if (!window.Notification) {
     showToast(AR ? 'المتصفح لا يدعم الإشعارات' : 'Browser does not support notifications', '#c0392b');
     return;
   }
+  console.log('[notify-debug] step 2: Notification.permission BEFORE request =', Notification.permission);
   try {
     const perm = await Notification.requestPermission();
+    console.log('[notify-debug] step 3: requestPermission() returned =', perm);
     const btn = document.getElementById('notifyBellBtn');
     if (perm === 'granted') {
+      console.log('[notify-debug] step 4: permission granted, calling subscribeToPush()...');
       const pushOk = await subscribeToPush();
+      console.log('[notify-debug] step 5: subscribeToPush() returned =', pushOk);
       showToast(AR
         ? (pushOk ? 'تم تفعيل الإشعارات — ستصلك حتى لو أغلقت التطبيق ✓' : 'تم تفعيل الإشعارات بالتطبيق المفتوح ✓')
         : (pushOk ? 'Notifications enabled — you\'ll get them even with the app closed ✓' : 'Notifications enabled while the app is open ✓'));
       if (btn) btn.classList.add('active');
     } else {
+      console.log('[notify-debug] step 4-ALT: permission NOT granted, value was:', perm);
       showToast(AR ? 'لم يتم منح إذن الإشعارات' : 'Notification permission not granted', '#c0392b');
     }
   } catch (e) {
-    console.error('requestNotifyPermission failed:', e);
+    console.error('[notify-debug] EXCEPTION in requestNotifyPermission:', e);
     showToast(AR ? 'حدث خطأ غير متوقع أثناء التفعيل' : 'Unexpected error while enabling notifications', '#c0392b');
   }
 }
