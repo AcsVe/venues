@@ -558,6 +558,20 @@ def api_submit_checkout():
         ))
 
     db.session.commit()
+
+    from utils.helpers import get_handover_notify_emails
+    notify_emails = get_handover_notify_emails(b.stage_id)
+    if notify_emails:
+        try:
+            from utils.email_utils import send_handover_notification
+            handed_out = [(students_map.get(sid), num) for sid, num in clean_entries if num]
+            send_handover_notification(notify_emails, {
+                'reqId': b.req_id, 'name': b.name, 'stage': b.stage_name,
+                'grade': b.grade_name, 'section': b.section_name, 'date': b.booking_date,
+            }, handed_out)
+        except Exception as e:
+            print(f"[email] send_handover_notification failed: {e}", flush=True)
+
     return jsonify({'success': True})
 
 
