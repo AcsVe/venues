@@ -289,6 +289,17 @@ def submit_booking():
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
 
+    try:
+        from utils.push_utils import send_push_to_all
+        send_push_to_all(
+            current_app._get_current_object(),
+            'حجز جديد بانتظار المراجعة',
+            f'{booking.name} — {stage.name_ar} — {booking_date}',
+            url=f'/admin/#bookings',
+        )
+    except Exception as e:
+        print(f"[push] notification failed: {e}", flush=True)
+
     return jsonify({'success': True, 'reqId': req_id})
 
 
