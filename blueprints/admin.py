@@ -118,6 +118,27 @@ def api_push_unsubscribe():
     return jsonify({'success': True})
 
 
+@admin_bp.route('/api/push-debug')
+@login_required
+def api_push_debug():
+    """Quick diagnostic: how many push subscriptions are currently stored,
+    and can the pywebpush library actually be imported on this server."""
+    count = PushSubscription.query.count()
+    try:
+        import pywebpush
+        pywebpush_ok = True
+        pywebpush_err = None
+    except Exception as e:
+        pywebpush_ok = False
+        pywebpush_err = str(e)
+    return jsonify({
+        'subscriptionCount': count,
+        'pywebpushInstalled': pywebpush_ok,
+        'pywebpushError': pywebpush_err,
+        'vapidPublicKeySet': bool(current_app.config.get('VAPID_PUBLIC_KEY')),
+    })
+
+
 @admin_bp.route('/api/stats')
 @login_required
 def api_stats():
