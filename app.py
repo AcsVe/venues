@@ -31,7 +31,7 @@ def create_app():
     app.config['ADMIN_PASS']    = os.environ.get('ADMIN_PASS', 'acs2024')
     app.config['ORG_AR']        = os.environ.get('ORG_AR', 'مدرسة الرائد العربي')
     app.config['ORG_EN']        = os.environ.get('ORG_EN', 'Al-Raed Al-Arabi School')
-    app.config['LOGO_URL']      = os.environ.get('LOGO_URL', '/static/logo.jpg')
+    app.config['LOGO_URL']      = os.environ.get('LOGO_URL', '/static/logo.png')
     app.config['ACCENT_COLOR']  = os.environ.get('ACCENT_COLOR', '#3D5A80')
     app.config['BASE_URL']      = os.environ.get('BASE_URL', os.environ.get('RENDER_EXTERNAL_URL', '')).rstrip('/')
 
