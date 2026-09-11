@@ -4,10 +4,10 @@
 // data — this system needs a live connection to work correctly; the goal
 // here is just a nicer "you're offline" experience, not offline booking.
 
-const CACHE_NAME = 'raed-shell-v1';
+const CACHE_NAME = 'raed-shell-v2';
 const SHELL_ASSETS = [
   '/static/offline.html',
-  '/static/logo.jpg',
+  '/static/logo.png',
   '/static/icon-192.png',
   '/static/icon-512.png',
   '/static/apple-touch-icon.png',
@@ -50,4 +50,39 @@ self.addEventListener('fetch', (event) => {
   }
   // Everything else (API calls, admin data, etc.) goes straight to the
   // network as normal — intentionally not intercepted.
+});
+
+// ── Real Web Push — arrives even when the app/browser is fully closed ──
+self.addEventListener('push', (event) => {
+  let data = { title: 'إشعار جديد', body: '', url: '/admin/' };
+  try {
+    if (event.data) data = Object.assign(data, event.data.json());
+  } catch (e) {}
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/static/icon-192.png',
+      badge: '/static/icon-192.png',
+      data: { url: data.url || '/admin/' },
+      dir: 'rtl',
+      lang: 'ar',
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/admin/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.includes('/admin') && 'focus' in client) {
+          client.navigate(url);
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
 });
