@@ -73,6 +73,8 @@
       padding: 6px 0;
     }
     .sidebar-footer a:hover { color: #fff; }
+    .sidebar-footer a#notifyBellBtn.active { color: #27ae60; }
+    .sidebar-footer a#notifyBellBtn.active i { color: #27ae60; }
     /* Main */
     .main { margin-inline-start: var(--sidebar); display: flex; flex-direction: column; min-height: 100vh; width: calc(100% - var(--sidebar)); }
     .topbar {
@@ -286,6 +288,10 @@
       .mobile-nav { display: none !important; }
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulseBadge {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(39,174,96,.6); }
+      50% { transform: scale(1.3); box-shadow: 0 0 0 6px rgba(39,174,96,0); }
+    }
     /* FullCalendar mobile fix */
     @media (max-width: 768px) {
       #adminCal .fc-toolbar { flex-wrap: wrap; gap: 6px; }
@@ -322,6 +328,7 @@
   </div>
   <div class="sidebar-footer">
     <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
+    <a href="#" id="notifyBellBtn" onclick="requestNotifyPermission();return false;"><i class="fas fa-bell"></i> تفعيل إشعارات الحجوزات الجديدة</a>
     <a href="#" onclick="toggleLang();return false;"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></a>
     <a href="#" id="installAppBtn" onclick="handleInstallClick(event)" style="display:none"><i class="fas fa-download"></i> تثبيت التطبيق</a>
     <a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> خروج</a>
@@ -531,13 +538,17 @@
           </select>
           <span id="tcSelCount" style="font-size:.85rem;color:var(--muted)"></span>
         </div>
-        <div id="tcBulkBar" style="display:none;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:12px;gap:10px;flex-wrap:wrap;align-items:center">
-          <button class="btn btn-red btn-sm" onclick="bulkDeleteTeachers()"><i class="fas fa-trash"></i> حذف المحدد</button>
-          <span style="color:var(--muted);font-size:.85rem">نقل المحدد إلى:</span>
-          <select id="tcBulkMoveStage" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
-            <option value="">-- اختر مرحلة --</option>
-          </select>
-          <button class="btn btn-primary btn-sm" onclick="bulkMoveTeachers()"><i class="fas fa-exchange-alt"></i> نقل</button>
+        <div id="tcBulkBar" style="display:none;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:12px;gap:16px;flex-wrap:wrap;align-items:center">
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn btn-red btn-sm" onclick="bulkDeleteTeachers()"><i class="fas fa-trash"></i> حذف المحدد</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding-inline-start:16px;border-inline-start:1.5px solid var(--border)">
+            <span style="color:var(--muted);font-size:.85rem;white-space:nowrap">نقل المحدد إلى:</span>
+            <select id="tcBulkMoveStage" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
+              <option value="">-- اختر مرحلة --</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="bulkMoveTeachers()"><i class="fas fa-exchange-alt"></i> نقل</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -1051,6 +1062,9 @@ const I18N_EN = {
   "حذف كل المعلمين المحددين نهائياً؟": "Permanently delete all selected teachers?",
   "نقل كل المعلمين المحددين للمرحلة المختارة؟ سيتم إلغاء تعيين الصف/الشعبة الحالي لهم.":
     "Move all selected teachers to the chosen stage? Their current grade/section assignment will be cleared.",
+  "نقل المحدد إلى:": "Move selected to:",
+  "-- اختر مرحلة --": "-- Select a stage --",
+  "تفعيل إشعارات الحجوزات الجديدة": "Enable New Booking Notifications",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1228,6 +1242,64 @@ async function loadBookings() {
   } catch(e) { console.error(e); }
 }
 
+let lastKnownPendingCount = null;
+let newBookingSoundCtx = null;
+
+function playNewBookingChime() {
+  try {
+    if (!newBookingSoundCtx) newBookingSoundCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = newBookingSoundCtx;
+    [880, 1108].forEach((freq, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = freq;
+      o.connect(g); g.connect(ctx.destination);
+      const start = ctx.currentTime + i * 0.12;
+      g.gain.setValueAtTime(0.001, start);
+      g.gain.exponentialRampToValueAtTime(0.15, start + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, start + 0.25);
+      o.start(start); o.stop(start + 0.26);
+    });
+  } catch (e) {}
+}
+
+function notifyNewBooking(count) {
+  const msg = AR ? `وصل ${count} ${count === 1 ? 'حجز جديد' : 'حجوزات جديدة'}` : `${count} new booking${count === 1 ? '' : 's'} arrived`;
+  showToast(msg, '#27ae60');
+  playNewBookingChime();
+  const badge = document.getElementById('nbPending');
+  if (badge) {
+    badge.style.animation = 'none';
+    void badge.offsetWidth;
+    badge.style.animation = 'pulseBadge 1s ease 2';
+  }
+  if (window.Notification && Notification.permission === 'granted') {
+    try {
+      const n = new Notification(AR ? 'حجز جديد بانتظار المراجعة' : 'New booking pending review', {
+        body: msg, icon: '/static/icon-192.png', tag: 'new-booking',
+      });
+      n.onclick = () => { window.focus(); showTab('bookings'); n.close(); };
+    } catch (e) {}
+  }
+  if (document.getElementById('tab-bookings').classList.contains('active')) {
+    loadBookings();
+  }
+}
+
+async function requestNotifyPermission() {
+  if (!window.Notification) {
+    showToast(AR ? 'المتصفح لا يدعم الإشعارات' : 'Browser does not support notifications', '#c0392b');
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  const btn = document.getElementById('notifyBellBtn');
+  if (perm === 'granted') {
+    showToast(AR ? 'تم تفعيل الإشعارات ✓' : 'Notifications enabled ✓');
+    if (btn) btn.classList.add('active');
+  } else {
+    showToast(AR ? 'لم يتم منح إذن الإشعارات' : 'Notification permission not granted', '#c0392b');
+  }
+}
+
 async function loadStats() {
   try {
     const data = await fetch('/admin/api/stats').then(r => r.json());
@@ -1238,8 +1310,19 @@ async function loadStats() {
     document.getElementById('stRejected').textContent = data.rejected;
     document.getElementById('stCancelled').textContent= data.cancelled;
     document.getElementById('nbPending').textContent  = data.pending;
+
+    if (lastKnownPendingCount === null) {
+      lastKnownPendingCount = data.pending; // baseline on first load — don't notify about pre-existing ones
+    } else if (data.pending > lastKnownPendingCount) {
+      notifyNewBooking(data.pending - lastKnownPendingCount);
+      lastKnownPendingCount = data.pending;
+    } else {
+      lastKnownPendingCount = data.pending;
+    }
   } catch(e) {}
 }
+
+setInterval(loadStats, 15000); // poll for new bookings every 15s
 
 function filterBk(f, btn) {
   curFilter = f;
@@ -2896,6 +2979,11 @@ const validTabs = ['bookings','halls','blocked','contacts','teachers','students'
 const initialTab = location.hash.replace('#', '');
 if (validTabs.includes(initialTab)) {
   showTab(initialTab);
+}
+
+if (window.Notification && Notification.permission === 'granted') {
+  const bellBtn = document.getElementById('notifyBellBtn');
+  if (bellBtn) bellBtn.classList.add('active');
 }
 
 if ('serviceWorker' in navigator) {
