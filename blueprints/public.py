@@ -7,6 +7,7 @@ from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod,
                     Student, Teacher, BookingCheckout, CheckoutLine, BookingReminder, AppSetting)
 from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
+                            get_new_notify_emails_with_actions, get_new_notify_emails_readonly, get_approved_notify_emails,
                             get_blocked_for_date, is_valid_email, sanitize_email)
 from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification, send_approve, send_reject
 
@@ -288,7 +289,7 @@ def submit_booking():
         db.session.commit()
         checkout_url = f"{base_url}/checkout/{req_id}" if base_url else ''
         try:
-            contacts = [{'email': e} for e in get_all_contact_emails(stage.id)]
+            contacts = [{'email': e} for e in get_approved_notify_emails(stage.id)]
             send_staff_notification('approve', email_ctx, contacts)
         except Exception as e:
             print(f"[email] notification failed: {e}", flush=True)
@@ -299,8 +300,15 @@ def submit_booking():
         push_title = 'تمت الموافقة تلقائياً على حجز جديد'
     else:
         try:
-            contacts = [{'email': e} for e in get_all_contact_emails(stage.id)]
-            send_staff_notification('new', staff_ctx, contacts)
+            contacts_with_actions = [{'email': e} for e in get_new_notify_emails_with_actions(stage.id)]
+            send_staff_notification('new', staff_ctx, contacts_with_actions)
+
+            contacts_readonly = [{'email': e} for e in get_new_notify_emails_readonly(stage.id)]
+            if contacts_readonly:
+                readonly_ctx = dict(staff_ctx)
+                readonly_ctx.pop('approveUrl', None)
+                readonly_ctx.pop('rejectUrl', None)
+                send_staff_notification('new', readonly_ctx, contacts_readonly)
         except Exception as e:
             print(f"[email] notification failed: {e}", flush=True)
         try:
@@ -709,7 +717,7 @@ def quick_approve(req_id):
     db.session.commit()
 
     try:
-        send_staff_notification('approve', _booking_action_ctx(b), [{'email': e} for e in get_all_contact_emails(b.stage_id)])
+        send_staff_notification('approve', _booking_action_ctx(b), [{'email': e} for e in get_approved_notify_emails(b.stage_id)])
     except Exception as e:
         print(f"[email] quick-approve staff notification failed: {e}", flush=True)
     try:
