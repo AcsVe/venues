@@ -125,6 +125,7 @@ class Booking(db.Model):
     id            = db.Column(db.Integer, primary_key=True)
     req_id        = db.Column(db.String(32), unique=True, nullable=False)
     action_token  = db.Column(db.String(43))  # secures one-click approve/reject links in staff emails
+    receipt_printed = db.Column(db.Boolean, default=False)  # for the auto-print-on-approval station
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     name          = db.Column(db.String(200), nullable=False)
     email         = db.Column(db.String(200), nullable=False)
@@ -278,6 +279,32 @@ class Period(db.Model):
         }
 
 
+class AppSetting(db.Model):
+    """Simple key/value store for site-wide toggles (auto-approve bookings,
+    etc.) — one row per setting, so new switches can be added later without
+    a schema change."""
+    __tablename__ = 'app_settings'
+    key   = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.String(500))
+
+    @staticmethod
+    def get_bool(key, default=False):
+        row = AppSetting.query.get(key)
+        if row is None:
+            return default
+        return row.value == '1'
+
+    @staticmethod
+    def set_bool(key, value):
+        row = AppSetting.query.get(key)
+        if row is None:
+            row = AppSetting(key=key, value='1' if value else '0')
+            db.session.add(row)
+        else:
+            row.value = '1' if value else '0'
+        db.session.commit()
+
+
 class BlockedPeriod(db.Model):
     """A date/time range during which a stage's trolley (or all trolleys, if
     left blank) cannot be booked."""
@@ -343,6 +370,7 @@ def init_db(app):
             conn.exec_driver_sql("ALTER TABLE booking_reminders ADD COLUMN IF NOT EXISTS recipient_email VARCHAR(200)")
             conn.exec_driver_sql("ALTER TABLE booking_reminders ADD COLUMN IF NOT EXISTS kind VARCHAR(10) DEFAULT 'admin'")
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS action_token VARCHAR(43)")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS receipt_printed BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notify_handover BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
