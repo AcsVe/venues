@@ -3,7 +3,7 @@ from functools import wraps
 from flask import (Blueprint, render_template, request, jsonify,
                    session, redirect, url_for, current_app, send_file)
 from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact,
-                    Teacher, Student, BookingCheckout, CheckoutLine, BookingReminder, PushSubscription)
+                    Teacher, Student, BookingCheckout, CheckoutLine, BookingReminder, PushSubscription, AppSetting)
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
                             get_all_contact_emails, check_conflict, check_blocked,
                             resolve_stage_grade_section_by_name)
@@ -84,6 +84,56 @@ def api_bookings():
         q = q.filter_by(status=filt)
     bookings = q.order_by(Booking.created_at.desc()).all()
     return jsonify([b.to_dict() for b in bookings])
+
+
+@admin_bp.route('/api/settings')
+@login_required
+def api_get_settings():
+    return jsonify({
+        'autoApproveBookings': AppSetting.get_bool('auto_approve_bookings', False),
+        'autoPrintReceipts': AppSetting.get_bool('auto_print_receipts', False),
+    })
+
+
+@admin_bp.route('/api/settings', methods=['POST'])
+@login_required
+def api_update_settings():
+    data = request.get_json(silent=True) or {}
+    if 'autoApproveBookings' in data:
+        AppSetting.set_bool('auto_approve_bookings', bool(data['autoApproveBookings']))
+    if 'autoPrintReceipts' in data:
+        AppSetting.set_bool('auto_print_receipts', bool(data['autoPrintReceipts']))
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/print-queue')
+@login_required
+def api_print_queue():
+    """Approved bookings whose delivery receipt hasn't been auto-printed
+    yet — polled by whichever single browser is designated as the print
+    station (see localStorage flag on the client side)."""
+    if not AppSetting.get_bool('auto_print_receipts', False):
+        return jsonify([])
+    bookings = (Booking.query
+                .filter(Booking.status.in_(['approved', 'completed']))
+                .filter_by(receipt_printed=False)
+                .order_by(Booking.action_date.asc())
+                .limit(10)
+                .all())
+    return jsonify([b.to_dict() for b in bookings])
+
+
+@admin_bp.route('/api/mark-printed', methods=['POST'])
+@login_required
+def api_mark_printed():
+    data = request.get_json(silent=True) or {}
+    req_id = data.get('reqId', '')
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    b.receipt_printed = True
+    db.session.commit()
+    return jsonify({'success': True})
 
 
 @admin_bp.route('/api/vapid-public-key')
