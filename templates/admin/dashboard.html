@@ -503,10 +503,36 @@
         </div>
       </div>
 
+      <div class="card" style="border:1.5px solid #247680">
+        <div class="card-title" style="color:#247680"><i class="fas fa-inbox"></i> مستلمو إشعار الحجز الجديد فقط</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:12px">
+          اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها بريد إلكتروني تلقائي فور إتمام أي معلم/ة لنموذج تسليم الأجهزة، الضغط على مفتاح Ctrl لتحديد أكثر من جهة اتصال.
+        </p>
+        <select id="newBookingRecipientsSelect" multiple size="6" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;margin-bottom:12px"></select>
+        <button class="btn btn-primary btn-sm" onclick="saveNewBookingRecipients()"><i class="fas fa-save"></i> حفظ المستلمين</button>
+        <div style="margin-top:16px;padding-top:14px;border-top:1.5px dashed var(--border)">
+          <div style="font-weight:700;font-size:.88rem;margin-bottom:6px">استثناء روابط الاعتماد/الرفض</div>
+          <p style="font-size:.82rem;color:var(--muted);margin-bottom:10px">
+            من جهات الاتصال المحددة أعلاه، اختر من تريد أن يصله إشعار الحجز الجديد للاطّلاع فقط، دون رابطي الاعتماد أو الرفض المباشرين.
+          </p>
+          <select id="newBookingReadonlySelect" multiple size="4" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;margin-bottom:12px"></select>
+          <button class="btn btn-outline btn-sm" onclick="saveNewBookingReadonly()"><i class="fas fa-save"></i> حفظ الاستثناءات</button>
+        </div>
+      </div>
+
+      <div class="card" style="border:1.5px solid #27ae60">
+        <div class="card-title" style="color:#27ae60"><i class="fas fa-check-circle"></i> مستلمو إشعار اعتماد الحجز فقط</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:12px">
+          اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها بريد إلكتروني إعلامي (دون أي رابط اعتماد أو رفض) فور اعتماد أي حجز، سواء كان الاعتماد يدوياً أو تلقائياً؛ مع الضغط باستمرار على مفتاح Ctrl (أو Cmd على أجهزة Mac) لتحديد أكثر من جهة اتصال.
+        </p>
+        <select id="approvedRecipientsSelect" multiple size="6" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;margin-bottom:12px"></select>
+        <button class="btn btn-primary btn-sm" onclick="saveApprovedRecipients()"><i class="fas fa-save"></i> حفظ المستلمين</button>
+      </div>
+
       <div class="card" style="border:1.5px solid #8e44ad">
         <div class="card-title" style="color:#8e44ad"><i class="fas fa-bell"></i> مستلمو إشعار تسليم الأجهزة فقط</div>
         <p style="font-size:.85rem;color:var(--muted);margin-bottom:12px">
-          اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها بريد إلكتروني تلقائي فور إتمام أي معلم/ة لنموذج تسليم الأجهزة، الضغط على مفتاح Ctrl لتحديد أكثر من جهة اتصال.
+          اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها بريد إلكتروني تلقائي فور إتمام أي معلم لنموذج تسليم الأجهزة، مع الضغط باستمرار على مفتاح Ctrl (أو Cmd على أجهزة Mac) لتحديد أكثر من جهة اتصال. تبقى بقية جهات الاتصال غير مشمولة بهذا الإشعار تحديداً.
         </p>
         <select id="handoverRecipientsSelect" multiple size="6" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;margin-bottom:12px"></select>
         <button class="btn btn-primary btn-sm" onclick="saveHandoverRecipients()"><i class="fas fa-save"></i> حفظ المستلمين</button>
@@ -2342,28 +2368,58 @@ function renderContactsTable() {
     </tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted)">${t('لا توجد جهات اتصال')}</td></tr>`;
 
   renderHandoverRecipientsSelect();
+  renderNewBookingRecipientsSelect();
+  renderApprovedRecipientsSelect();
 }
 
-function renderHandoverRecipientsSelect() {
-  const sel = document.getElementById('handoverRecipientsSelect');
+function renderRecipientsSelect(selectId, field) {
+  const sel = document.getElementById(selectId);
   if (!sel) return;
   sel.innerHTML = lastContactsList.map(c =>
-    `<option value="${c.id}" ${c.notifyHandover ? 'selected' : ''}>${esc(c.name || c.email)} — ${esc(c.email)}</option>`
+    `<option value="${c.id}" ${c[field] ? 'selected' : ''}>${esc(c.name || c.email)} — ${esc(c.email)}</option>`
   ).join('') || `<option disabled>${t('لا توجد جهات اتصال')}</option>`;
 }
 
-async function saveHandoverRecipients() {
-  const sel = document.getElementById('handoverRecipientsSelect');
+async function saveRecipientsSelect(selectId, field, apiField) {
+  const sel = document.getElementById(selectId);
   const selectedIds = new Set(Array.from(sel.selectedOptions).map(o => parseInt(o.value, 10)));
-  let okCount = 0;
   for (const c of lastContactsList) {
     const shouldNotify = selectedIds.has(c.id);
-    if (shouldNotify === !!c.notifyHandover) continue; // no change needed
-    const data = await api('/admin/api/update-contact', {id: c.id, notifyHandover: shouldNotify});
-    if (data.success) { c.notifyHandover = shouldNotify; okCount++; }
+    if (shouldNotify === !!c[field]) continue; // no change needed
+    const data = await api('/admin/api/update-contact', {id: c.id, [apiField]: shouldNotify});
+    if (data.success) c[field] = shouldNotify;
   }
   showToast(AR ? 'تم حفظ قائمة المستلمين ✓' : 'Recipient list saved ✓');
 }
+
+function renderHandoverRecipientsSelect() { renderRecipientsSelect('handoverRecipientsSelect', 'notifyHandover'); }
+async function saveHandoverRecipients() { await saveRecipientsSelect('handoverRecipientsSelect', 'notifyHandover', 'notifyHandover'); }
+function renderNewBookingRecipientsSelect() { renderRecipientsSelect('newBookingRecipientsSelect', 'notifyNew'); renderNewBookingReadonlySelect(); }
+async function saveNewBookingRecipients() { await saveRecipientsSelect('newBookingRecipientsSelect', 'notifyNew', 'notifyNew'); renderNewBookingReadonlySelect(); }
+
+function renderNewBookingReadonlySelect() {
+  const sel = document.getElementById('newBookingReadonlySelect');
+  if (!sel) return;
+  const eligible = lastContactsList.filter(c => c.notifyNew);
+  sel.innerHTML = eligible.map(c =>
+    `<option value="${c.id}" ${c.newReadonly ? 'selected' : ''}>${esc(c.name || c.email)} — ${esc(c.email)}</option>`
+  ).join('') || `<option disabled>${AR?'لا توجد جهات اتصال مؤهلة':'No eligible contacts'}</option>`;
+}
+
+async function saveNewBookingReadonly() {
+  const sel = document.getElementById('newBookingReadonlySelect');
+  const selectedIds = new Set(Array.from(sel.selectedOptions).map(o => parseInt(o.value, 10)));
+  const eligible = lastContactsList.filter(c => c.notifyNew);
+  for (const c of eligible) {
+    const shouldBeReadonly = selectedIds.has(c.id);
+    if (shouldBeReadonly === !!c.newReadonly) continue;
+    const data = await api('/admin/api/update-contact', {id: c.id, newReadonly: shouldBeReadonly});
+    if (data.success) c.newReadonly = shouldBeReadonly;
+  }
+  showToast(AR ? 'تم حفظ الاستثناءات ✓' : 'Exceptions saved ✓');
+}
+function renderApprovedRecipientsSelect() { renderRecipientsSelect('approvedRecipientsSelect', 'notifyApproved'); }
+async function saveApprovedRecipients() { await saveRecipientsSelect('approvedRecipientsSelect', 'notifyApproved', 'notifyApproved'); }
 
 async function addContact() {
   const email = document.getElementById('ctEmail').value.trim();
