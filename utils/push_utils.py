@@ -6,7 +6,7 @@ PushSubscription, collected client-side through the Push API)."""
 import json
 
 
-def send_push_to_all(app, title, body, url='/admin/'):
+def send_push_to_all(app, title, body, url='/admin/', event_type=None):
     """Sends one push notification to every subscribed admin device.
     Subscriptions the browser has since revoked (HTTP 404/410 from the
     push service) are cleaned up automatically."""
@@ -33,7 +33,10 @@ def send_push_to_all(app, title, body, url='/admin/'):
         return 0
 
     vapid_claims = {'sub': app.config.get('VAPID_CLAIMS_EMAIL', 'mailto:admin@example.com')}
-    payload = json.dumps({'title': title, 'body': body, 'url': url})
+    payload_dict = {'title': title, 'body': body, 'url': url}
+    if event_type:
+        payload_dict['type'] = event_type
+    payload = json.dumps(payload_dict)
 
     sent = 0
     stale_ids = []
