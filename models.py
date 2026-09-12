@@ -92,6 +92,7 @@ class BookingCheckout(db.Model):
     id           = db.Column(db.Integer, primary_key=True)
     booking_id   = db.Column(db.Integer, db.ForeignKey('bookings.id'), unique=True, nullable=False)
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    notes        = db.Column(db.Text)  # optional teacher remarks about the devices/trolley
 
     lines = db.relationship('CheckoutLine', backref='checkout', cascade='all, delete-orphan',
                              order_by='CheckoutLine.seq')
@@ -371,6 +372,7 @@ def init_db(app):
             conn.exec_driver_sql("ALTER TABLE booking_reminders ADD COLUMN IF NOT EXISTS kind VARCHAR(10) DEFAULT 'admin'")
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS action_token VARCHAR(43)")
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS receipt_printed BOOLEAN DEFAULT FALSE")
+            conn.exec_driver_sql("ALTER TABLE booking_checkouts ADD COLUMN IF NOT EXISTS notes TEXT")
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notify_handover BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
