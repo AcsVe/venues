@@ -1259,20 +1259,25 @@ function showToast(msg, color = '#FF5733') {
 }
 function confirmT(msg) { return confirm(t(msg)); }
 
-function printLetterheadHtml(bodyHtml, titleAr, titleEn) {
+function printLetterheadHtml(bodyHtml, titleAr, titleEn, hideOrgName) {
   const dirAttr = AR ? 'dir="rtl" lang="ar"' : 'dir="ltr" lang="en"';
   const title = AR ? titleAr : titleEn;
   const now = new Date();
   const printedAt = now.toLocaleString(AR ? 'ar' : 'en-US', {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn'
   });
-  const logoImg = ORG_LOGO_URL ? `<img src="${ORG_LOGO_URL}" alt="logo" style="height:46px;display:block">` : '';
+  const logoImg = ORG_LOGO_URL ? `<img src="${ORG_LOGO_URL}" alt="${AR?'شعار المدرسة':'School logo'}" style="height:46px;display:block">` : '';
+  const orgNamesBlock = hideOrgName ? '' : `
+    <div class="org-names">
+      <div class="ar">${ORG_AR_NAME}</div>
+      <div class="en">${ORG_EN_NAME}</div>
+    </div>`;
 
   return `<!DOCTYPE html><html ${dirAttr}><head>
 <meta charset="UTF-8"><title>${title}</title>
 <style>
   body{font-family:Arial,sans-serif;padding:24px;color:#1e2a2b;margin:0}
-  .print-header{display:flex;align-items:center;gap:14px;border-bottom:3px solid #FF5733;padding-bottom:14px;margin-bottom:18px}
+  .print-header{display:flex;align-items:center;justify-content:${hideOrgName?'center':'flex-start'};gap:14px;border-bottom:3px solid #FF5733;padding-bottom:14px;margin-bottom:18px}
   .print-header .org-names{font-weight:800;font-size:15px;line-height:1.5}
   .print-header .org-names .ar{color:#1B3358}
   .print-header .org-names .en{color:#6b7c7e;font-size:13px}
@@ -1285,11 +1290,7 @@ function printLetterheadHtml(bodyHtml, titleAr, titleEn) {
   @media print{.print-btn{display:none}}
 </style></head><body>
   <div class="print-header">
-    ${logoImg}
-    <div class="org-names">
-      <div class="ar">${ORG_AR_NAME}</div>
-      <div class="en">${ORG_EN_NAME}</div>
-    </div>
+    ${logoImg}${orgNamesBlock}
   </div>
   <button class="print-btn" onclick="window.print()">${AR?'طباعة':'Print'}</button>
   ${bodyHtml}
@@ -1647,7 +1648,7 @@ function openDetail(reqId) {
       ${drow('رقم الطلب', `<strong style="color:var(--primary)">${b.reqId}</strong>`)}
       ${drow('الحالة', `<span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span>`)}
       ${drow('الاسم', b.name)} ${drow('البريد', b.email)}
-      ${drow('الجوال', b.phone||'-')} ${drow('سبب الحجز', b.title||'-')}
+      ${drow('الجوال', b.phone||'-', true)} ${drow('سبب الحجز', b.title||'-')}
       ${drow('المرحلة', stageDisplayName(b.stage)||'-')} ${drow('الصف', b.grade||'-')}
       ${drow('الشعبة', b.section||'-')} ${drow('الحصة', periodStr)}
       ${drow('التاريخ', b.date)}
@@ -1743,22 +1744,30 @@ function buildReceiptHtml(b) {
     margin-${AR ? 'left' : 'right'}: 10mm;
     margin-bottom: 10mm;
   }
-  body { font-family: Arial, sans-serif; color:#111; margin:0; padding:0; font-size:15px; }
-  .header { display:flex; align-items:center; border-bottom:1.5px solid #333; padding-bottom:8px; margin-bottom:14px; }
-  h2 { font-size:16px; margin:0 0 10px; }
+  body { font-family: Arial, sans-serif; color:#111; margin:0; padding:0; font-size:15px; display:flex; flex-direction:column; align-items:center; }
+  .header { display:flex; align-items:center; justify-content:center; border-bottom:1.5px solid #333; padding-bottom:8px; margin-bottom:14px; width:100%; max-width:480px; }
+  .content { width:100%; max-width:480px; }
+  h2 { font-size:16px; margin:0 0 10px; text-align:center; }
   table { width:100%; border-collapse:collapse; }
-  .status-line { margin-top:14px; font-size:13px; color:#333; }
-  .footer { margin-top:20px; padding-top:8px; border-top:1px solid #ccc; font-size:10px; color:#666; display:flex; justify-content:space-between; }
-  .print-btn { background:#1B3358; color:#fff; border:none; padding:7px 16px; border-radius:6px; cursor:pointer; margin-bottom:14px; font-size:12px; }
+  .status-line { margin-top:14px; font-size:13px; color:#333; text-align:center; }
+  .footer { margin-top:20px; padding-top:8px; border-top:1px solid #ccc; font-size:10px; color:#666; display:flex; justify-content:space-between; width:100%; max-width:480px; }
+  .print-btn {
+    background:#FF5733; color:#fff; border:none; padding:12px 32px; border-radius:8px;
+    cursor:pointer; margin-bottom:18px; font-size:16px; font-weight:700;
+    box-shadow:0 3px 10px rgba(255,87,51,.4);
+  }
+  .print-btn:hover { background:#e64a2e; }
   @media print { .print-btn { display:none; } }
 </style></head><body>
   <div class="header">
     ${logoImg}
   </div>
-  <button class="print-btn" onclick="window.print()">${AR?'طباعة':'Print'}</button>
-  <h2>${AR?'إيصال تسليم عربة الحواسيب':'Laptop Trolley Delivery Receipt'}</h2>
-  <table>${rows}</table>
-  <p class="status-line">${AR?'الحالة: معتمد ✓':'Status: Approved ✓'}</p>
+  <button class="print-btn" onclick="window.print()">🖨️ ${AR?'طباعة':'Print'}</button>
+  <div class="content">
+    <h2>${AR?'إيصال تسليم عربة الحواسيب':'Laptop Trolley Delivery Receipt'}</h2>
+    <table>${rows}</table>
+    <p class="status-line">${AR?'الحالة: معتمد ✓':'Status: Approved ✓'}</p>
+  </div>
   <div class="footer">
     <span>${AR?'تاريخ الطباعة':'Printed on'}: ${printedAt}</span>
     <span>${ORG_AR_NAME}</span>
@@ -1885,14 +1894,14 @@ function printBooking(reqId) {
   const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
   const rows = [
     [t('رقم الطلب'), b.reqId], [t('الحالة'), sLabels[b.status]||b.status],
-    [t('الاسم'), b.name], [t('البريد'), b.email], [t('الجوال'), b.phone||'-'],
+    [t('الاسم'), b.name], [t('البريد'), b.email], [t('الجوال'), b.phone||'-', true],
     [t('سبب الحجز'), b.title||'-'], [t('المرحلة'), stageDisplayName(b.stage)||'-'], [t('الصف'), b.grade||'-'],
     [t('الشعبة'), b.section||'-'], [t('الحصة'), periodStr], [t('التاريخ'), b.date],
     [t('ملاحظات'), b.notes||'-'],
-  ].map(([k,v]) => `<tr><td style="padding:8px;background:#f0f7f8;font-weight:700;width:35%">${k}</td><td style="padding:8px;border-bottom:1px solid #eee">${String(v).replace(/</g,'&lt;')}</td></tr>`).join('');
+  ].map(([k,v,forceLtr]) => `<tr><td style="padding:8px;background:#f0f7f8;font-weight:700;width:35%">${k}</td><td style="padding:8px;border-bottom:1px solid #eee" ${forceLtr?'dir="ltr" align="right"':''}>${String(v).replace(/</g,'&lt;')}</td></tr>`).join('');
 
   const body = `<h2>${AR?'تفاصيل الحجز':'Booking Details'}</h2><table style="margin-top:12px">${rows}</table>`;
-  const html = printLetterheadHtml(body, `${AR?'تفاصيل الحجز':'Booking Details'} — ${b.reqId}`, `${AR?'تفاصيل الحجز':'Booking Details'} — ${b.reqId}`);
+  const html = printLetterheadHtml(body, `${AR?'تفاصيل الحجز':'Booking Details'} — ${b.reqId}`, `${AR?'تفاصيل الحجز':'Booking Details'} — ${b.reqId}`, true);
   const win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();
@@ -1904,8 +1913,8 @@ async function quickSetPending(reqId) {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 
-function drow(label, val) {
-  return `<tr><td style="padding:7px 10px;font-weight:700;background:#f0f7f8;width:36%">${t(label)}</td><td style="padding:7px 10px;border-bottom:1px solid var(--border)">${val}</td></tr>`;
+function drow(label, val, forceLtr) {
+  return `<tr><td style="padding:7px 10px;font-weight:700;background:#f0f7f8;width:36%">${t(label)}</td><td style="padding:7px 10px;border-bottom:1px solid var(--border)" ${forceLtr?'dir="ltr" align="right"':''}>${val}</td></tr>`;
 }
 
 function editPopulateStages(selectedStageId) {
