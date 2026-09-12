@@ -504,9 +504,10 @@
       </div>
 
       <div class="card" style="border:1.5px solid #8e44ad">
-        <div class="card-title" style="color:#8e44ad"><i class="fas fa-bell"></i> مستلمو إشعار تسليم الأجهزة</div>
+        <div class="card-title" style="color:#8e44ad"><i class="fas fa-bell"></i> مستلمو إشعار تسليم الأجهزة فقط</div>
         <p style="font-size:.85rem;color:var(--muted);margin-bottom:12px">
-          اختر من جهات الاتصال أعلاه من تريد وصوله إيميل تلقائي فور إتمام أي معلم/ة لنموذج تسليم الأجهزة. الباقي لا يصلهم شيء لهذا الإشعار تحديداً.
+          اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها بريد إلكتروني تلقائي فور إتمام أي معلم/ة لنموذج تسليم الأجهزة، الضغط على مفتاح Ctrl لتحديد أكثر من جهة اتصال.
+
         </p>
         <select id="handoverRecipientsSelect" multiple size="6" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;margin-bottom:12px"></select>
         <button class="btn btn-primary btn-sm" onclick="saveHandoverRecipients()"><i class="fas fa-save"></i> حفظ المستلمين</button>
@@ -1138,9 +1139,9 @@ const I18N_EN = {
   "إشعار عند تسليم الأجهزة (يصل إيميل تلقائي عند إتمام أي معلم/ة لنموذج تسليم الأجهزة بهذي المرحلة)":
     "Notify on device handover (an automatic email is sent whenever any teacher completes the device handover form for this stage)",
   "إشعار تسليم الأجهزة": "Handover Notification",
-  "مستلمو إشعار تسليم الأجهزة": "Device Handover Notification Recipients",
-  "اختر من جهات الاتصال أعلاه من تريد وصوله إيميل تلقائي فور إتمام أي معلم/ة لنموذج تسليم الأجهزة. الباقي لا يصلهم شيء لهذا الإشعار تحديداً.":
-    "Pick which of the contacts above should get an automatic email as soon as any teacher completes the device handover form. Everyone else won't receive this specific notification.",
+  "مستلمو إشعار تسليم الأجهزة فقط": "Device Handover Notification Recipients Only",
+  "اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها بريد إلكتروني تلقائي فور إتمام أي معلم لنموذج تسليم الأجهزة، مع الضغط باستمرار على مفتاح Ctrl (أو Cmd على أجهزة Mac) لتحديد أكثر من جهة اتصال. تبقى بقية جهات الاتصال غير مشمولة بهذا الإشعار تحديداً.":
+    "From the list below, choose which contacts should get an automatic email as soon as any teacher completes the device handover form — hold down Ctrl (or Cmd on Mac) to select more than one. All other contacts will not receive this specific notification.",
   "حفظ المستلمين": "Save Recipients",
   "إيصال تسليم": "Delivery Receipt",
   "الإعدادات": "Settings",
@@ -1684,15 +1685,15 @@ function openDetail(reqId) {
   }
 
   let footer = '';
+  if (b.status === 'approved' || b.status === 'completed') {
+    footer += `<button style="background:#FF5733;color:#fff;border:none;font-weight:700" class="btn" onclick="printDeliveryReceipt('${b.reqId}')" title="${t('إيصال تسليم')}"><i class="fas fa-receipt"></i> ${t('إيصال تسليم')}</button>`;
+  }
   if (b.status === 'pending') {
     footer += `<button class="btn btn-green" onclick="quickApprove('${b.reqId}');closeModal('bkModal')"><i class="fas fa-check"></i> موافقة</button>`;
     footer += `<button class="btn btn-red" onclick="closeModal('bkModal');openReject('${b.reqId}')"><i class="fas fa-times"></i> رفض</button>`;
   }
   if (b.status === 'approved') {
     footer += `<button class="btn btn-blue" onclick="quickComplete('${b.reqId}');closeModal('bkModal')"><i class="fas fa-flag-checkered"></i> ${t('اكتمل الحجز')}</button>`;
-  }
-  if (b.status === 'approved' || b.status === 'completed') {
-    footer += `<button class="btn btn-outline" onclick="printDeliveryReceipt('${b.reqId}')" title="${t('إيصال تسليم')}"><i class="fas fa-receipt"></i> ${t('إيصال تسليم')}</button>`;
   }
   if (b.status !== 'cancelled' && b.status !== 'rejected' && b.status !== 'completed') {
     footer += `<button class="btn btn-orange" onclick="quickCancel('${b.reqId}');closeModal('bkModal')"><i class="fas fa-ban"></i> إلغاء</button>`;
@@ -3258,7 +3259,7 @@ function exportCheckoutCSV() {
   checkoutReportData.lines.forEach(l => {
     rows.push([l.reqId, l.teacher, l.date, stageDisplayName(l.stage)||'', gradeDisplayName(l.grade)||'', l.section||'', l.studentName||'', l.laptopNumber ?? '']);
   });
-  const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+  const csv = '' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -3577,7 +3578,7 @@ function exportCSV() {
       b.periodNumber ? (t('الحصة')+' '+b.periodNumber) : '',
       b.date||'', statusLbl[b.status]||b.status, b.notes||'', b.createdAt||'']);
   });
-  const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+  const csv = '' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
