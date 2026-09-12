@@ -1867,7 +1867,15 @@ async function renderSettingsTab() {
     </div>`;
 }
 
-setInterval(checkPrintQueue, 20000);
+setInterval(checkPrintQueue, 8000); // fallback poll, in case the instant push trigger below is missed
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'booking-approved') {
+      checkPrintQueue(); // fires the moment a booking is approved — no waiting for the next poll tick
+    }
+  });
+}
 
 function printBooking(reqId) {
   const b = allBookings.find(x => x.reqId === reqId);
