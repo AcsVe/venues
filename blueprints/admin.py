@@ -1222,6 +1222,7 @@ def api_checkout_report():
                 'stage': b.stage_name, 'grade': b.grade_name, 'section': b.section_name,
                 'periodNumber': b.period_number,
                 'studentName': line.student_name, 'laptopNumber': line.laptop_number,
+                'notes': co.notes or '',
             })
 
     q = Booking.query.filter(Booking.status.in_(['approved', 'completed']))
