@@ -306,7 +306,10 @@
         if (installBtn) installBtn.style.display = 'flex';
       } else {
         window.addEventListener('beforeinstallprompt', (e) => {
-          e.preventDefault();
+          // Don't preventDefault() — let the browser's own automatic
+          // install banner show up (Android/Chrome). We still keep a
+          // reference so the sidebar button works too, as a backup for
+          // anyone who dismissed the automatic banner.
           deferredInstallPrompt = e;
           if (installBtn) installBtn.style.display = 'flex';
         });
