@@ -320,6 +320,99 @@ def send_pending(data):
                  bcc_list=data.get('bcc', []))
 
 
+def send_handover_notification(emails, booking_ctx, handed_out):
+    """Sent right after a teacher submits the device handover form, to
+    whichever contacts they chose to notify on that form."""
+    students_rows_ar = ''.join(
+        f'<tr><td style="padding:6px 8px;background:#f0f7f8;font-weight:600">{name}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #eee">{num}</td></tr>'
+        for name, num in handed_out
+    ) or '<tr><td colspan="2" style="padding:6px 8px;color:#888">لم يُسلَّم أي جهاز بعد لأي طالب</td></tr>'
+    students_rows_en = ''.join(
+        f'<tr><td style="padding:6px 8px;background:#f0f7f8;font-weight:600">{name}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #eee">{num}</td></tr>'
+        for name, num in handed_out
+    ) or '<tr><td colspan="2" style="padding:6px 8px;color:#888">No devices handed out yet</td></tr>'
+
+    content_ar = f"""
+    <h2 style="color:#247680;margin-top:0">✅ تم تسليم الأجهزة</h2>
+    <p>أكمل المعلم/ة <strong>{booking_ctx.get('name','')}</strong> نموذج تسليم الأجهزة للحجز التالي.</p>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_ar(booking_ctx)}</table>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">
+      <tr><th style="text-align:right;padding:6px 8px;background:#e8f0f2">الطالب</th><th style="text-align:right;padding:6px 8px;background:#e8f0f2">رقم الجهاز</th></tr>
+      {students_rows_ar}
+    </table>
+    {f'<p style="background:#fff8e1;border-inline-start:3px solid #f0ad4e;padding:8px 12px;border-radius:4px"><strong>ملاحظة المعلم/ة:</strong> {booking_ctx.get("notes")}</p>' if booking_ctx.get('notes') else ''}
+    """
+    content_en = f"""
+    <h2 style="color:#247680;margin-top:0">✅ Devices Handed Over</h2>
+    <p>Teacher <strong>{booking_ctx.get('name','')}</strong> completed the device handover form for the booking below.</p>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_en(booking_ctx)}</table>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">
+      <tr><th style="text-align:left;padding:6px 8px;background:#e8f0f2">Student</th><th style="text-align:left;padding:6px 8px;background:#e8f0f2">Device #</th></tr>
+      {students_rows_en}
+    </table>
+    {f'<p style="background:#fff8e1;border-inline-start:3px solid #f0ad4e;padding:8px 12px;border-radius:4px"><strong>Teacher note:</strong> {booking_ctx.get("notes")}</p>' if booking_ctx.get('notes') else ''}
+    """
+    html = _base_html(content_ar, content_en)
+    ok = True
+    for email in emails:
+        result = _send(email, '', f"[الرائد العربي / Al-Raed] تم تسليم الأجهزة #{booking_ctx.get('reqId','')}", html)
+        ok = ok and result
+    return ok
+
+
+def send_checkout_report_email(emails, lines):
+    """Sends the (already filtered, exactly as the admin was viewing it)
+    Device Handover Log as a bilingual HTML table to one or more addresses
+    the admin typed in — for sharing with staff who don't have panel access."""
+    rows_ar = ''.join(
+        f'<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">{l.get("reqId","")}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #eee">{l.get("teacher","")}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #eee">{l.get("date","")}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #eee">{l.get("stage","")}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #eee">{l.get("grade","")}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #eee">{l.get("section","")}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #eee">{l.get("studentName","")}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:700">{l.get("laptopNumber","")}</td></tr>'
+        for l in lines
+    )
+    content_ar = f"""
+    <h2 style="color:#247680;margin-top:0">📋 سجل تسليم الأجهزة</h2>
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <tr style="background:#f0f7f8">
+        <th style="padding:6px 8px;text-align:right">رقم الطلب</th><th style="padding:6px 8px;text-align:right">المعلم/ة</th>
+        <th style="padding:6px 8px;text-align:right">التاريخ</th><th style="padding:6px 8px;text-align:right">المرحلة</th>
+        <th style="padding:6px 8px;text-align:right">الصف</th><th style="padding:6px 8px;text-align:right">الشعبة</th>
+        <th style="padding:6px 8px;text-align:right">الطالب</th><th style="padding:6px 8px;text-align:right">رقم الجهاز</th>
+      </tr>
+      {rows_ar}
+    </table>
+    </div>
+    """
+    content_en = f"""
+    <h2 style="color:#247680;margin-top:0">📋 Device Handover Log</h2>
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <tr style="background:#f0f7f8">
+        <th style="padding:6px 8px;text-align:left">Request ID</th><th style="padding:6px 8px;text-align:left">Teacher</th>
+        <th style="padding:6px 8px;text-align:left">Date</th><th style="padding:6px 8px;text-align:left">Stage</th>
+        <th style="padding:6px 8px;text-align:left">Grade</th><th style="padding:6px 8px;text-align:left">Section</th>
+        <th style="padding:6px 8px;text-align:left">Student</th><th style="padding:6px 8px;text-align:left">Device #</th>
+      </tr>
+      {rows_ar}
+    </table>
+    </div>
+    """
+    html = _base_html(content_ar, content_en)
+    ok = True
+    for email in emails:
+        result = _send(email, '', '[الرائد العربي / Al-Raed] سجل تسليم الأجهزة / Device Handover Log', html)
+        ok = ok and result
+    return ok
+
+
 def send_scheduled_reminder(data):
     """A one-off reminder scheduled for a specific date/time — either an
     admin's personal follow-up note to themselves, or a teacher's own
