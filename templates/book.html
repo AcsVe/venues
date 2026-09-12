@@ -113,11 +113,11 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>{{ 'الجوال' if lang == 'ar' else 'Phone' }}</label>
+        <label>{{ 'رقم الهاتف' if lang == 'ar' else 'Phone Number' }}</label>
         <input type="tel" id="phone" placeholder="+962 7x xxx xxxx" dir="ltr">
       </div>
       <div class="form-group">
-        <label>{{ 'سبب الحجز' if lang == 'ar' else 'Reason for Booking' }}</label>
+        <label>{{ 'سبب الحجز' if lang == 'ar' else 'Reason for Booking' }} <span class="req">*</span></label>
         <input type="text" id="eventTitle" placeholder="{{ 'مثال: حصة حاسوب' if lang == 'ar' else 'e.g. Computer class' }}">
       </div>
     </div>
@@ -243,7 +243,7 @@ function onStageChange() {
   refreshPeriodAvailability();
 
   nameInput.disabled = false;
-  nameInput.placeholder = AR ? 'الاسم الرباعي' : 'Enter full name';
+  nameInput.placeholder = AR ? 'الاسم' : 'Name';
   loadTeacherNames(stageId);
 }
 
@@ -377,8 +377,9 @@ async function submitBooking() {
   const sectionId = document.getElementById('sectionSel').value;
   const periodId  = document.getElementById('periodSel').value;
   const bdate = document.getElementById('bookingDate').value;
+  const eventTitle = document.getElementById('eventTitle').value.trim();
 
-  if (!name || !email || !stageId || !gradeId || !sectionId || !periodId || !bdate) {
+  if (!name || !email || !stageId || !gradeId || !sectionId || !periodId || !bdate || !eventTitle) {
     showAlert(AR ? 'يرجى ملء جميع الحقول الإلزامية' : 'Please fill all required fields', 'error');
     return;
   }
