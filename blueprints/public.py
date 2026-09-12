@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from flask import (Blueprint, render_template, request, jsonify,
                    redirect, url_for, send_from_directory, current_app)
 from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod,
-                    Student, Teacher, BookingCheckout, CheckoutLine, BookingReminder)
+                    Student, Teacher, BookingCheckout, CheckoutLine, BookingReminder, AppSetting)
 from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
                             get_blocked_for_date, is_valid_email, sanitize_email)
@@ -279,21 +279,41 @@ def submit_booking():
     if base_url and action_token:
         staff_ctx['approveUrl'] = f"{base_url}/action/approve/{req_id}?token={action_token}"
         staff_ctx['rejectUrl']  = f"{base_url}/action/reject/{req_id}?token={action_token}"
-    try:
-        contacts = [{'email': e} for e in get_all_contact_emails(stage.id)]
-        send_staff_notification('new', staff_ctx, contacts)
-    except Exception as e:
-        print(f"[email] notification failed: {e}", flush=True)
-    try:
-        send_confirm(email_ctx)
-    except Exception as e:
-        print(f"[email] notification failed: {e}", flush=True)
+
+    auto_approve = AppSetting.get_bool('auto_approve_bookings', False)
+
+    if auto_approve:
+        booking.status = 'approved'
+        booking.action_date = datetime.utcnow()
+        db.session.commit()
+        checkout_url = f"{base_url}/checkout/{req_id}" if base_url else ''
+        try:
+            contacts = [{'email': e} for e in get_all_contact_emails(stage.id)]
+            send_staff_notification('approve', email_ctx, contacts)
+        except Exception as e:
+            print(f"[email] notification failed: {e}", flush=True)
+        try:
+            send_approve(dict(email_ctx, checkoutUrl=checkout_url))
+        except Exception as e:
+            print(f"[email] notification failed: {e}", flush=True)
+        push_title = 'تمت الموافقة تلقائياً على حجز جديد'
+    else:
+        try:
+            contacts = [{'email': e} for e in get_all_contact_emails(stage.id)]
+            send_staff_notification('new', staff_ctx, contacts)
+        except Exception as e:
+            print(f"[email] notification failed: {e}", flush=True)
+        try:
+            send_confirm(email_ctx)
+        except Exception as e:
+            print(f"[email] notification failed: {e}", flush=True)
+        push_title = 'حجز جديد بانتظار المراجعة'
 
     try:
         from utils.push_utils import send_push_to_all
         send_push_to_all(
             current_app._get_current_object(),
-            'حجز جديد بانتظار المراجعة',
+            push_title,
             f'{booking.name} — {stage.name_ar} — {booking_date}',
             url=f'/admin/#bookings',
         )
