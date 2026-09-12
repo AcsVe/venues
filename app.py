@@ -10,6 +10,12 @@ def create_app():
 
     app.secret_key = os.environ.get('SECRET_KEY', 'acs-dev-secret-change-in-prod')
 
+    # A long-lived session so a device logged in once (e.g. the print
+    # station) stays logged in across browser/computer restarts instead of
+    # needing someone to re-enter credentials every time.
+    from datetime import timedelta
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=365)
+
     if os.path.isdir('/data'):
         db_path = '/data/acs_booking.db'
         upload_dir = '/data/uploads'
