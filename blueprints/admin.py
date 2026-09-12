@@ -54,6 +54,7 @@ def login():
         p = request.form.get('password', '')
         if (u == current_app.config['ADMIN_USER'] and
                 p == current_app.config['ADMIN_PASS']):
+            session.permanent = True
             session['admin_logged_in'] = True
             session['admin_lang'] = lang
             return redirect(url_for('admin.dashboard'))
