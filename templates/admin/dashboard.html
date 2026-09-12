@@ -779,7 +779,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>رقم الحجز</th><th>المعلم/ة</th><th>التاريخ</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>الطالب</th><th>رقم الجهاز</th></tr></thead>
+            <thead><tr><th>رقم الحجز</th><th>المعلم/ة</th><th>التاريخ</th><th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>عدد الأجهزة المسلَّمة</th></tr></thead>
             <tbody id="checkoutLinesTable"></tbody>
           </table>
         </div>
@@ -1144,6 +1144,7 @@ const I18N_EN = {
   "حفظ المستلمين": "Save Recipients",
   "إيصال تسليم": "Delivery Receipt",
   "الإعدادات": "Settings",
+  "عدد الأجهزة المسلَّمة": "Devices Handed Out",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1735,11 +1736,15 @@ function buildReceiptHtml(b) {
   return `<!DOCTYPE html><html ${dirAttr}><head>
 <meta charset="UTF-8"><title>${title}</title>
 <style>
-  @page { margin: 12mm; }
+  @page {
+    size: portrait;
+    margin-top: 22mm;
+    margin-${AR ? 'right' : 'left'}: 25mm;
+    margin-${AR ? 'left' : 'right'}: 10mm;
+    margin-bottom: 10mm;
+  }
   body { font-family: Arial, sans-serif; color:#111; margin:0; padding:0; font-size:15px; }
-  .header { display:flex; align-items:center; gap:10px; border-bottom:1.5px solid #333; padding-bottom:8px; margin-bottom:14px; }
-  .header .names { font-weight:700; font-size:13px; line-height:1.4; }
-  .header .names .en { font-weight:400; color:#444; font-size:11px; }
+  .header { display:flex; align-items:center; border-bottom:1.5px solid #333; padding-bottom:8px; margin-bottom:14px; }
   h2 { font-size:16px; margin:0 0 10px; }
   table { width:100%; border-collapse:collapse; }
   .status-line { margin-top:14px; font-size:13px; color:#333; }
@@ -1749,10 +1754,6 @@ function buildReceiptHtml(b) {
 </style></head><body>
   <div class="header">
     ${logoImg}
-    <div class="names">
-      <div>${ORG_AR_NAME}</div>
-      <div class="en">${ORG_EN_NAME}</div>
-    </div>
   </div>
   <button class="print-btn" onclick="window.print()">${AR?'طباعة':'Print'}</button>
   <h2>${AR?'إيصال تسليم عربة الحواسيب':'Laptop Trolley Delivery Receipt'}</h2>
@@ -3143,6 +3144,7 @@ function renderCal() {
 // ── Report Stats + Charts ──
 // ── Device Handover Report ──
 let checkoutReportData = { lines: [], missing: [] };
+let lastGroupedCheckoutLines = {};
 
 async function loadCheckoutReport() {
   await loadStructure();
@@ -3184,18 +3186,56 @@ function renderCheckoutLines() {
     for (const s of STRUCTURE) { const g = s.grades.find(x => String(x.id) === filterGradeId); if (g) { gradeNameAr = g.nameAr; break; } }
     if (gradeNameAr) lines = lines.filter(l => l.grade === gradeNameAr);
   }
-  lines = [...lines].sort((a,b) => (b.date||'').localeCompare(a.date||''));
-  document.getElementById('checkoutLinesTable').innerHTML = lines.map(l => `
+
+  // One report can have many student/device lines — group them so the
+  // table shows one row per booking instead of piling up a row per
+  // student, and clicking a row reveals the full breakdown.
+  const grouped = {};
+  lines.forEach(l => {
+    if (!grouped[l.reqId]) {
+      grouped[l.reqId] = { reqId: l.reqId, teacher: l.teacher, date: l.date, stage: l.stage, grade: l.grade, section: l.section, notes: l.notes || '', students: [] };
+    }
+    grouped[l.reqId].students.push({ name: l.studentName, laptopNumber: l.laptopNumber });
+  });
+  lastGroupedCheckoutLines = grouped;
+  const groups = Object.values(grouped).sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  document.getElementById('checkoutLinesTable').innerHTML = groups.map(g => `
+    <tr onclick="openCheckoutDetail('${g.reqId}')" style="cursor:pointer">
+      <td><strong style="color:var(--primary)">${esc(g.reqId)}</strong></td>
+      <td>${esc(g.teacher)}</td>
+      <td>${g.date}</td>
+      <td>${esc(stageDisplayName(g.stage)||'')}</td>
+      <td>${esc(gradeDisplayName(g.grade)||'')}</td>
+      <td>${esc(g.section||'')}</td>
+      <td>${g.students.filter(s => s.laptopNumber != null).length} / ${g.students.length}</td>
+    </tr>`).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+}
+
+function openCheckoutDetail(reqId) {
+  const g = lastGroupedCheckoutLines[reqId];
+  if (!g) return;
+  const rows = g.students.map(s => `
     <tr>
-      <td><strong style="color:var(--primary)">${esc(l.reqId)}</strong></td>
-      <td>${esc(l.teacher)}</td>
-      <td>${l.date}</td>
-      <td>${esc(stageDisplayName(l.stage)||'')}</td>
-      <td>${esc(gradeDisplayName(l.grade)||'')}</td>
-      <td>${esc(l.section||'')}</td>
-      <td>${esc(l.studentName||'')}</td>
-      <td>${l.laptopNumber ?? `<span style="color:var(--muted)">${t('لم يُسلَّم')}</span>`}</td>
-    </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
+      <td style="padding:8px;border-bottom:1px solid #eee">${esc(s.name||'')}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee">${s.laptopNumber ?? `<span style="color:var(--muted)">${t('لم يُسلَّم')}</span>`}</td>
+    </tr>`).join('');
+  document.getElementById('bkModalTitle').textContent = `${t('رقم الحجز')}: ${g.reqId}`;
+  document.getElementById('bkModalAlert').innerHTML = '';
+  document.getElementById('bkModalBody').innerHTML = `
+    <div style="margin-bottom:10px;font-size:.9rem;line-height:1.8">
+      <div><strong>${t('المعلم/ة')}:</strong> ${esc(g.teacher)}</div>
+      <div><strong>${t('التاريخ')}:</strong> ${g.date}</div>
+      <div><strong>${t('المرحلة')}:</strong> ${esc(stageDisplayName(g.stage)||'')} — <strong>${t('الصف')}:</strong> ${esc(gradeDisplayName(g.grade)||'')} — <strong>${t('الشعبة')}:</strong> ${esc(g.section||'')}</div>
+    </div>
+    ${g.notes ? `<div style="background:#fff8e1;border-inline-start:3px solid #f0ad4e;padding:8px 12px;border-radius:4px;margin-bottom:10px;font-size:.88rem"><strong>${AR?'ملاحظة المعلم/ة':'Teacher note'}:</strong> ${esc(g.notes)}</div>` : ''}
+    <table style="width:100%;border-collapse:collapse">
+      <tr><th style="text-align:start;padding:8px;background:var(--bg)">${t('الطالب')}</th><th style="text-align:start;padding:8px;background:var(--bg)">${t('رقم الجهاز')}</th></tr>
+      ${rows}
+    </table>`;
+  document.getElementById('bkReminderPanel').innerHTML = '';
+  document.getElementById('bkModalFooter').innerHTML = `<button class="btn btn-outline" onclick="closeModal('bkModal')">${t('إغلاق')}</button>`;
+  document.getElementById('bkModal').classList.add('open');
 }
 
 function renderMissingCheckout() {
@@ -3233,7 +3273,7 @@ function printCheckoutReport() {
       <thead><tr>
         <th>${t('رقم الحجز')}</th><th>${t('المعلم/ة')}</th><th>${t('التاريخ')}</th>
         <th>${t('المرحلة')}</th><th>${t('الصف')}</th><th>${t('الشعبة')}</th>
-        <th>${t('الطالب')}</th><th>${t('رقم الجهاز')}</th>
+        <th>${t('عدد الأجهزة المسلَّمة')}</th>
       </tr></thead>
       <tbody>${document.getElementById('checkoutLinesTable').innerHTML}</tbody>
     </table>`;
@@ -3253,16 +3293,18 @@ async function sendCheckoutReportEmail() {
   if (!raw) { showToast(AR?'يرجى إدخال بريد إلكتروني واحد على الأقل':'Please enter at least one email address', '#c0392b'); return; }
   const emails = raw.split(',').map(e => e.trim()).filter(Boolean);
 
-  // Send exactly what's currently filtered/visible, so the recipient sees the same view the admin is looking at.
-  const visibleRows = [...document.querySelectorAll('#checkoutLinesTable tr')].map(tr => {
-    const tds = [...tr.querySelectorAll('td')];
-    if (tds.length < 8) return null;
-    return {
-      reqId: tds[0].textContent.trim(), teacher: tds[1].textContent.trim(), date: tds[2].textContent.trim(),
-      stage: tds[3].textContent.trim(), grade: tds[4].textContent.trim(), section: tds[5].textContent.trim(),
-      studentName: tds[6].textContent.trim(), laptopNumber: tds[7].textContent.trim(),
-    };
-  }).filter(Boolean);
+  // Send the full per-student/device breakdown for whatever is currently
+  // filtered — lastGroupedCheckoutLines already reflects the active filters.
+  const visibleRows = [];
+  Object.values(lastGroupedCheckoutLines).forEach(g => {
+    g.students.forEach(s => {
+      visibleRows.push({
+        reqId: g.reqId, teacher: g.teacher, date: g.date,
+        stage: stageDisplayName(g.stage)||'', grade: gradeDisplayName(g.grade)||'', section: g.section||'',
+        studentName: s.name||'', laptopNumber: s.laptopNumber ?? '',
+      });
+    });
+  });
 
   const data = await api('/admin/api/send-checkout-report', { emails, lines: visibleRows });
   if (data.success) {
