@@ -5,7 +5,7 @@ from flask import (Blueprint, render_template, request, jsonify,
 from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact,
                     Teacher, Student, BookingCheckout, CheckoutLine, BookingReminder, PushSubscription, AppSetting)
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
-                            get_all_contact_emails, check_conflict, check_blocked,
+                            get_all_contact_emails, get_approved_notify_emails, check_conflict, check_blocked,
                             resolve_stage_grade_section_by_name)
 from utils.email_utils import (send_approve, send_reject, send_cancel,
                                 send_pending, send_update, send_staff_notification)
@@ -233,7 +233,8 @@ def api_approve():
         print("[email] DEBUG: building context...", flush=True)
         ctx = _booking_email_ctx(b)
         print(f"[email] DEBUG: context built, email={ctx.get('email')}", flush=True)
-        contacts = _get_contacts(b.stage_id)
+        contacts = get_approved_notify_emails(b.stage_id)
+        contacts = [{'email': e} for e in contacts]
         print(f"[email] DEBUG: contacts fetched, count={len(contacts)}", flush=True)
         send_staff_notification('approve', ctx, contacts)
         print("[email] DEBUG: send_staff_notification returned", flush=True)
@@ -785,7 +786,14 @@ def api_update_contact():
     c = Contact.query.get(data.get('id'))
     if not c:
         return jsonify({'success': False, 'error': 'غير موجود'}), 404
-    c.notify_handover = bool(data.get('notifyHandover'))
+    if 'notifyHandover' in data:
+        c.notify_handover = bool(data['notifyHandover'])
+    if 'notifyNew' in data:
+        c.notify_new = bool(data['notifyNew'])
+    if 'newReadonly' in data:
+        c.new_readonly = bool(data['newReadonly'])
+    if 'notifyApproved' in data:
+        c.notify_approved = bool(data['notifyApproved'])
     db.session.commit()
     return jsonify({'success': True})
 
