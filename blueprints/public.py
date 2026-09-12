@@ -316,6 +316,7 @@ def submit_booking():
             push_title,
             f'{booking.name} — {stage.name_ar} — {booking_date}',
             url=f'/admin/#bookings',
+            event_type='booking-approved' if auto_approve else None,
         )
     except Exception as e:
         print(f"[push] notification failed: {e}", flush=True)
