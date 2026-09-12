@@ -507,7 +507,6 @@
         <div class="card-title" style="color:#8e44ad"><i class="fas fa-bell"></i> مستلمو إشعار تسليم الأجهزة فقط</div>
         <p style="font-size:.85rem;color:var(--muted);margin-bottom:12px">
           اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها بريد إلكتروني تلقائي فور إتمام أي معلم/ة لنموذج تسليم الأجهزة، الضغط على مفتاح Ctrl لتحديد أكثر من جهة اتصال.
-
         </p>
         <select id="handoverRecipientsSelect" multiple size="6" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;margin-bottom:12px"></select>
         <button class="btn btn-primary btn-sm" onclick="saveHandoverRecipients()"><i class="fas fa-save"></i> حفظ المستلمين</button>
@@ -2151,10 +2150,23 @@ async function renderPeriodsTable() {
       <td dir="ltr">${p.endTime||'-'}</td>
       <td><span class="badge ${p.active?'badge-approved':'badge-cancelled'}">${t(p.active?'فعالة':'معطلة')}</span></td>
       <td>
+        <button class="btn btn-sm ${p.active?'btn-outline':'btn-green'}" onclick="togglePeriodActive(${p.id}, ${!p.active})" title="${t(p.active?'تعطيل':'تفعيل')}">
+          <i class="fas fa-${p.active?'ban':'check'}"></i> ${t(p.active?'تعطيل':'تفعيل')}
+        </button>
         <button class="btn btn-sm btn-outline" onclick="openEditPeriod(${p.id})" title="${t('تعديل')}"><i class="fas fa-edit"></i></button>
         <button class="btn btn-red btn-sm" onclick="deletePeriod(${p.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button>
       </td>
     </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--muted)">${t('لا توجد حصص بعد')}</td></tr>`;
+}
+
+async function togglePeriodActive(id, newActive) {
+  const p = PERIODS.find(x => x.id === id);
+  if (!p) return;
+  const data = await api('/admin/api/update-period', {id, label: p.label, startTime: p.startTime, endTime: p.endTime, active: newActive});
+  if (data.success) {
+    showToast(newActive ? (AR?'تم تفعيل الحصة':'Period enabled') : (AR?'تم تعطيل الحصة':'Period disabled'));
+    renderPeriodsTable();
+  } else showToast(data.error || t('خطأ'), '#c0392b');
 }
 
 async function addPeriod() {
