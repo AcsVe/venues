@@ -192,7 +192,7 @@ def submit_booking():
         f = request.get_json(silent=True) or {}
         files = []
 
-    required = ['fullName', 'email', 'bookingDate', 'stageId', 'gradeId', 'sectionId', 'periodId']
+    required = ['fullName', 'email', 'bookingDate', 'stageId', 'gradeId', 'sectionId', 'periodId', 'eventTitle']
     for field in required:
         if not f.get(field):
             return jsonify({'success': False, 'error': f'الحقل {field} مطلوب'}), 400
@@ -579,6 +579,7 @@ def api_submit_checkout():
         db.session.add(checkout)
         db.session.flush()
     checkout.submitted_at = datetime.utcnow()
+    checkout.notes = (data.get('notes') or '').strip()[:2000]  # generous cap, still bounded
 
     students_map = {s.id: s.name for s in Student.query.filter(
         Student.id.in_([sid for sid, _ in clean_entries])).all()}
@@ -601,6 +602,7 @@ def api_submit_checkout():
             send_handover_notification(notify_emails, {
                 'reqId': b.req_id, 'name': b.name, 'stage': b.stage_name,
                 'grade': b.grade_name, 'section': b.section_name, 'date': b.booking_date,
+                'notes': checkout.notes or '',
             }, handed_out)
         except Exception as e:
             print(f"[email] send_handover_notification failed: {e}", flush=True)
