@@ -3491,7 +3491,8 @@ if (!isStandalone) {
     if (installBtn) installBtn.style.display = 'flex';
   } else {
     window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
+      // Don't preventDefault() — let the browser's own automatic banner
+      // show too; the sidebar button stays as a manual backup.
       deferredInstallPrompt = e;
       if (installBtn) installBtn.style.display = 'flex';
     });
