@@ -24,6 +24,15 @@ def create_app():
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # Neon (and most managed Postgres) silently close idle connections
+    # after a short timeout; without pool_pre_ping, SQLAlchemy tries to
+    # reuse that dead connection and raises "SSL connection has been
+    # closed unexpectedly". pre_ping tests each connection with a cheap
+    # query before use and transparently reconnects if it's gone stale.
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'pool_recycle': 280,
+    }
     app.config['UPLOAD_FOLDER'] = upload_dir
     app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
