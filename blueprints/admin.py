@@ -245,6 +245,16 @@ def api_approve():
         print(f"[email] notification failed: {e}", flush=True)
         print(f"[email] TRACEBACK: {traceback.format_exc()}", flush=True)
 
+    try:
+        from utils.push_utils import send_push_to_all
+        send_push_to_all(
+            current_app._get_current_object(),
+            'تمت الموافقة على حجز', f'{b.name} — {b.stage_name} — {b.booking_date}',
+            url='/admin/#bookings', event_type='booking-approved',
+        )
+    except Exception as e:
+        print(f"[push] notification failed: {e}", flush=True)
+
     return jsonify({'success': True})
 
 
