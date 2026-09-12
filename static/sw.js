@@ -59,16 +59,25 @@ self.addEventListener('push', (event) => {
     if (event.data) data = Object.assign(data, event.data.json());
   } catch (e) {}
 
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
+  event.waitUntil((async () => {
+    await self.registration.showNotification(data.title, {
       body: data.body,
       icon: '/static/icon-192.png',
       badge: '/static/icon-192.png',
       data: { url: data.url || '/admin/' },
       dir: 'rtl',
       lang: 'ar',
-    })
-  );
+    });
+
+    // Wake any open admin page IMMEDIATELY (no waiting for its next poll)
+    // so the print station can react the instant a booking is approved —
+    // this is what makes it feel like a live receipt printer instead of
+    // something that catches up every few seconds.
+    if (data.type === 'booking-approved') {
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      clients.forEach((client) => client.postMessage({ type: 'booking-approved' }));
+    }
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
