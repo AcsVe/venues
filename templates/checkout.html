@@ -73,6 +73,14 @@
   </table>
   </div>
 
+  <div style="margin-top:16px">
+    <label style="display:block;font-weight:700;margin-bottom:6px;font-size:.9rem">
+      {{ 'ملاحظات (اختياري)' if lang == 'ar' else 'Notes (optional)' }}
+    </label>
+    <textarea id="checkoutNotes" rows="3" style="width:100%;padding:10px 13px;border:1.5px solid #d5dde0;border-radius:9px;font-family:inherit;font-size:.92rem;resize:vertical"
+      placeholder="{{ 'أي ملاحظة بخصوص الأجهزة أو العربة...' if lang == 'ar' else 'Any note about the devices or trolley...' }}"></textarea>
+  </div>
+
   <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:20px" onclick="submitCheckout()" id="submitBtn">
     <i class="fas fa-paper-plane"></i> {{ 'إرسال' if lang == 'ar' else 'Submit' }}
   </button>
@@ -129,7 +137,7 @@ async function submitCheckout() {
     const res = await fetch('/api/submit-checkout', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ reqId: REQ_ID, entries })
+      body: JSON.stringify({ reqId: REQ_ID, entries, notes: document.getElementById('checkoutNotes').value.trim() })
     });
     const data = await res.json();
     if (data.success) {
