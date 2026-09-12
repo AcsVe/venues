@@ -325,6 +325,7 @@
     <button class="nav-item" onclick="showTab('students')"><i class="fas fa-user-graduate"></i> الطلاب</button>
     <button class="nav-item" onclick="showTab('reports')"><i class="fas fa-chart-bar"></i> التقارير</button>
     <button class="nav-item" onclick="showTab('archive')"><i class="fas fa-archive"></i> الأرشفة</button>
+    <button class="nav-item" onclick="showTab('settings')"><i class="fas fa-cog"></i> الإعدادات</button>
     <button class="nav-item" onclick="showTab('calview')"><i class="fas fa-calendar-alt"></i> التقويم</button>
   </div>
   <div class="sidebar-footer">
@@ -814,6 +815,11 @@
       </div>
     </div>
 
+    <!-- ── SETTINGS TAB ── -->
+    <div class="tab-panel" id="tab-settings">
+      <div id="settingsContent"></div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -1137,6 +1143,7 @@ const I18N_EN = {
     "Pick which of the contacts above should get an automatic email as soon as any teacher completes the device handover form. Everyone else won't receive this specific notification.",
   "حفظ المستلمين": "Save Recipients",
   "إيصال تسليم": "Delivery Receipt",
+  "الإعدادات": "Settings",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1221,7 +1228,7 @@ function showTab(name) {
     }
   });
   history.replaceState(null, '', '#' + name);
-  const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), archive:t('الأرشفة'), calview:t('التقويم المرئي')};
+  const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), archive:t('الأرشفة'), settings:t('الإعدادات'), calview:t('التقويم المرئي')};
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
   if (name === 'calview')  initAdminCal();
@@ -1230,6 +1237,7 @@ function showTab(name) {
   if (name === 'teachers') loadTeachersTab();
   if (name === 'students') loadStudentsTab();
   if (name === 'reports')  { loadReportStats(); loadCheckoutReport(); }
+  if (name === 'settings') renderSettingsTab();
 }
 
 // ── Clock ──
@@ -1698,9 +1706,7 @@ function openDetail(reqId) {
   openModal('bkModal');
 }
 
-function printDeliveryReceipt(reqId) {
-  const b = allBookings.find(x => x.reqId === reqId);
-  if (!b) return;
+function buildReceiptHtml(b) {
   const periodStr = b.periodNumber
     ? `${t('الحصة')} ${b.periodNumber}${b.startTime && b.endTime ? ` (${b.startTime}–${b.endTime})` : ''}`
     : '-';
@@ -1726,7 +1732,7 @@ function printDeliveryReceipt(reqId) {
       <td style="padding:9px 10px;border:1px solid #999">${esc(String(v))}</td>
     </tr>`).join('');
 
-  const html = `<!DOCTYPE html><html ${dirAttr}><head>
+  return `<!DOCTYPE html><html ${dirAttr}><head>
 <meta charset="UTF-8"><title>${title}</title>
 <style>
   @page { margin: 12mm; }
@@ -1757,11 +1763,111 @@ function printDeliveryReceipt(reqId) {
     <span>${ORG_AR_NAME}</span>
   </div>
 </body></html>`;
+}
+
+function printDeliveryReceipt(reqId) {
+  const b = allBookings.find(x => x.reqId === reqId);
+  if (!b) return;
+  const html = buildReceiptHtml(b);
 
   const win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();
 }
+
+function silentPrintReceipt(booking) {
+  const html = buildReceiptHtml(booking);
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) {
+      console.warn('Silent print failed:', e);
+    }
+    setTimeout(() => iframe.remove(), 5000);
+  };
+}
+
+let printQueueBusy = false;
+async function checkPrintQueue() {
+  if (localStorage.getItem('isPrintStation') !== 'true') return;
+  if (printQueueBusy) return;
+  printQueueBusy = true;
+  try {
+    const queue = await fetch('/admin/api/print-queue').then(r => r.json());
+    for (const booking of queue) {
+      silentPrintReceipt(booking);
+      await api('/admin/api/mark-printed', { reqId: booking.reqId });
+      await new Promise(r => setTimeout(r, 1500)); // stagger multiple print jobs
+    }
+  } catch (e) {
+    console.warn('Print queue check failed:', e);
+  }
+  printQueueBusy = false;
+}
+
+async function togglePrintStation() {
+  const isStation = localStorage.getItem('isPrintStation') === 'true';
+  if (isStation) {
+    localStorage.removeItem('isPrintStation');
+    showToast(AR ? 'تم إلغاء تعيين هذا الجهاز كجهاز طباعة' : 'This device is no longer the print station');
+  } else {
+    localStorage.setItem('isPrintStation', 'true');
+    showToast(AR ? 'تم تعيين هذا الجهاز كجهاز الطباعة ✓' : 'This device is now the print station ✓');
+  }
+  renderSettingsTab();
+}
+
+async function toggleAutoApprove(checked) {
+  const data = await api('/admin/api/settings', { autoApproveBookings: checked });
+  if (data.success) showToast(checked ? (AR?'تم تفعيل الموافقة التلقائية':'Auto-approval enabled') : (AR?'تم إيقاف الموافقة التلقائية':'Auto-approval disabled'));
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function toggleAutoPrint(checked) {
+  const data = await api('/admin/api/settings', { autoPrintReceipts: checked });
+  if (data.success) showToast(checked ? (AR?'تم تفعيل الطباعة التلقائية':'Auto-print enabled') : (AR?'تم إيقاف الطباعة التلقائية':'Auto-print disabled'));
+  else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+async function renderSettingsTab() {
+  const settings = await fetch('/admin/api/settings').then(r => r.json());
+  const isStation = localStorage.getItem('isPrintStation') === 'true';
+  const el = document.getElementById('settingsContent');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-title"><i class="fas fa-check-double"></i> ${AR?'الموافقة التلقائية':'Auto-Approval'}</div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.92rem">
+        <input type="checkbox" id="autoApproveToggle" ${settings.autoApproveBookings?'checked':''} onchange="toggleAutoApprove(this.checked)" style="width:20px;height:20px">
+        ${AR?'الموافقة تلقائياً على كل حجز جديد فور تقديمه (إشعارات المعلم والإدمن تصل كالمعتاد)':'Automatically approve every new booking the instant it\'s submitted (teacher and admin notifications still fire as usual)'}
+      </label>
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="fas fa-print"></i> ${AR?'الطباعة التلقائية لإيصال التسليم':'Auto-Print Delivery Receipt'}</div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.92rem;margin-bottom:16px">
+        <input type="checkbox" id="autoPrintToggle" ${settings.autoPrintReceipts?'checked':''} onchange="toggleAutoPrint(this.checked)" style="width:20px;height:20px">
+        ${AR?'طباعة إيصال تسليم تلقائياً فور اعتماد أي حجز (يدوياً أو تلقائياً)':'Automatically print a delivery receipt as soon as any booking is approved (manually or automatically)'}
+      </label>
+      <div style="background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:14px">
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">
+          ${AR?'فعّل هذا الخيار على جهاز واحد بس (المتصل بالطابعة) لتفادي طباعة نفس الإيصال أكثر من مرة.':'Enable this on exactly one device (the one connected to the printer) to avoid printing the same receipt more than once.'}
+        </p>
+        <button class="btn ${isStation?'btn-red':'btn-primary'} btn-sm" onclick="togglePrintStation()">
+          <i class="fas fa-${isStation?'times':'desktop'}"></i>
+          ${isStation ? (AR?'إلغاء تعيين هذا الجهاز':'Unset This Device') : (AR?'تعيين هذا الجهاز كجهاز طباعة':'Set This Device As Print Station')}
+        </button>
+        ${isStation ? `<div style="margin-top:10px;color:#27ae60;font-weight:700;font-size:.85rem"><i class="fas fa-check-circle"></i> ${AR?'هذا الجهاز مُعيَّن حالياً':'This device is currently the print station'}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+setInterval(checkPrintQueue, 20000);
 
 function printBooking(reqId) {
   const b = allBookings.find(x => x.reqId === reqId);
@@ -3462,7 +3568,7 @@ loadPeriods();
 
 // Restore whichever tab the URL hash points to (so refresh/reload/shared
 // links keep the same tab instead of always resetting to Bookings).
-const validTabs = ['bookings','halls','blocked','contacts','teachers','students','reports','archive','calview'];
+const validTabs = ['bookings','halls','blocked','contacts','teachers','students','reports','archive','settings','calview'];
 const initialTab = location.hash.replace('#', '');
 if (validTabs.includes(initialTab)) {
   showTab(initialTab);
