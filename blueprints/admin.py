@@ -93,6 +93,7 @@ def api_get_settings():
     return jsonify({
         'autoApproveBookings': AppSetting.get_bool('auto_approve_bookings', False),
         'autoPrintReceipts': AppSetting.get_bool('auto_print_receipts', False),
+        'disableCheckoutFormLink': AppSetting.get_bool('disable_checkout_form_link', False),
     })
 
 
@@ -104,6 +105,8 @@ def api_update_settings():
         AppSetting.set_bool('auto_approve_bookings', bool(data['autoApproveBookings']))
     if 'autoPrintReceipts' in data:
         AppSetting.set_bool('auto_print_receipts', bool(data['autoPrintReceipts']))
+    if 'disableCheckoutFormLink' in data:
+        AppSetting.set_bool('disable_checkout_form_link', bool(data['disableCheckoutFormLink']))
     return jsonify({'success': True})
 
 
@@ -226,7 +229,7 @@ def api_approve():
     db.session.commit()
 
     base_url = current_app.config.get('BASE_URL', '')
-    checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url else ''
+    checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url and not AppSetting.get_bool('disable_checkout_form_link', False) else ''
 
     print(f"[email] DEBUG: approve started for {req_id}", flush=True)
     try:
