@@ -594,7 +594,10 @@
               <th onclick="sortTeachers('name')" style="cursor:pointer">الاسم<span id="tcArrow-name"></span></th>
               <th onclick="sortTeachers('email')" style="cursor:pointer">البريد<span id="tcArrow-email"></span></th>
               <th onclick="sortTeachers('phone')" style="cursor:pointer">الجوال<span id="tcArrow-phone"></span></th>
-              <th>المرحلة</th><th>الصف</th><th>الشعبة</th><th>تعديل</th><th>حذف</th>
+              <th onclick="sortTeachers('_stageLabel')" style="cursor:pointer">المرحلة<span id="tcArrow-_stageLabel"></span></th>
+              <th onclick="sortTeachers('_gradeLabel')" style="cursor:pointer">الصف<span id="tcArrow-_gradeLabel"></span></th>
+              <th onclick="sortTeachers('_sectionLabel')" style="cursor:pointer">الشعبة<span id="tcArrow-_sectionLabel"></span></th>
+              <th>تعديل</th><th>حذف</th>
             </tr></thead>
             <tbody id="teachersTable"></tbody>
           </table>
@@ -2543,6 +2546,14 @@ async function loadTeachers() {
   const list = await fetch(url).then(r => r.json());
   if (mySeq !== teachersReqSeq) return; // a newer request (e.g. filter changed) already started — drop this stale one
 
+  // Pre-compute display labels once so sorting by Stage/Grade/Section
+  // sorts by what's actually shown, not by internal IDs.
+  list.forEach(tc => {
+    tc._stageLabel = stageLabelById(tc.stageId);
+    tc._gradeLabel = gradeSectionLabel('grade', tc.gradeId);
+    tc._sectionLabel = gradeSectionLabel('section', tc.sectionId);
+  });
+
   lastTeachersList = list;
   renderTeachersTable();
 }
@@ -2553,7 +2564,7 @@ function sortTeachers(key) {
 }
 
 function renderTeachersTable() {
-  ['name','email','phone'].forEach(k => {
+  ['name','email','phone','_stageLabel','_gradeLabel','_sectionLabel'].forEach(k => {
     const el = document.getElementById('tcArrow-' + k);
     if (el) el.textContent = sortArrow(teachersSort, k);
   });
@@ -2565,9 +2576,9 @@ function renderTeachersTable() {
       <td>${esc(tc.name)}</td>
       <td dir="ltr">${esc(tc.email)}</td>
       <td dir="ltr">${esc(tc.phone)}</td>
-      <td>${esc(stageLabelById(tc.stageId))}</td>
-      <td>${esc(gradeSectionLabel('grade', tc.gradeId))}</td>
-      <td>${esc(gradeSectionLabel('section', tc.sectionId))}</td>
+      <td>${esc(tc._stageLabel)}</td>
+      <td>${esc(tc._gradeLabel)}</td>
+      <td>${esc(tc._sectionLabel)}</td>
       <td><button class="btn btn-sm btn-outline" onclick="openEditTeacher(${tc.id})" title="${t('تعديل')}"><i class="fas fa-edit"></i></button></td>
       <td><button class="btn btn-red btn-sm" onclick="deleteTeacher(${tc.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
     </tr>`).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--muted)">${t('لا توجد بيانات')}</td></tr>`;
