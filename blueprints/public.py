@@ -287,7 +287,7 @@ def submit_booking():
         booking.status = 'approved'
         booking.action_date = datetime.utcnow()
         db.session.commit()
-        checkout_url = f"{base_url}/checkout/{req_id}" if base_url else ''
+        checkout_url = f"{base_url}/checkout/{req_id}" if base_url and not AppSetting.get_bool('disable_checkout_form_link', False) else ''
         try:
             contacts = [{'email': e} for e in get_approved_notify_emails(stage.id)]
             send_staff_notification('approve', email_ctx, contacts)
@@ -710,7 +710,7 @@ def quick_approve(req_id):
             f'Current status: {b.status}. No further action needed.', '#247680')
 
     base_url = current_app.config.get('BASE_URL', '')
-    checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url else ''
+    checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url and not AppSetting.get_bool('disable_checkout_form_link', False) else ''
 
     b.status = 'approved'
     b.action_date = datetime.utcnow()
