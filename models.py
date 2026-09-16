@@ -161,6 +161,10 @@ class Booking(db.Model):
     cc_emails     = db.Column(db.Text)   # semicolon-separated
     action_date   = db.Column(db.DateTime)
 
+    # ── Tracking Approver Details ──────────────────────────────────────────
+    approved_by_name = db.Column(db.String(200))
+    approved_at      = db.Column(db.DateTime)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -188,6 +192,8 @@ class Booking(db.Model):
             'status': self.status,
             'rejectReason': self.reject_reason or '',
             'cc': self.cc_emails or '',
+            'approvedByName': self.approved_by_name or '',
+            'approvedAt': self.approved_at.isoformat() if self.approved_at else '',
         }
 
 
@@ -385,8 +391,9 @@ def init_db(app):
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notify_approved BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
-            # Contacts can now repeat the same email across different stages —
-            # drop the old single-column unique constraint if present.
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS approved_by_name VARCHAR(200)")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP")
+            
             try:
                 conn.exec_driver_sql("ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_email_key")
             except Exception:
@@ -411,7 +418,6 @@ def init_db(app):
                                   name_en=f'Grade {num}', sort_order=i))
         db.session.commit()
 
-        # One default section (أ) per grade — admin can add more from the panel
         for g in Grade.query.all():
             db.session.add(Section(grade_id=g.id, name_ar='أ', name_en='A', sort_order=0))
         db.session.commit()
@@ -422,12 +428,12 @@ def init_db(app):
         db.session.commit()
 
 
-_ORDINALS_AR_F = {  # feminine — used for الحصة (period)
+_ORDINALS_AR_F = {
     1: 'الأولى', 2: 'الثانية', 3: 'الثالثة', 4: 'الرابعة', 5: 'الخامسة',
     6: 'السادسة', 7: 'السابعة', 8: 'الثامنة', 9: 'التاسعة', 10: 'العاشرة',
     11: 'الحادية عشرة', 12: 'الثانية عشرة',
 }
-_ORDINALS_AR_M = {  # masculine — used for الصف (grade)
+_ORDINALS_AR_M = {
     1: 'الأول', 2: 'الثاني', 3: 'الثالث', 4: 'الرابع', 5: 'الخامس',
     6: 'السادس', 7: 'السابع', 8: 'الثامن', 9: 'التاسع', 10: 'العاشر',
     11: 'الحادي عشر', 12: 'الثاني عشر',
