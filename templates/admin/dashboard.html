@@ -252,42 +252,7 @@
       .stat-card { padding: 14px 10px; }
       .stat-val { font-size: 1.6rem; }
     }
-    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 140; }
-    .sidebar-overlay.open { display: block; }
-      .topbar { padding: 10px 14px; }
-      .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .table-wrap table { min-width: 500px; font-size: .8rem; }
-      .hamburger { display: inline-flex !important; }
-      .stat-card { padding: 12px; }
-      .stat-val { font-size: 1.6rem; }
-    }
-    .sidebar-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,.5); z-index: 140;
-    }
-    .sidebar-overlay.open { display: block; }
-    .hamburger { display: inline-flex !important; }
-      .stat-card { padding: 12px; }
-      .stat-val { font-size: 1.6rem; }
-    }
     .spinner { display: inline-block; width: 16px; height: 16px; border: 2.5px solid rgba(255,87,51,.3); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
-    @media (max-width: 768px) {
-      .sidebar { transform: translateX(110%); transition: transform .28s ease; width: 82vw !important; max-width: 290px; }
-      html[dir="ltr"] .sidebar { transform: translateX(-110%); }
-      html[dir="ltr"] .sidebar.open { transform: translateX(0); }
-      .sidebar.open { transform: translateX(0); }
-      .main { margin-inline-start: 0 !important; width: 100% !important; }
-      .hamburger { display: inline-flex !important; }
-      .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
-      .form-grid { grid-template-columns: 1fr !important; }
-      .content { padding: 12px !important; }
-      .topbar { padding: 10px 14px !important; }
-      .table-wrap { -webkit-overflow-scrolling: touch; }
-      .stat-card { padding: 12px 8px; }
-      .stat-val { font-size: 1.5rem; }
-      .search-input { min-width: unset; width: 100%; }
-      .mobile-nav { display: none !important; }
-    }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes pulseBadge {
       0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(39,174,96,.6); }
@@ -1174,6 +1139,8 @@ const I18N_EN = {
   "إيصال تسليم": "Delivery Receipt",
   "الإعدادات": "Settings",
   "عدد الأجهزة المسلَّمة": "Devices Handed Out",
+  "معتمد الحجز": "Approved By",
+  "طباعة نموذج تسليم المعلم": "Print Teacher Handover Form"
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1204,7 +1171,7 @@ function applyStaticLang() {
   document.documentElement.dir  = AR ? 'rtl' : 'ltr';
   ORIGINAL_TEXT_NODES.forEach(({ node, original }) => {
     const trimmed = original.trim();
-    const normalized = trimmed.replace(/\s+/g, ' ');  // collapse internal newlines/indentation for dictionary lookup — a multi-line source paragraph's trimmed text still has raw newlines that never match the single-spaced dictionary key otherwise
+    const normalized = trimmed.replace(/\s+/g, ' ');  // collapse internal newlines/indentation for dictionary lookup
     node.nodeValue = AR ? original : original.replace(trimmed, I18N_EN[normalized] || I18N_EN[trimmed] || trimmed);
   });
   document.querySelectorAll('[placeholder]').forEach(el => {
@@ -1347,7 +1314,7 @@ async function loadBookings() {
   try {
     const res = await fetch('/admin/api/bookings?filter=' + curFilter);
     const data = await res.json();
-    if (mySeq !== bookingsReqSeq) return; // a newer filter click superseded this request
+    if (mySeq !== bookingsReqSeq) return;
     allBookings = data;
     renderTable();
     loadStats();
@@ -1405,59 +1372,45 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 async function subscribeToPush() {
-  console.log('[notify-debug] subscribeToPush: serviceWorker in navigator?', 'serviceWorker' in navigator, '| PushManager in window?', 'PushManager' in window);
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
   try {
     const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
     const reg = await Promise.race([navigator.serviceWorker.ready, timeout(5000)]);
-    console.log('[notify-debug] service worker ready, scope =', reg.scope);
     let sub = await reg.pushManager.getSubscription();
-    console.log('[notify-debug] existing subscription found?', !!sub);
     if (!sub) {
       const { publicKey } = await fetch('/admin/api/vapid-public-key').then(r => r.json());
-      console.log('[notify-debug] fetched VAPID public key, length =', publicKey ? publicKey.length : 0);
       if (!publicKey) return false;
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
-      console.log('[notify-debug] new subscription created:', sub.endpoint);
     }
     const subJson = sub.toJSON();
-    const saveResult = await api('/admin/api/push-subscribe', { endpoint: subJson.endpoint, keys: subJson.keys });
-    console.log('[notify-debug] save-to-server result:', saveResult);
+    await api('/admin/api/push-subscribe', { endpoint: subJson.endpoint, keys: subJson.keys });
     return true;
   } catch (e) {
-    console.error('[notify-debug] Push subscription EXCEPTION:', e.name, e.message, e);
     return false;
   }
 }
 
 async function requestNotifyPermission() {
-  console.log('[notify-debug] step 1: window.Notification exists?', !!window.Notification);
   if (!window.Notification) {
     showToast(AR ? 'المتصفح لا يدعم الإشعارات' : 'Browser does not support notifications', '#c0392b');
     return;
   }
-  console.log('[notify-debug] step 2: Notification.permission BEFORE request =', Notification.permission);
   try {
     const perm = await Notification.requestPermission();
-    console.log('[notify-debug] step 3: requestPermission() returned =', perm);
     const btn = document.getElementById('notifyBellBtn');
     if (perm === 'granted') {
-      console.log('[notify-debug] step 4: permission granted, calling subscribeToPush()...');
       const pushOk = await subscribeToPush();
-      console.log('[notify-debug] step 5: subscribeToPush() returned =', pushOk);
       showToast(AR
         ? (pushOk ? 'تم تفعيل الإشعارات — ستصلك حتى لو أغلقت التطبيق ✓' : 'تم تفعيل الإشعارات بالتطبيق المفتوح ✓')
         : (pushOk ? 'Notifications enabled — you\'ll get them even with the app closed ✓' : 'Notifications enabled while the app is open ✓'));
       if (btn) btn.classList.add('active');
     } else {
-      console.log('[notify-debug] step 4-ALT: permission NOT granted, value was:', perm);
       showToast(AR ? 'لم يتم منح إذن الإشعارات' : 'Notification permission not granted', '#c0392b');
     }
   } catch (e) {
-    console.error('[notify-debug] EXCEPTION in requestNotifyPermission:', e);
     showToast(AR ? 'حدث خطأ غير متوقع أثناء التفعيل' : 'Unexpected error while enabling notifications', '#c0392b');
   }
 }
@@ -1474,7 +1427,7 @@ async function loadStats() {
     document.getElementById('nbPending').textContent  = data.pending;
 
     if (lastKnownPendingCount === null) {
-      lastKnownPendingCount = data.pending; // baseline on first load — don't notify about pre-existing ones
+      lastKnownPendingCount = data.pending;
     } else if (data.pending > lastKnownPendingCount) {
       notifyNewBooking(data.pending - lastKnownPendingCount);
       lastKnownPendingCount = data.pending;
@@ -1484,7 +1437,7 @@ async function loadStats() {
   } catch(e) {}
 }
 
-setInterval(loadStats, 15000); // poll for new bookings every 15s
+setInterval(loadStats, 15000);
 
 function filterBk(f, btn) {
   curFilter = f;
@@ -1598,7 +1551,7 @@ async function confirmReject() {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 
-// ── Personal scheduled reminder (admin follow-up on an approved booking) ──
+// ── Personal scheduled reminder ──
 async function loadReminderPanel(reqId) {
   const panel = document.getElementById('bkReminderPanel');
   panel.innerHTML = `<div style="color:var(--muted);font-size:.85rem;margin-top:10px">${AR?'جاري التحميل...':'Loading...'}</div>`;
@@ -1672,10 +1625,15 @@ function openDetail(reqId) {
   document.getElementById('bkModalTitle').innerHTML = `<i class="fas fa-calendar-check"></i> ${b.reqId}`;
   const sLabels = {approved:t('معتمد'),completed:t('مكتمل'),pending:t('قيد المراجعة'),rejected:t('مرفوض'),cancelled:t('ملغي')};
   const periodStr = b.periodNumber ? (t('الحصة') + ' ' + b.periodNumber + (b.startTime&&b.endTime ? ` (${b.startTime} - ${b.endTime})` : '')) : '-';
+  
   document.getElementById('bkModalBody').innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:.88rem">
       ${drow('رقم الطلب', `<strong style="color:var(--primary)">${b.reqId}</strong>`)}
       ${drow('الحالة', `<span class="badge badge-${b.status}">${sLabels[b.status]||b.status}</span>`)}
+      
+      <!-- [تعديل 1]: عرض اسم الشخص المعتمد للحجز عند التوفر -->
+      ${b.approvedByName ? drow('معتمد الحجز', `<strong style="color:#27ae60"><i class="fas fa-user-check me-1"></i>${esc(b.approvedByName)}</strong>`) : ''}
+
       ${drow('الاسم', b.name)} ${drow('البريد', b.email)}
       ${drow('الجوال', b.phone||'-', true)} ${drow('سبب الحجز', b.title||'-')}
       ${drow('المرحلة', stageDisplayName(b.stage)||'-')} ${drow('الصف', b.grade||'-')}
@@ -1714,7 +1672,10 @@ function openDetail(reqId) {
   }
 
   let footer = '';
+
+  // [تعديل 2]: إضافة زر مباشر لفتح طباعة نموذج التسليم للمعلم في تبويب جديد
   if (b.status === 'approved' || b.status === 'completed') {
+    footer += `<a href="/checkout/${b.reqId}" target="_blank" class="btn btn-outline" style="text-decoration:none"><i class="fas fa-print"></i> ${t('طباعة نموذج تسليم المعلم')}</a>`;
     footer += `<button style="background:#FF5733;color:#fff;border:none;font-weight:700" class="btn" onclick="printDeliveryReceipt('${b.reqId}')" title="${t('إيصال تسليم')}"><i class="fas fa-receipt"></i> ${t('إيصال تسليم')}</button>`;
   }
   if (b.status === 'pending') {
@@ -1842,7 +1803,7 @@ async function checkPrintQueue() {
     for (const booking of queue) {
       silentPrintReceipt(booking);
       await api('/admin/api/mark-printed', { reqId: booking.reqId });
-      await new Promise(r => setTimeout(r, 1500)); // stagger multiple print jobs
+      await new Promise(r => setTimeout(r, 1500));
     }
   } catch (e) {
     console.warn('Print queue check failed:', e);
@@ -1919,12 +1880,12 @@ async function renderSettingsTab() {
     </div>`;
 }
 
-setInterval(checkPrintQueue, 8000); // fallback poll, in case the instant push trigger below is missed
+setInterval(checkPrintQueue, 8000);
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'booking-approved') {
-      checkPrintQueue(); // fires the moment a booking is approved — no waiting for the next poll tick
+      checkPrintQueue();
     }
   });
 }
@@ -2030,7 +1991,6 @@ async function saveEdit() {
 async function loadHalls() {
   await loadStructure();
   hallsList = STRUCTURE;
-  // Update blocked-period stage select too
   const blkSel = document.getElementById('blkHall');
   blkSel.innerHTML = `<option value="">-- ${t('كل المراحل')} --</option>` +
     STRUCTURE.map(s => `<option value="${s.trolleyCode}">${esc(s.nameAr)}</option>`).join('');
@@ -2161,7 +2121,7 @@ async function addGrade(stageId) {
   const nameAr = input.value.trim();
   if (!nameAr) { showToast('اسم الصف مطلوب', '#c0392b'); return; }
   const nameEn = prompt(AR ? 'الاسم الإنجليزي للصف (يظهر عند التبديل للإنجليزية):' : 'English name for the grade (shown when switched to English):', nameAr);
-  if (nameEn === null) return; // cancelled
+  if (nameEn === null) return;
   const data = await api('/admin/api/add-grade', {stageId, nameAr, nameEn: nameEn.trim() || nameAr});
   if (data.success) { input.value=''; showToast('تمت الإضافة'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -2178,7 +2138,7 @@ async function addSection(gradeId) {
   const nameAr = input.value.trim();
   if (!nameAr) { showToast('اسم الشعبة مطلوب', '#c0392b'); return; }
   const nameEn = prompt(AR ? 'الاسم الإنجليزي للشعبة (يظهر عند التبديل للإنجليزية):' : 'English name for the section (shown when switched to English):', nameAr);
-  if (nameEn === null) return; // cancelled
+  if (nameEn === null) return;
   const data = await api('/admin/api/add-section', {gradeId, nameAr, nameEn: nameEn.trim() || nameAr});
   if (data.success) { input.value=''; showToast('تمت الإضافة'); loadHalls(); }
   else showToast(data.error || 'خطأ', '#c0392b');
@@ -2306,7 +2266,6 @@ async function loadContactsTab() {
   loadContacts();
 }
 
-// ── Generic column sorting (reused across Bookings/Teachers/Students/Contacts) ──
 function genericSort(list, key, dir) {
   return [...list].sort((a, b) => {
     let av = a[key], bv = b[key];
@@ -2401,7 +2360,7 @@ async function saveRecipientsSelect(selectId, field, apiField) {
   const selectedIds = new Set(Array.from(sel.selectedOptions).map(o => parseInt(o.value, 10)));
   for (const c of lastContactsList) {
     const shouldNotify = selectedIds.has(c.id);
-    if (shouldNotify === !!c[field]) continue; // no change needed
+    if (shouldNotify === !!c[field]) continue;
     const data = await api('/admin/api/update-contact', {id: c.id, [apiField]: shouldNotify});
     if (data.success) c[field] = shouldNotify;
   }
@@ -2450,7 +2409,6 @@ async function addContact() {
     loadContacts();
   } else showToast(data.error || 'خطأ', '#c0392b');
 }
-
 
 async function deleteContact(id) {
   if (!confirmT('حذف جهة الاتصال هذه؟')) return;
@@ -2544,10 +2502,8 @@ async function loadTeachers() {
 
   const mySeq = ++teachersReqSeq;
   const list = await fetch(url).then(r => r.json());
-  if (mySeq !== teachersReqSeq) return; // a newer request (e.g. filter changed) already started — drop this stale one
+  if (mySeq !== teachersReqSeq) return;
 
-  // Pre-compute display labels once so sorting by Stage/Grade/Section
-  // sorts by what's actually shown, not by internal IDs.
   list.forEach(tc => {
     tc._stageLabel = stageLabelById(tc.stageId);
     tc._gradeLabel = gradeSectionLabel('grade', tc.gradeId);
@@ -2653,7 +2609,6 @@ async function openEditTeacher(id) {
   const phone = prompt(AR ? 'الجوال:' : 'Phone:', tc.phone || '');
   if (phone === null) return;
 
-  // Reuse the same add-form cascading selects to pick the new assignment.
   document.getElementById('tcStage').value = tc.stageId || '';
   onTcStageChange();
   if (tc.gradeId) { document.getElementById('tcGrade').value = tc.gradeId; onTcGradeChange(); }
@@ -2828,10 +2783,8 @@ async function loadStudents() {
 
   const mySeq = ++studentsReqSeq;
   const list = await fetch(url).then(r => r.json());
-  if (mySeq !== studentsReqSeq) return; // a newer filter request superseded this one
+  if (mySeq !== studentsReqSeq) return;
 
-  // Pre-compute display labels once so sorting by Stage/Grade/Section
-  // sorts by what's actually shown, not by internal IDs.
   list.forEach(s => {
     s._stageLabel = labelForStruct('stage', s.stageId);
     s._gradeLabel = labelForStruct('grade', s.gradeId);
@@ -2926,7 +2879,6 @@ async function bulkMoveSelectedStudents() {
 }
 
 async function openMoveStudent(studentId) {
-  // Build a flat list of "Stage — Grade — Section" choices for a simple prompt-based picker.
   const options = [];
   STRUCTURE.forEach(s => s.grades.forEach(g => g.sections.forEach(sec => {
     options.push({id: sec.id, label: `${AR?s.nameAr:(s.nameEn||s.nameAr)} — ${AR?g.nameAr:(g.nameEn||g.nameAr)} — ${AR?sec.nameAr:(sec.nameEn||sec.nameAr)}`});
@@ -2961,8 +2913,6 @@ async function deleteStudent(id) {
 }
 
 function parseCsvLine(line) {
-  // Handles quoted fields (with embedded commas) — a naive split(',') breaks
-  // on values like "Secondary Stage","Grade 9","CSA".
   const fields = [];
   let cur = '', inQuotes = false;
   for (let i = 0; i < line.length; i++) {
@@ -2991,7 +2941,6 @@ async function uploadRosterAutocreate(input) {
   const text = await file.text();
   let lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-  // Auto-skip a header row like "Name,Stage,Grade,Section" or "DisplayName,Class"
   if (lines.length) {
     const firstFields = parseCsvLine(lines[0]).map(f => f.toLowerCase());
     const headerWords = ['name', 'stage', 'grade', 'section', 'class', 'displayname'];
@@ -3003,11 +2952,9 @@ async function uploadRosterAutocreate(input) {
   const list = lines.map(l => {
     const fields = parseCsvLine(l);
     if (fields.length >= 4) {
-      // name, stage, grade, section — explicit columns
       return { name: fields[0], stage: fields[1], grade: fields[2], section: fields[3] };
     }
     if (fields.length === 2) {
-      // name, classCode — e.g. "8CSA"
       return { name: fields[0], classCode: fields[1] };
     }
     return null;
@@ -3042,10 +2989,8 @@ async function uploadStudents(input) {
   const list = lines.map(l => {
     const parts = l.split(',').map(p => p.trim());
     if (parts.length >= 4) {
-      // Full format: name,stage,grade,section
       return {name: parts[0], stage: parts[1], grade: parts[2], section: parts[3]};
     }
-    // Simple format: just a name — needs the section pre-selected above
     return {name: parts[0], sectionId: fallbackSectionId || null};
   }).filter(x => x.name);
 
@@ -3103,7 +3048,7 @@ function runReport() {
     groups[key].count++;
     if (r.status === 'approved') groups[key].approved++;
     if (r.status === 'pending')  groups[key].pending++;
-    groups[key].hours++; // one period = one booking
+    groups[key].hours++;
   }
 
   let arr = Object.entries(groups).map(([key, data]) => ({key, data}));
@@ -3170,7 +3115,6 @@ async function initAdminCal() {
   const res = await fetch('/admin/api/bookings?filter=all');
   allBookingsForCal = await res.json();
 
-  // Populate stage filter (by trolley code)
   const seen = new Set();
   const sel = document.getElementById('calHallFilter');
   sel.innerHTML = `<option value="">${t('كل المراحل')}</option>`;
@@ -3244,7 +3188,6 @@ function renderCal() {
 }
 
 // ── Report Stats + Charts ──
-// ── Device Handover Report ──
 let checkoutReportData = { lines: [], missing: [] };
 let lastGroupedCheckoutLines = {};
 
@@ -3289,9 +3232,6 @@ function renderCheckoutLines() {
     if (gradeNameAr) lines = lines.filter(l => l.grade === gradeNameAr);
   }
 
-  // One report can have many student/device lines — group them so the
-  // table shows one row per booking instead of piling up a row per
-  // student, and clicking a row reveals the full breakdown.
   const grouped = {};
   lines.forEach(l => {
     if (!grouped[l.reqId]) {
@@ -3395,8 +3335,6 @@ async function sendCheckoutReportEmail() {
   if (!raw) { showToast(AR?'يرجى إدخال بريد إلكتروني واحد على الأقل':'Please enter at least one email address', '#c0392b'); return; }
   const emails = raw.split(',').map(e => e.trim()).filter(Boolean);
 
-  // Send the full per-student/device breakdown for whatever is currently
-  // filtered — lastGroupedCheckoutLines already reflects the active filters.
   const visibleRows = [];
   Object.values(lastGroupedCheckoutLines).forEach(g => {
     g.students.forEach(s => {
@@ -3524,10 +3462,8 @@ async function loadReportStats() {
 
   if (!data.length) return;
 
-  // ── Donut Chart ──
   drawDonut(approved, completed, pending, rejected + cancelled, data.length);
 
-  // ── Monthly Line Chart ──
   const months = {};
   data.forEach(b => {
     if (!b.date) return;
@@ -3537,7 +3473,6 @@ async function loadReportStats() {
   const sortedMonths = Object.entries(months).sort((a,b)=>a[0]>b[0]?1:-1).slice(-6);
   drawMonthChart(sortedMonths);
 
-  // ── Hall Bars ──
   drawHallBars(hallCount);
 }
 
@@ -3567,12 +3502,12 @@ function drawDonut(approved, completed, pending, rejected, total) {
     ctx.fill();
     start += angle;
   });
-  // inner circle
+
   ctx.beginPath();
   ctx.arc(cx, cy, ri, 0, Math.PI*2);
   ctx.fillStyle = '#fff';
   ctx.fill();
-  // center text
+
   ctx.fillStyle = '#1e2a2b';
   ctx.font = 'bold 22px Tajawal';
   ctx.textAlign = 'center';
@@ -3582,7 +3517,6 @@ function drawDonut(approved, completed, pending, rejected, total) {
   ctx.fillStyle = '#6b7c7e';
   ctx.fillText(t('إجمالي'), cx, cy+12);
 
-  // legend
   document.getElementById('donutLegend').innerHTML = slices.map(s =>
     '<span style="display:inline-flex;align-items:center;gap:4px;margin-left:10px">' +
     '<span style="width:10px;height:10px;border-radius:50%;background:'+s.color+';display:inline-block"></span>' +
@@ -3606,14 +3540,12 @@ function drawMonthChart(sortedMonths) {
   const mx = Math.max(...vals, 1);
   const step = cw / (sortedMonths.length - 1 || 1);
 
-  // Grid lines
   ctx.strokeStyle = '#e0eeef'; ctx.lineWidth = 1;
   for (let i=0;i<=4;i++) {
     const y = pad.top + (ch/4)*i;
     ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(pad.left+cw,y); ctx.stroke();
   }
 
-  // Line
   ctx.beginPath();
   ctx.strokeStyle = '#FF5733'; ctx.lineWidth = 2.5;
   sortedMonths.forEach(([m,v],i) => {
@@ -3623,7 +3555,6 @@ function drawMonthChart(sortedMonths) {
   });
   ctx.stroke();
 
-  // Fill area
   ctx.beginPath();
   sortedMonths.forEach(([m,v],i) => {
     const x = pad.left + i*step;
@@ -3636,7 +3567,6 @@ function drawMonthChart(sortedMonths) {
   ctx.fillStyle = 'rgba(255,87,51,.1)';
   ctx.fill();
 
-  // Dots + labels
   sortedMonths.forEach(([m,v],i) => {
     const x = pad.left + i*step;
     const y = pad.top + ch - (v/mx)*ch;
@@ -3718,8 +3648,6 @@ loadBookings();
 loadHalls();
 loadPeriods();
 
-// Restore whichever tab the URL hash points to (so refresh/reload/shared
-// links keep the same tab instead of always resetting to Bookings).
 const validTabs = ['bookings','halls','blocked','contacts','teachers','students','reports','archive','settings','calview'];
 const initialTab = location.hash.replace('#', '');
 if (validTabs.includes(initialTab)) {
@@ -3749,8 +3677,6 @@ if (!isStandalone) {
     if (installBtn) installBtn.style.display = 'flex';
   } else {
     window.addEventListener('beforeinstallprompt', (e) => {
-      // Don't preventDefault() — let the browser's own automatic banner
-      // show too; the sidebar button stays as a manual backup.
       deferredInstallPrompt = e;
       if (installBtn) installBtn.style.display = 'flex';
     });
