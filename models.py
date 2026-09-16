@@ -135,9 +135,6 @@ class Booking(db.Model):
     event_title   = db.Column(db.String(300))
     booking_date  = db.Column(db.String(10), nullable=False)   # yyyy-MM-dd
 
-    # ── حقل اسم من اعتمد الحجز ──
-    approved_by   = db.Column(db.String(200))
-
     # ── Academic-structure fields (stage/grade/section/period) ─────────────
     stage_id       = db.Column(db.Integer, db.ForeignKey('stages.id'))
     grade_id       = db.Column(db.Integer, db.ForeignKey('grades.id'))
@@ -163,6 +160,7 @@ class Booking(db.Model):
     reject_reason = db.Column(db.Text)
     cc_emails     = db.Column(db.Text)   # semicolon-separated
     action_date   = db.Column(db.DateTime)
+    approved_by   = db.Column(db.String(200))  # name of whoever approved the booking
 
     def to_dict(self):
         return {
@@ -190,8 +188,8 @@ class Booking(db.Model):
             'att': [a for a in (self.attachments or '').split(',') if a and '[DEL]' not in a],
             'status': self.status,
             'rejectReason': self.reject_reason or '',
-            'cc': self.cc_emails or '',
             'approvedBy': self.approved_by or '',
+            'cc': self.cc_emails or '',
         }
 
 
@@ -374,7 +372,6 @@ def init_db(app):
                 ('trolley_code', 'VARCHAR(50)'), ('stage_name', 'VARCHAR(200)'),
                 ('grade_name', 'VARCHAR(100)'), ('section_name', 'VARCHAR(100)'),
                 ('period_number', 'INTEGER'),
-                ('approved_by', 'VARCHAR(200)'),
             ]:
                 conn.exec_driver_sql(f"ALTER TABLE bookings ADD COLUMN IF NOT EXISTS {col} {coltype}")
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS stage_id INTEGER")
@@ -390,6 +387,7 @@ def init_db(app):
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notify_approved BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS approved_by VARCHAR(200)")
             # Contacts can now repeat the same email across different stages —
             # drop the old single-column unique constraint if present.
             try:
