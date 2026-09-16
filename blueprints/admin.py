@@ -113,9 +113,6 @@ def api_update_settings():
 @admin_bp.route('/api/print-queue')
 @login_required
 def api_print_queue():
-    """Approved bookings whose delivery receipt hasn't been auto-printed
-    yet — polled by whichever single browser is designated as the print
-    station (see localStorage flag on the client side)."""
     if not AppSetting.get_bool('auto_print_receipts', False):
         return jsonify([])
     bookings = (Booking.query
@@ -175,8 +172,6 @@ def api_push_unsubscribe():
 @admin_bp.route('/api/push-debug')
 @login_required
 def api_push_debug():
-    """Quick diagnostic: how many push subscriptions are currently stored,
-    and can the pywebpush library actually be imported on this server."""
     count = PushSubscription.query.count()
     try:
         import pywebpush
@@ -224,8 +219,10 @@ def api_approve():
     if not b:
         return jsonify({'success': False, 'error': 'غير موجود'}), 404
 
-    b.status      = 'approved'
-    b.action_date = datetime.utcnow()
+    b.status           = 'approved'
+    b.action_date      = datetime.utcnow()
+    b.approved_at      = datetime.utcnow()
+    b.approved_by_name = current_app.config.get('ADMIN_USER', 'الإدارة')
     db.session.commit()
 
     base_url = current_app.config.get('BASE_URL', '')
@@ -233,21 +230,15 @@ def api_approve():
 
     print(f"[email] DEBUG: approve started for {req_id}", flush=True)
     try:
-        print("[email] DEBUG: building context...", flush=True)
         ctx = _booking_email_ctx(b)
-        print(f"[email] DEBUG: context built, email={ctx.get('email')}", flush=True)
         contacts = get_approved_notify_emails(b.stage_id)
         contacts = [{'email': e} for e in contacts]
-        print(f"[email] DEBUG: contacts fetched, count={len(contacts)}", flush=True)
         send_staff_notification('approve', ctx, contacts)
-        print("[email] DEBUG: send_staff_notification returned", flush=True)
         ctx2 = _booking_email_ctx(b, checkoutUrl=checkout_url)
         send_approve(ctx2)
-        print("[email] DEBUG: send_approve returned", flush=True)
     except Exception as e:
         import traceback
         print(f"[email] notification failed: {e}", flush=True)
-        print(f"[email] TRACEBACK: {traceback.format_exc()}", flush=True)
 
     try:
         from utils.push_utils import send_push_to_all
@@ -265,8 +256,6 @@ def api_approve():
 @admin_bp.route('/api/complete', methods=['POST'])
 @login_required
 def api_complete():
-    """Manually close out an approved booking once the trolley has been
-    returned and everything is settled."""
     data   = request.get_json(silent=True) or {}
     req_id = data.get('reqId', '')
 
@@ -428,11 +417,6 @@ def api_update_booking():
 
 
 def _delete_bookings_safely(bookings):
-    """Deletes bookings along with everything that references them
-    (device-handover records and scheduled reminders) — Postgres enforces
-    the foreign keys strictly, so deleting a Booking directly while a
-    BookingCheckout or BookingReminder still points to it raises an
-    IntegrityError and aborts the whole request."""
     booking_ids = [b.id for b in bookings]
     if not booking_ids:
         return 0
@@ -479,8 +463,6 @@ def api_bulk_delete():
 @admin_bp.route('/api/halls')
 @login_required
 def api_halls():
-    """Kept at the same URL for compatibility with the dashboard JS.
-    Returns stages with their nested grades/sections."""
     stages = Stage.query.order_by(Stage.sort_order).all()
     return jsonify([s.to_dict(with_grades=True) for s in stages])
 
@@ -733,7 +715,7 @@ def api_add_blocked():
     blk = BlockedPeriod(
         from_date = data['fromDate'],
         to_date   = data['toDate'],
-        hall      = data.get('hall', ''),   # trolley_code, or '' = all stages
+        hall      = data.get('hall', ''),
         from_time = data.get('fromTime', ''),
         to_time   = data.get('toTime', ''),
         reason    = data.get('reason', ''),
@@ -852,10 +834,6 @@ def api_add_teacher():
 @admin_bp.route('/api/bulk-add-teachers', methods=['POST'])
 @login_required
 def api_bulk_add_teachers():
-    """Bulk import from a pasted/uploaded CSV-like list.
-    Each item: {name, email, phone, stage, grade, section} — stage/grade/
-    section are matched by NAME text (Arabic or English), so one file can
-    mix teachers from different stages/sections. All optional except name."""
     data  = request.get_json(silent=True) or {}
     items = data.get('list', [])
     added = 0
@@ -926,8 +904,6 @@ def api_delete_teachers_bulk():
 @admin_bp.route('/api/move-teachers-bulk', methods=['POST'])
 @login_required
 def api_move_teachers_bulk():
-    """Reassign a batch of teachers to a different stage. Clears any
-    grade/section they had, since those belonged to the old stage."""
     data = request.get_json(silent=True) or {}
     ids = data.get('ids', [])
     stage_id = data.get('stageId')
@@ -983,9 +959,6 @@ def api_add_student():
 @admin_bp.route('/api/bulk-add-students', methods=['POST'])
 @login_required
 def api_bulk_add_students():
-    """Each item: {name, sectionId} (manual add flow, unchanged) OR
-    {name, stage, grade, section} (CSV bulk import — matched by name text,
-    so one file can mix students from different sections)."""
     data  = request.get_json(silent=True) or {}
     items = data.get('list', [])
     added = 0
@@ -1024,12 +997,6 @@ def api_bulk_add_students():
 @admin_bp.route('/api/import-roster-autocreate', methods=['POST'])
 @login_required
 def api_import_roster_autocreate():
-    """One-time bulk import for external rosters (e.g. RasjoNet exports).
-    Accepts EITHER shape per row:
-      - {name, classCode}                  e.g. classCode='8CSA'
-      - {name, stage, grade, section}      e.g. stage='Secondary Stage', grade='Grade 9', section='CSA'
-    Either way, any missing Stage/Grade/Section is auto-created and reused
-    on repeat matches — nothing is ever duplicated across rows."""
     import re
     from sqlalchemy import func
 
@@ -1041,7 +1008,7 @@ def api_import_roster_autocreate():
 
     data = request.get_json(silent=True) or {}
     items = data.get('list', [])
-    primary_max = int(data.get('primaryMaxGrade', 6))  # grades <= this go to stage[0]
+    primary_max = int(data.get('primaryMaxGrade', 6))
 
     stages = Stage.query.order_by(Stage.sort_order).all()
     if len(stages) < 2:
@@ -1053,8 +1020,8 @@ def api_import_roster_autocreate():
             (func.lower(Stage.name_ar) == text.lower()) | (func.lower(Stage.name_en) == text.lower())
         ).first()
 
-    grade_cache = {}    # (stage_id, key) -> Grade
-    section_cache = {}  # (grade_id, key) -> Section
+    grade_cache = {}
+    section_cache = {}
     added = 0
     errors = []
 
@@ -1077,7 +1044,7 @@ def api_import_roster_autocreate():
                 continue
             grade_num = int(m.group(1))
             section_code = m.group(2).strip() or 'عام'
-            grade_label = grade_num  # used only to build the default name_ar/name_en below
+            grade_label = grade_num
         elif grade_text and section_text:
             num_match = re.search(r'\d{1,2}', grade_text)
             grade_num = int(num_match.group()) if num_match else None
@@ -1164,8 +1131,6 @@ def api_delete_students_bulk():
 @admin_bp.route('/api/move-student', methods=['POST'])
 @login_required
 def api_move_student():
-    """Transfer one student to a different section (e.g. mid-year class
-    changes). Stage/grade are derived from the destination section."""
     data = request.get_json(silent=True) or {}
     stu = Student.query.get(data.get('id'))
     if not stu:
@@ -1184,8 +1149,6 @@ def api_move_student():
 @admin_bp.route('/api/move-students-bulk', methods=['POST'])
 @login_required
 def api_move_students_bulk():
-    """Move every student currently in one section to another — handy for
-    a whole-class transfer instead of one student at a time."""
     data = request.get_json(silent=True) or {}
     from_section = Section.query.get(data.get('fromSectionId'))
     to_section   = Section.query.get(data.get('toSectionId'))
@@ -1217,8 +1180,6 @@ def api_get_checkout(req_id):
 @admin_bp.route('/api/checkout-report')
 @login_required
 def api_checkout_report():
-    """Full device-handover history across all bookings, plus the list of
-    approved/completed bookings that still have no handover record."""
     checkouts = BookingCheckout.query.all()
     lines_out = []
     covered_booking_ids = set()
@@ -1273,7 +1234,7 @@ def api_send_checkout_report():
     return jsonify({'success': ok, 'error': None if ok else 'تعذّر إرسال البريد — تأكد من إعدادات البريد بالخادم'})
 
 
-# ── Archive old data (export-then-delete, to stay within storage limits) ──
+# ── Archive old data ──────────────────────────────────────────────────────
 @admin_bp.route('/api/archive-preview')
 @login_required
 def api_archive_preview():
@@ -1314,7 +1275,7 @@ def api_archive_export():
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
         b_io = io.StringIO()
-        b_io.write('\ufeff')  # BOM so Excel opens Arabic text correctly
+        b_io.write('\ufeff')
         writer = csv.writer(b_io)
         writer.writerow(['reqId', 'name', 'email', 'phone', 'title', 'bookingDate', 'stage', 'grade',
                          'section', 'periodNumber', 'startTime', 'endTime', 'status', 'notes',
@@ -1363,8 +1324,6 @@ def api_archive_delete():
     if not booking_ids:
         return jsonify({'success': True, 'deletedBookings': 0, 'deletedCheckouts': 0})
 
-    # Delete dependent checkout data first — Booking has no ORM-level
-    # cascade to BookingCheckout, and the FK would otherwise block deletion.
     checkouts = BookingCheckout.query.filter(BookingCheckout.booking_id.in_(booking_ids)).all()
     checkout_count = len(checkouts)
     for co in checkouts:
@@ -1378,13 +1337,10 @@ def api_archive_delete():
     return jsonify({'success': True, 'deletedBookings': deleted_count, 'deletedCheckouts': checkout_count})
 
 
-# ── Scheduled reminders (admin picks an exact date/time per booking) ──────
+# ── Scheduled reminders ───────────────────────────────────────────────────
 @admin_bp.route('/api/booking-reminder')
 @login_required
 def api_get_booking_reminder():
-    """Return the pending (unsent) ADMIN reminder for a booking, if any —
-    a teacher's own reminder on the same booking is entirely separate and
-    never shown or touched here."""
     req_id = request.args.get('reqId', '')
     b = Booking.query.filter_by(req_id=req_id).first()
     if not b:
@@ -1399,7 +1355,7 @@ def api_get_booking_reminder():
 def api_schedule_reminder():
     data = request.get_json(silent=True) or {}
     req_id = data.get('reqId', '')
-    remind_at_str = data.get('remindAt', '')  # expected "YYYY-MM-DDTHH:MM" from <input type="datetime-local">
+    remind_at_str = data.get('remindAt', '')
     recipient_email = sanitize_email(data.get('recipientEmail', ''))
     note = (data.get('note') or '').strip()
 
@@ -1418,16 +1374,11 @@ def api_schedule_reminder():
     except ValueError:
         return jsonify({'success': False, 'error': 'صيغة التاريخ/الوقت غير صحيحة'}), 400
 
-    # The picker gives the admin's local wall-clock time (Jordan, UTC+3, no
-    # DST) — compare against local "now", not UTC, or every reminder would
-    # look 3 hours further in the future than the admin actually meant.
     from datetime import timedelta
     jordan_now = datetime.utcnow() + timedelta(hours=3)
     if remind_at <= jordan_now:
         return jsonify({'success': False, 'error': 'يجب أن يكون وقت التذكير بالمستقبل'}), 400
 
-    # Replace any existing pending ADMIN reminder for this booking — a
-    # teacher's own reminder on the same booking is untouched, by design.
     BookingReminder.query.filter_by(booking_id=b.id, sent=False, kind='admin').delete()
     db.session.add(BookingReminder(booking_id=b.id, remind_at=remind_at,
                                     recipient_email=recipient_email, note=note, kind='admin'))
@@ -1438,7 +1389,6 @@ def api_schedule_reminder():
 @admin_bp.route('/api/cancel-reminder', methods=['POST'])
 @login_required
 def api_cancel_reminder():
-    """Cancels the admin's own pending reminder only — never a teacher's."""
     data = request.get_json(silent=True) or {}
     req_id = data.get('reqId', '')
     b = Booking.query.filter_by(req_id=req_id).first()
