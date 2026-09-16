@@ -113,6 +113,9 @@ def api_update_settings():
 @admin_bp.route('/api/print-queue')
 @login_required
 def api_print_queue():
+    """Approved bookings whose delivery receipt hasn't been auto-printed
+    yet — polled by whichever single browser is designated as the print
+    station (see localStorage flag on the client side)."""
     if not AppSetting.get_bool('auto_print_receipts', False):
         return jsonify([])
     bookings = (Booking.query
@@ -172,6 +175,8 @@ def api_push_unsubscribe():
 @admin_bp.route('/api/push-debug')
 @login_required
 def api_push_debug():
+    """Quick diagnostic: how many push subscriptions are currently stored,
+    and can the pywebpush library actually be imported on this server."""
     count = PushSubscription.query.count()
     try:
         import pywebpush
@@ -212,17 +217,20 @@ def api_stats():
 @admin_bp.route('/api/approve', methods=['POST'])
 @login_required
 def api_approve():
-    data   = request.get_json(silent=True) or {}
-    req_id = data.get('reqId', '')
+    data        = request.get_json(silent=True) or {}
+    req_id      = data.get('reqId', '')
+    approved_by = (data.get('approvedBy') or '').strip()
+
+    if not approved_by:
+        return jsonify({'success': False, 'error': 'اسم المعتمِد مطلوب'}), 400
 
     b = Booking.query.filter_by(req_id=req_id).first()
     if not b:
         return jsonify({'success': False, 'error': 'غير موجود'}), 404
 
-    b.status       = 'approved'
-    b.action_date  = datetime.utcnow()
-    b.approved_at      = datetime.utcnow()
-    b.approved_by_name = current_app.config.get('ADMIN_USER', 'الإدارة')
+    b.status      = 'approved'
+    b.action_date = datetime.utcnow()
+    b.approved_by = approved_by
     db.session.commit()
 
     base_url = current_app.config.get('BASE_URL', '')
@@ -230,15 +238,21 @@ def api_approve():
 
     print(f"[email] DEBUG: approve started for {req_id}", flush=True)
     try:
+        print("[email] DEBUG: building context...", flush=True)
         ctx = _booking_email_ctx(b)
+        print(f"[email] DEBUG: context built, email={ctx.get('email')}", flush=True)
         contacts = get_approved_notify_emails(b.stage_id)
         contacts = [{'email': e} for e in contacts]
+        print(f"[email] DEBUG: contacts fetched, count={len(contacts)}", flush=True)
         send_staff_notification('approve', ctx, contacts)
+        print("[email] DEBUG: send_staff_notification returned", flush=True)
         ctx2 = _booking_email_ctx(b, checkoutUrl=checkout_url)
         send_approve(ctx2)
+        print("[email] DEBUG: send_approve returned", flush=True)
     except Exception as e:
         import traceback
         print(f"[email] notification failed: {e}", flush=True)
+        print(f"[email] TRACEBACK: {traceback.format_exc()}", flush=True)
 
     try:
         from utils.push_utils import send_push_to_all
@@ -256,6 +270,8 @@ def api_approve():
 @admin_bp.route('/api/complete', methods=['POST'])
 @login_required
 def api_complete():
+    """Manually close out an approved booking once the trolley has been
+    returned and everything is settled."""
     data   = request.get_json(silent=True) or {}
     req_id = data.get('reqId', '')
 
@@ -334,6 +350,7 @@ def api_set_pending():
 
     b.status        = 'pending'
     b.reject_reason = ''
+    b.approved_by   = ''
     b.action_date   = datetime.utcnow()
     db.session.commit()
 
@@ -417,6 +434,11 @@ def api_update_booking():
 
 
 def _delete_bookings_safely(bookings):
+    """Deletes bookings along with everything that references them
+    (device-handover records and scheduled reminders) — Postgres enforces
+    the foreign keys strictly, so deleting a Booking directly while a
+    BookingCheckout or BookingReminder still points to it raises an
+    IntegrityError and aborts the whole request."""
     booking_ids = [b.id for b in bookings]
     if not booking_ids:
         return 0
@@ -463,6 +485,8 @@ def api_bulk_delete():
 @admin_bp.route('/api/halls')
 @login_required
 def api_halls():
+    """Kept at the same URL for compatibility with the dashboard JS.
+    Returns stages with their nested grades/sections."""
     stages = Stage.query.order_by(Stage.sort_order).all()
     return jsonify([s.to_dict(with_grades=True) for s in stages])
 
@@ -715,7 +739,7 @@ def api_add_blocked():
     blk = BlockedPeriod(
         from_date = data['fromDate'],
         to_date   = data['toDate'],
-        hall      = data.get('hall', ''),
+        hall      = data.get('hall', ''),   # trolley_code, or '' = all stages
         from_time = data.get('fromTime', ''),
         to_time   = data.get('toTime', ''),
         reason    = data.get('reason', ''),
@@ -834,6 +858,10 @@ def api_add_teacher():
 @admin_bp.route('/api/bulk-add-teachers', methods=['POST'])
 @login_required
 def api_bulk_add_teachers():
+    """Bulk import from a pasted/uploaded CSV-like list.
+    Each item: {name, email, phone, stage, grade, section} — stage/grade/
+    section are matched by NAME text (Arabic or English), so one file can
+    mix teachers from different stages/sections. All optional except name."""
     data  = request.get_json(silent=True) or {}
     items = data.get('list', [])
     added = 0
@@ -885,5 +913,543 @@ def api_delete_teacher():
     if not tch:
         return jsonify({'success': False, 'error': 'غير موجود'}), 404
     db.session.delete(tch)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/delete-teachers-bulk', methods=['POST'])
+@login_required
+def api_delete_teachers_bulk():
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'success': False, 'error': 'لم يتم تحديد أي معلم'}), 400
+    count = Teacher.query.filter(Teacher.id.in_(ids)).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify({'success': True, 'count': count})
+
+
+@admin_bp.route('/api/move-teachers-bulk', methods=['POST'])
+@login_required
+def api_move_teachers_bulk():
+    """Reassign a batch of teachers to a different stage. Clears any
+    grade/section they had, since those belonged to the old stage."""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    stage_id = data.get('stageId')
+    if not ids:
+        return jsonify({'success': False, 'error': 'لم يتم تحديد أي معلم'}), 400
+    stage = Stage.query.get(stage_id) if stage_id else None
+    if stage_id and not stage:
+        return jsonify({'success': False, 'error': 'المرحلة غير موجودة'}), 400
+
+    teachers = Teacher.query.filter(Teacher.id.in_(ids)).all()
+    for tch in teachers:
+        tch.stage_id = stage.id if stage else None
+        tch.grade_id = None
+        tch.section_id = None
+    db.session.commit()
+    return jsonify({'success': True, 'count': len(teachers)})
+
+
+# ── Students API ──────────────────────────────────────────────────────────
+@admin_bp.route('/api/students')
+@login_required
+def api_students():
+    section_id = request.args.get('sectionId', type=int)
+    grade_id = request.args.get('gradeId', type=int)
+    stage_id = request.args.get('stageId', type=int)
+    q = Student.query
+    if section_id:
+        q = q.filter_by(section_id=section_id)
+    elif grade_id:
+        q = q.filter_by(grade_id=grade_id)
+    elif stage_id:
+        q = q.filter_by(stage_id=stage_id)
+    students = q.order_by(Student.name).all()
+    return jsonify([s.to_dict() for s in students])
+
+
+@admin_bp.route('/api/add-student', methods=['POST'])
+@login_required
+def api_add_student():
+    data = request.get_json(silent=True) or {}
+    if not data.get('name') or not data.get('sectionId'):
+        return jsonify({'success': False, 'error': 'اسم الطالب والشعبة مطلوبان'}), 400
+    section = Section.query.get(data['sectionId'])
+    if not section:
+        return jsonify({'success': False, 'error': 'الشعبة غير موجودة'}), 400
+    stu = Student(name=data['name'], stage_id=section.grade.stage_id,
+                  grade_id=section.grade_id, section_id=section.id)
+    db.session.add(stu)
+    db.session.commit()
+    return jsonify({'success': True, 'id': stu.id})
+
+
+@admin_bp.route('/api/bulk-add-students', methods=['POST'])
+@login_required
+def api_bulk_add_students():
+    """Each item: {name, sectionId} (manual add flow, unchanged) OR
+    {name, stage, grade, section} (CSV bulk import — matched by name text,
+    so one file can mix students from different sections)."""
+    data  = request.get_json(silent=True) or {}
+    items = data.get('list', [])
+    added = 0
+    errors = []
+    for item in items:
+        name = (item.get('name') or '').strip()
+        if not name:
+            continue
+
+        section_id = item.get('sectionId')
+        if section_id:
+            section = Section.query.get(section_id)
+            if not section:
+                errors.append(f'{name}: الشعبة غير موجودة')
+                continue
+            db.session.add(Student(
+                name=name, stage_id=section.grade.stage_id,
+                grade_id=section.grade_id, section_id=section.id,
+            ))
+            added += 1
+            continue
+
+        stage, grade, section, err = resolve_stage_grade_section_by_name(
+            item.get('stage', ''), item.get('grade', ''), item.get('section', ''))
+        if err or not section:
+            errors.append(f'{name}: {err or "الشعبة مطلوبة"}')
+            continue
+        db.session.add(Student(
+            name=name, stage_id=stage.id, grade_id=grade.id, section_id=section.id,
+        ))
+        added += 1
+    db.session.commit()
+    return jsonify({'success': True, 'count': added, 'errors': errors})
+
+
+@admin_bp.route('/api/import-roster-autocreate', methods=['POST'])
+@login_required
+def api_import_roster_autocreate():
+    """One-time bulk import for external rosters (e.g. RasjoNet exports).
+    Accepts EITHER shape per row:
+      - {name, classCode}                  e.g. classCode='8CSA'
+      - {name, stage, grade, section}      e.g. stage='Secondary Stage', grade='Grade 9', section='CSA'
+    Either way, any missing Stage/Grade/Section is auto-created and reused
+    on repeat matches — nothing is ever duplicated across rows."""
+    import re
+    from sqlalchemy import func
+
+    ARABIC_ORDINALS = {
+        1: 'الأول', 2: 'الثاني', 3: 'الثالث', 4: 'الرابع', 5: 'الخامس',
+        6: 'السادس', 7: 'السابع', 8: 'الثامن', 9: 'التاسع', 10: 'العاشر',
+        11: 'الحادي عشر', 12: 'الثاني عشر',
+    }
+
+    data = request.get_json(silent=True) or {}
+    items = data.get('list', [])
+    primary_max = int(data.get('primaryMaxGrade', 6))  # grades <= this go to stage[0]
+
+    stages = Stage.query.order_by(Stage.sort_order).all()
+    if len(stages) < 2:
+        return jsonify({'success': False, 'error': 'يجب أن يكون هناك مرحلتان على الأقل'}), 400
+    default_primary, default_secondary = stages[0], stages[1]
+
+    def find_stage_by_text(text):
+        return Stage.query.filter(
+            (func.lower(Stage.name_ar) == text.lower()) | (func.lower(Stage.name_en) == text.lower())
+        ).first()
+
+    grade_cache = {}    # (stage_id, key) -> Grade
+    section_cache = {}  # (grade_id, key) -> Section
+    added = 0
+    errors = []
+
+    for item in items:
+        name = (item.get('name') or '').strip()
+        class_code = (item.get('classCode') or '').strip()
+        stage_text = (item.get('stage') or '').strip()
+        grade_text = (item.get('grade') or '').strip()
+        section_text = (item.get('section') or '').strip()
+        if not name:
+            continue
+
+        grade_num = None
+        section_code = None
+
+        if class_code:
+            m = re.match(r'^(\d{1,2})(.*)$', class_code)
+            if not m:
+                errors.append(f'{name}: تعذّر فهم رمز الصف "{class_code}"')
+                continue
+            grade_num = int(m.group(1))
+            section_code = m.group(2).strip() or 'عام'
+            grade_label = grade_num  # used only to build the default name_ar/name_en below
+        elif grade_text and section_text:
+            num_match = re.search(r'\d{1,2}', grade_text)
+            grade_num = int(num_match.group()) if num_match else None
+            section_code = section_text
+            grade_label = grade_text
+        else:
+            errors.append(f'{name}: بيانات الصف ناقصة (لا رمز صف ولا مرحلة/صف/شعبة كاملة)')
+            continue
+
+        if stage_text:
+            stage = find_stage_by_text(stage_text)
+            if not stage:
+                errors.append(f'{name}: المرحلة غير موجودة: {stage_text}')
+                continue
+        elif grade_num is not None:
+            stage = default_primary if grade_num <= primary_max else default_secondary
+        else:
+            errors.append(f'{name}: تعذّر تحديد المرحلة لعدم وجود رقم صف واضح')
+            continue
+
+        gkey = (stage.id, grade_text or grade_num)
+        grade = grade_cache.get(gkey)
+        if not grade:
+            if grade_num is not None and grade_num in ARABIC_ORDINALS:
+                grade_name_ar = f'الصف {ARABIC_ORDINALS[grade_num]}'
+            else:
+                grade_name_ar = grade_label if isinstance(grade_label, str) else str(grade_label)
+            grade_name_en = grade_text if grade_text else f'Grade {grade_num}'
+
+            grade = Grade.query.filter_by(stage_id=stage.id).filter(
+                (Grade.name_ar == grade_name_ar) | (Grade.name_en == grade_name_en)
+            ).first()
+            if not grade:
+                grade = Grade(stage_id=stage.id, name_ar=grade_name_ar, name_en=grade_name_en,
+                              sort_order=Grade.query.filter_by(stage_id=stage.id).count())
+                db.session.add(grade)
+                db.session.flush()
+            grade_cache[gkey] = grade
+
+        skey = (grade.id, section_code)
+        section = section_cache.get(skey)
+        if not section:
+            section = Section.query.filter_by(grade_id=grade.id).filter(
+                (Section.name_ar == section_code) | (Section.name_en == section_code)
+            ).first()
+            if not section:
+                section = Section(grade_id=grade.id, name_ar=section_code, name_en=section_code,
+                                   sort_order=Section.query.filter_by(grade_id=grade.id).count())
+                db.session.add(section)
+                db.session.flush()
+            section_cache[skey] = section
+
+        db.session.add(Student(name=name, stage_id=stage.id, grade_id=grade.id, section_id=section.id))
+        added += 1
+
+    db.session.commit()
+    return jsonify({'success': True, 'count': added, 'errors': errors})
+
+
+@admin_bp.route('/api/delete-student', methods=['POST'])
+@login_required
+def api_delete_student():
+    data = request.get_json(silent=True) or {}
+    stu = Student.query.get(data.get('id'))
+    if not stu:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    db.session.delete(stu)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/delete-students-bulk', methods=['POST'])
+@login_required
+def api_delete_students_bulk():
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'success': False, 'error': 'لم يتم تحديد أي طالب'}), 400
+    count = Student.query.filter(Student.id.in_(ids)).delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify({'success': True, 'count': count})
+
+
+@admin_bp.route('/api/move-student', methods=['POST'])
+@login_required
+def api_move_student():
+    """Transfer one student to a different section (e.g. mid-year class
+    changes). Stage/grade are derived from the destination section."""
+    data = request.get_json(silent=True) or {}
+    stu = Student.query.get(data.get('id'))
+    if not stu:
+        return jsonify({'success': False, 'error': 'الطالب غير موجود'}), 404
+    section = Section.query.get(data.get('sectionId'))
+    if not section:
+        return jsonify({'success': False, 'error': 'الشعبة الوجهة غير موجودة'}), 400
+
+    stu.section_id = section.id
+    stu.grade_id   = section.grade_id
+    stu.stage_id   = section.grade.stage_id
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/move-students-bulk', methods=['POST'])
+@login_required
+def api_move_students_bulk():
+    """Move every student currently in one section to another — handy for
+    a whole-class transfer instead of one student at a time."""
+    data = request.get_json(silent=True) or {}
+    from_section = Section.query.get(data.get('fromSectionId'))
+    to_section   = Section.query.get(data.get('toSectionId'))
+    if not from_section or not to_section:
+        return jsonify({'success': False, 'error': 'الشعبة غير موجودة'}), 400
+
+    students = Student.query.filter_by(section_id=from_section.id).all()
+    for stu in students:
+        stu.section_id = to_section.id
+        stu.grade_id   = to_section.grade_id
+        stu.stage_id   = to_section.grade.stage_id
+    db.session.commit()
+    return jsonify({'success': True, 'count': len(students)})
+
+
+# ── Checkout (laptop handover) viewing for audit ──────────────────────────
+@admin_bp.route('/api/checkout/<req_id>')
+@login_required
+def api_get_checkout(req_id):
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'غير موجود'}), 404
+    checkout = BookingCheckout.query.filter_by(booking_id=b.id).first()
+    if not checkout:
+        return jsonify({'success': True, 'checkout': None})
+    return jsonify({'success': True, 'checkout': checkout.to_dict()})
+
+
+@admin_bp.route('/api/checkout-report')
+@login_required
+def api_checkout_report():
+    """Full device-handover history across all bookings, plus the list of
+    approved/completed bookings that still have no handover record."""
+    checkouts = BookingCheckout.query.all()
+    lines_out = []
+    covered_booking_ids = set()
+    for co in checkouts:
+        b = Booking.query.get(co.booking_id)
+        if not b:
+            continue
+        covered_booking_ids.add(b.id)
+        for line in co.lines:
+            lines_out.append({
+                'reqId': b.req_id, 'teacher': b.name, 'date': b.booking_date,
+                'stage': b.stage_name, 'grade': b.grade_name, 'section': b.section_name,
+                'periodNumber': b.period_number,
+                'studentName': line.student_name, 'laptopNumber': line.laptop_number,
+                'notes': co.notes or '',
+            })
+
+    q = Booking.query.filter(Booking.status.in_(['approved', 'completed']))
+    if covered_booking_ids:
+        q = q.filter(~Booking.id.in_(covered_booking_ids))
+    missing = q.order_by(Booking.booking_date.desc()).all()
+
+    missing_out = [{
+        'reqId': b.req_id, 'teacher': b.name, 'email': b.email, 'date': b.booking_date,
+        'stage': b.stage_name, 'grade': b.grade_name, 'section': b.section_name,
+        'status': b.status,
+    } for b in missing]
+
+    return jsonify({'lines': lines_out, 'missing': missing_out})
+
+
+@admin_bp.route('/api/send-checkout-report', methods=['POST'])
+@login_required
+def api_send_checkout_report():
+    data = request.get_json(silent=True) or {}
+    emails = data.get('emails', [])
+    lines = data.get('lines', [])
+
+    valid_emails = [sanitize_email(e) for e in emails if is_valid_email(sanitize_email(e))]
+    if not valid_emails:
+        return jsonify({'success': False, 'error': 'لا يوجد بريد إلكتروني صحيح'}), 400
+    if not lines:
+        return jsonify({'success': False, 'error': 'لا توجد بيانات لإرسالها'}), 400
+
+    from utils.email_utils import send_checkout_report_email
+    try:
+        ok = send_checkout_report_email(valid_emails, lines)
+    except Exception as e:
+        print(f"[email] send_checkout_report_email failed: {e}", flush=True)
+        ok = False
+
+    return jsonify({'success': ok, 'error': None if ok else 'تعذّر إرسال البريد — تأكد من إعدادات البريد بالخادم'})
+
+
+# ── Archive old data (export-then-delete, to stay within storage limits) ──
+@admin_bp.route('/api/archive-preview')
+@login_required
+def api_archive_preview():
+    before_date = request.args.get('beforeDate', '')
+    if not before_date:
+        return jsonify({'error': 'التاريخ مطلوب'}), 400
+
+    bookings = Booking.query.filter(Booking.booking_date < before_date).all()
+    by_status = {}
+    for b in bookings:
+        by_status[b.status] = by_status.get(b.status, 0) + 1
+
+    booking_ids = [b.id for b in bookings]
+    checkout_count = (BookingCheckout.query.filter(BookingCheckout.booking_id.in_(booking_ids)).count()
+                       if booking_ids else 0)
+
+    return jsonify({'total': len(bookings), 'byStatus': by_status, 'checkoutCount': checkout_count})
+
+
+@admin_bp.route('/api/archive-export')
+@login_required
+def api_archive_export():
+    import io
+    import csv
+    import zipfile
+
+    before_date = request.args.get('beforeDate', '')
+    if not before_date:
+        return jsonify({'error': 'التاريخ مطلوب'}), 400
+
+    bookings = Booking.query.filter(Booking.booking_date < before_date).order_by(Booking.booking_date).all()
+    booking_ids = [b.id for b in bookings]
+    booking_map = {b.id: b for b in bookings}
+
+    checkouts = (BookingCheckout.query.filter(BookingCheckout.booking_id.in_(booking_ids)).all()
+                 if booking_ids else [])
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        b_io = io.StringIO()
+        b_io.write('\ufeff')  # BOM so Excel opens Arabic text correctly
+        writer = csv.writer(b_io)
+        writer.writerow(['reqId', 'name', 'email', 'phone', 'title', 'bookingDate', 'stage', 'grade',
+                         'section', 'periodNumber', 'startTime', 'endTime', 'status', 'notes',
+                         'rejectReason', 'createdAt'])
+        for b in bookings:
+            writer.writerow([
+                b.req_id, b.name, b.email, b.phone or '', b.event_title or '', b.booking_date,
+                b.stage_name or '', b.grade_name or '', b.section_name or '', b.period_number or '',
+                b.start_time or '', b.end_time or '', b.status, b.notes or '', b.reject_reason or '',
+                b.created_at.isoformat() if b.created_at else '',
+            ])
+        zf.writestr('bookings.csv', b_io.getvalue())
+
+        c_io = io.StringIO()
+        c_io.write('\ufeff')
+        writer2 = csv.writer(c_io)
+        writer2.writerow(['reqId', 'teacher', 'date', 'studentName', 'laptopNumber'])
+        for co in checkouts:
+            b = booking_map.get(co.booking_id)
+            for line in co.lines:
+                writer2.writerow([
+                    b.req_id if b else '', b.name if b else '', b.booking_date if b else '',
+                    line.student_name or '', line.laptop_number if line.laptop_number is not None else '',
+                ])
+        zf.writestr('checkout_lines.csv', c_io.getvalue())
+
+    buf.seek(0)
+    filename = f'archive_before_{before_date}.zip'
+    return send_file(buf, mimetype='application/zip', as_attachment=True, download_name=filename)
+
+
+@admin_bp.route('/api/archive-delete', methods=['POST'])
+@login_required
+def api_archive_delete():
+    data = request.get_json(silent=True) or {}
+    before_date = data.get('beforeDate', '')
+    confirm = data.get('confirm', False)
+
+    if not before_date:
+        return jsonify({'success': False, 'error': 'التاريخ مطلوب'}), 400
+    if not confirm:
+        return jsonify({'success': False, 'error': 'يجب تأكيد العملية'}), 400
+
+    bookings = Booking.query.filter(Booking.booking_date < before_date).all()
+    booking_ids = [b.id for b in bookings]
+    if not booking_ids:
+        return jsonify({'success': True, 'deletedBookings': 0, 'deletedCheckouts': 0})
+
+    # Delete dependent checkout data first — Booking has no ORM-level
+    # cascade to BookingCheckout, and the FK would otherwise block deletion.
+    checkouts = BookingCheckout.query.filter(BookingCheckout.booking_id.in_(booking_ids)).all()
+    checkout_count = len(checkouts)
+    for co in checkouts:
+        CheckoutLine.query.filter_by(checkout_id=co.id).delete()
+        db.session.delete(co)
+
+    deleted_count = len(booking_ids)
+    Booking.query.filter(Booking.id.in_(booking_ids)).delete(synchronize_session=False)
+    db.session.commit()
+
+    return jsonify({'success': True, 'deletedBookings': deleted_count, 'deletedCheckouts': checkout_count})
+
+
+# ── Scheduled reminders (admin picks an exact date/time per booking) ──────
+@admin_bp.route('/api/booking-reminder')
+@login_required
+def api_get_booking_reminder():
+    """Return the pending (unsent) ADMIN reminder for a booking, if any —
+    a teacher's own reminder on the same booking is entirely separate and
+    never shown or touched here."""
+    req_id = request.args.get('reqId', '')
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'reminder': None})
+    reminder = (BookingReminder.query.filter_by(booking_id=b.id, sent=False, kind='admin')
+                .order_by(BookingReminder.remind_at.desc()).first())
+    return jsonify({'reminder': reminder.to_dict() if reminder else None})
+
+
+@admin_bp.route('/api/schedule-reminder', methods=['POST'])
+@login_required
+def api_schedule_reminder():
+    data = request.get_json(silent=True) or {}
+    req_id = data.get('reqId', '')
+    remind_at_str = data.get('remindAt', '')  # expected "YYYY-MM-DDTHH:MM" from <input type="datetime-local">
+    recipient_email = sanitize_email(data.get('recipientEmail', ''))
+    note = (data.get('note') or '').strip()
+
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'الحجز غير موجود'}), 404
+    if b.status not in ('approved', 'completed'):
+        return jsonify({'success': False, 'error': 'التذكير متاح فقط للحجوزات المعتمدة'}), 400
+    if not remind_at_str:
+        return jsonify({'success': False, 'error': 'التاريخ والوقت مطلوبان'}), 400
+    if not is_valid_email(recipient_email):
+        return jsonify({'success': False, 'error': 'بريد إلكتروني صحيح مطلوب لاستلام التذكير'}), 400
+
+    try:
+        remind_at = datetime.strptime(remind_at_str, '%Y-%m-%dT%H:%M')
+    except ValueError:
+        return jsonify({'success': False, 'error': 'صيغة التاريخ/الوقت غير صحيحة'}), 400
+
+    # The picker gives the admin's local wall-clock time (Jordan, UTC+3, no
+    # DST) — compare against local "now", not UTC, or every reminder would
+    # look 3 hours further in the future than the admin actually meant.
+    from datetime import timedelta
+    jordan_now = datetime.utcnow() + timedelta(hours=3)
+    if remind_at <= jordan_now:
+        return jsonify({'success': False, 'error': 'يجب أن يكون وقت التذكير بالمستقبل'}), 400
+
+    # Replace any existing pending ADMIN reminder for this booking — a
+    # teacher's own reminder on the same booking is untouched, by design.
+    BookingReminder.query.filter_by(booking_id=b.id, sent=False, kind='admin').delete()
+    db.session.add(BookingReminder(booking_id=b.id, remind_at=remind_at,
+                                    recipient_email=recipient_email, note=note, kind='admin'))
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/cancel-reminder', methods=['POST'])
+@login_required
+def api_cancel_reminder():
+    """Cancels the admin's own pending reminder only — never a teacher's."""
+    data = request.get_json(silent=True) or {}
+    req_id = data.get('reqId', '')
+    b = Booking.query.filter_by(req_id=req_id).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'الحجز غير موجود'}), 404
+    BookingReminder.query.filter_by(booking_id=b.id, sent=False, kind='admin').delete()
     db.session.commit()
     return jsonify({'success': True})
