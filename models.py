@@ -160,6 +160,7 @@ class Booking(db.Model):
     reject_reason = db.Column(db.Text)
     cc_emails     = db.Column(db.Text)   # semicolon-separated
     action_date   = db.Column(db.DateTime)
+    approved_by   = db.Column(db.String(200))  # name of whoever approved the booking
 
     def to_dict(self):
         return {
@@ -187,6 +188,7 @@ class Booking(db.Model):
             'att': [a for a in (self.attachments or '').split(',') if a and '[DEL]' not in a],
             'status': self.status,
             'rejectReason': self.reject_reason or '',
+            'approvedBy': self.approved_by or '',
             'cc': self.cc_emails or '',
         }
 
@@ -385,6 +387,7 @@ def init_db(app):
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notify_approved BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS approved_by VARCHAR(200)")
             # Contacts can now repeat the same email across different stages —
             # drop the old single-column unique constraint if present.
             try:
