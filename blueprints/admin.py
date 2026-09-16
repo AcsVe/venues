@@ -217,8 +217,12 @@ def api_stats():
 @admin_bp.route('/api/approve', methods=['POST'])
 @login_required
 def api_approve():
-    data   = request.get_json(silent=True) or {}
-    req_id = data.get('reqId', '')
+    data        = request.get_json(silent=True) or {}
+    req_id      = data.get('reqId', '')
+    approved_by = (data.get('approvedBy') or '').strip()
+
+    if not approved_by:
+        return jsonify({'success': False, 'error': 'اسم المعتمِد مطلوب'}), 400
 
     b = Booking.query.filter_by(req_id=req_id).first()
     if not b:
@@ -226,6 +230,7 @@ def api_approve():
 
     b.status      = 'approved'
     b.action_date = datetime.utcnow()
+    b.approved_by = approved_by
     db.session.commit()
 
     base_url = current_app.config.get('BASE_URL', '')
@@ -345,6 +350,7 @@ def api_set_pending():
 
     b.status        = 'pending'
     b.reject_reason = ''
+    b.approved_by   = ''
     b.action_date   = datetime.utcnow()
     db.session.commit()
 
