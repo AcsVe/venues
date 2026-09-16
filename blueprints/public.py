@@ -90,7 +90,6 @@ def month_data():
             if cur > blk.to_date:
                 break
 
-    # Public view: hide sensitive details for privacy
     public_bookings = []
     for b in bookings:
         public_bookings.append({
@@ -133,8 +132,6 @@ def book():
 
 
 def _resolve_selection(data):
-    """Look up Stage/Grade/Section/Period objects from posted ids.
-    Returns (stage, grade, section, period, error)."""
     try:
         stage_id  = int(data.get('stageId'))
         grade_id  = int(data.get('gradeId'))
@@ -253,14 +250,11 @@ def submit_booking():
     db.session.add(booking)
     db.session.commit()
 
-    # Optional: the teacher can ask to be reminded about their own booking
-    # at a specific date/time. Best-effort — an invalid/missing value is
-    # silently skipped rather than failing the whole booking submission.
     reminder_at_str = (f.get('reminderAt') or '').strip()
     if reminder_at_str:
         try:
             reminder_at = datetime.strptime(reminder_at_str, '%Y-%m-%dT%H:%M')
-            if reminder_at > datetime.utcnow() + timedelta(hours=3):  # Jordan local "now"
+            if reminder_at > datetime.utcnow() + timedelta(hours=3):
                 db.session.add(BookingReminder(
                     booking_id=booking.id, remind_at=reminder_at,
                     recipient_email=booking.email, kind='teacher',
@@ -284,8 +278,10 @@ def submit_booking():
     auto_approve = AppSetting.get_bool('auto_approve_bookings', False)
 
     if auto_approve:
-        booking.status = 'approved'
-        booking.action_date = datetime.utcnow()
+        booking.status           = 'approved'
+        booking.action_date      = datetime.utcnow()
+        booking.approved_at      = datetime.utcnow()
+        booking.approved_by_name = 'اعتماد تلقائي (Auto-Approve)'
         db.session.commit()
         checkout_url = f"{base_url}/checkout/{req_id}" if base_url and not AppSetting.get_bool('disable_checkout_form_link', False) else ''
         try:
@@ -498,8 +494,6 @@ def api_teacher_names():
 
 @public_bp.route('/api/teacher-lookup')
 def api_teacher_lookup():
-    """Used by the booking form: when a name matches a teacher on the
-    roster, auto-fill their email and assigned stage/grade/section, if any."""
     name = (request.args.get('name') or '').strip()
     if not name:
         return jsonify({'found': False})
@@ -547,7 +541,7 @@ def checkout_form(req_id):
 def api_submit_checkout():
     data = request.get_json(silent=True) or {}
     req_id = data.get('reqId', '')
-    entries = data.get('entries', [])  # [{studentId, laptopNumber}]
+    entries = data.get('entries', [])
 
     b = Booking.query.filter_by(req_id=req_id).first()
     if not b:
@@ -555,7 +549,6 @@ def api_submit_checkout():
     if b.status not in ('approved', 'completed'):
         return jsonify({'success': False, 'error': 'الحجز غير معتمد بعد'}), 400
 
-    # Validate laptop numbers: within range, and no duplicate assignment
     seen_numbers = {}
     clean_entries = []
     for e in entries:
@@ -587,7 +580,7 @@ def api_submit_checkout():
         db.session.add(checkout)
         db.session.flush()
     checkout.submitted_at = datetime.utcnow()
-    checkout.notes = (data.get('notes') or '').strip()[:2000]  # generous cap, still bounded
+    checkout.notes = (data.get('notes') or '').strip()[:2000]
 
     students_map = {s.id: s.name for s in Student.query.filter(
         Student.id.in_([sid for sid, _ in clean_entries])).all()}
@@ -656,8 +649,6 @@ def api_available_periods():
 
 
 # ── One-click approve/reject from the staff notification email ────────────
-# No admin login required — secured by a per-booking random token instead,
-# so an admin can act straight from their inbox without opening the panel.
 def _booking_action_ctx(b, **extra):
     ctx = {
         'reqId': b.req_id, 'name': b.name, 'email': b.email,
@@ -703,17 +694,21 @@ def quick_approve(req_id):
     if not b or not b.action_token or token != b.action_token:
         return _action_error_page('رابط غير صالح أو منتهي الصلاحية.', 'Invalid or expired link.'), 403
 
+    # التعديل رقم 3: إظهار اسم معتمد الحجز وتاريخ الاعتماد عند المحاولة المكررة
     if b.status != 'pending':
-        return _action_result_page(
-            'تم التعامل مع هذا الحجز مسبقاً', 'Already Handled',
-            f'حالة الحجز الحالية: {b.status}. لا حاجة لأي إجراء إضافي.',
-            f'Current status: {b.status}. No further action needed.', '#247680')
+        approver = b.approved_by_name or 'المسؤول الإداري'
+        app_date = b.approved_at.strftime('%Y-%m-%d %H:%M') if b.approved_at else ''
+        msg_ar = f'حالة الحجز الحالية: {b.status}. معتمد مسبقاً بواسطة: {approver}' + (f' بتاريخ {app_date}' if app_date else '')
+        msg_en = f'Current status: {b.status}. Already approved by: {approver}' + (f' on {app_date}' if app_date else '')
+        return _action_result_page('تم التعامل مع هذا الحجز مسبقاً', 'Already Handled', msg_ar, msg_en, '#247680')
 
     base_url = current_app.config.get('BASE_URL', '')
     checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url and not AppSetting.get_bool('disable_checkout_form_link', False) else ''
 
-    b.status = 'approved'
-    b.action_date = datetime.utcnow()
+    b.status           = 'approved'
+    b.action_date      = datetime.utcnow()
+    b.approved_at      = datetime.utcnow()
+    b.approved_by_name = 'إعتماد سريع (عبر البريد)'
     db.session.commit()
 
     try:
