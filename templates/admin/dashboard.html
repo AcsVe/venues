@@ -889,6 +889,19 @@
   </div>
 </div>
 
+<!-- ── APPROVE MODAL ── -->
+<div class="modal-overlay" id="approveModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title"><i class="fas fa-check-circle"></i> اعتماد الحجز</div>
+    <input type="hidden" id="approveReqId">
+    <div class="form-group"><label>اسم من يعتمد الحجز</label><input type="text" id="approveByName" placeholder="أدخل اسمك..."></div>
+    <div class="modal-footer">
+      <button class="btn btn-green" onclick="confirmApprove()"><i class="fas fa-check"></i> اعتماد الحجز</button>
+      <button class="btn btn-outline" onclick="closeModal('approveModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── REJECT MODAL ── -->
 <div class="modal-overlay" id="rejectModal">
   <div class="modal" style="max-width:400px">
@@ -1174,6 +1187,11 @@ const I18N_EN = {
   "إيصال تسليم": "Delivery Receipt",
   "الإعدادات": "Settings",
   "عدد الأجهزة المسلَّمة": "Devices Handed Out",
+  "اعتماد الحجز": "Approve Booking",
+  "اسم من يعتمد الحجز": "Approver's Name",
+  "أدخل اسمك...": "Enter your name...",
+  "اعتمد من قبل": "Approved By",
+  "طباعة نموذج تسجيل الطلبة": "Print Student Registration Form",
 };
 
 const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
@@ -1535,7 +1553,7 @@ function renderTable() {
       <td>
         <div class="action-btns">
           <button class="btn btn-blue btn-sm" onclick="openDetail('${b.reqId}')" title="${t('عرض التفاصيل')}"><i class="fas fa-eye"></i></button>
-          ${b.status==='pending'?`<button class="btn btn-green btn-sm" onclick="quickApprove('${b.reqId}')" title="${t('موافقة')}"><i class="fas fa-check"></i></button>`:''}
+          ${b.status==='pending'?`<button class="btn btn-green btn-sm" onclick="openApprove('${b.reqId}')" title="${t('موافقة')}"><i class="fas fa-check"></i></button>`:''}
           ${b.status==='pending'?`<button class="btn btn-red btn-sm" onclick="openReject('${b.reqId}')" title="${t('رفض')}"><i class="fas fa-times"></i></button>`:''}
           ${b.status==='approved'?`<button class="btn btn-blue btn-sm" onclick="quickComplete('${b.reqId}')" title="${t('اكتمل الحجز')}"><i class="fas fa-flag-checkered"></i></button>`:''}
           ${b.status!=='cancelled'&&b.status!=='rejected'&&b.status!=='completed'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')" title="${t('إلغاء')}"><i class="fas fa-ban"></i></button>`:''}
@@ -1565,10 +1583,22 @@ async function bulkDelete() {
   else showToast(data.error || 'خطأ', '#c0392b');
 }
 
-async function quickApprove(reqId) {
-  const data = await api('/admin/api/approve', {reqId});
-  if (data.success) { showToast('✅ تمت الموافقة'); loadBookings(); }
-  else showToast(data.error || 'خطأ', '#c0392b');
+function openApprove(reqId) {
+  document.getElementById('approveReqId').value = reqId;
+  document.getElementById('approveByName').value = localStorage.getItem('lastApproverName') || '';
+  openModal('approveModal');
+}
+async function confirmApprove() {
+  const reqId      = document.getElementById('approveReqId').value;
+  const approvedBy = document.getElementById('approveByName').value.trim();
+  if (!approvedBy) { alert(AR ? 'يرجى إدخال اسم من يعتمد الحجز' : 'Please enter the approver\'s name'); return; }
+  const data = await api('/admin/api/approve', {reqId, approvedBy});
+  if (data.success) {
+    localStorage.setItem('lastApproverName', approvedBy);
+    showToast('✅ تمت الموافقة');
+    closeModal('approveModal');
+    loadBookings();
+  } else showToast(data.error || 'خطأ', '#c0392b');
 }
 async function quickCancel(reqId) {
   if (!confirmT('إلغاء هذا الحجز؟')) return;
@@ -1682,6 +1712,7 @@ function openDetail(reqId) {
       ${drow('الشعبة', b.section||'-')} ${drow('الحصة', periodStr)}
       ${drow('التاريخ', b.date)}
       ${drow('ملاحظات', b.notes||'-')}
+      ${(b.status === 'approved' || b.status === 'completed') && b.approvedBy ? drow('اعتمد من قبل', `<span style="color:#27ae60;font-weight:700">${esc(b.approvedBy)}</span>`) : ''}
       ${b.rejectReason ? drow('سبب الرفض', `<span style="color:#c0392b">${esc(b.rejectReason)}</span>`) : ''}
       ${b.att&&b.att.length ? drow('المرفقات', b.att.map(u=>`<a href="${u}" target="_blank" style="color:var(--primary)"><i class="fas fa-paperclip"></i> ${t('ملف')}</a>`).join(' ')) : ''}
     </table>
@@ -1718,7 +1749,7 @@ function openDetail(reqId) {
     footer += `<button style="background:#FF5733;color:#fff;border:none;font-weight:700" class="btn" onclick="printDeliveryReceipt('${b.reqId}')" title="${t('إيصال تسليم')}"><i class="fas fa-receipt"></i> ${t('إيصال تسليم')}</button>`;
   }
   if (b.status === 'pending') {
-    footer += `<button class="btn btn-green" onclick="quickApprove('${b.reqId}');closeModal('bkModal')"><i class="fas fa-check"></i> موافقة</button>`;
+    footer += `<button class="btn btn-green" onclick="closeModal('bkModal');openApprove('${b.reqId}')"><i class="fas fa-check"></i> موافقة</button>`;
     footer += `<button class="btn btn-red" onclick="closeModal('bkModal');openReject('${b.reqId}')"><i class="fas fa-times"></i> رفض</button>`;
   }
   if (b.status === 'approved') {
