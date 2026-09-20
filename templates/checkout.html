@@ -26,6 +26,14 @@
   .seq-col { width: 44px; color: var(--muted); font-weight: 700; }
   .no-students { text-align: center; padding: 34px; color: var(--muted); font-size: 1rem; }
   .co-hint { color: var(--muted); font-size: .92rem; margin-bottom: 16px; line-height: 1.6; }
+  .device-count-box {
+    display: flex; align-items: center; gap: 10px;
+    background: linear-gradient(135deg, #f0f7f8, #e8f4f5);
+    border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; margin-top: 16px; font-weight: 700;
+    font-size: .95rem; color: var(--primary);
+  }
+  .device-count-box i { font-size: 1.1rem; }
 </style>
 {% endblock %}
 
@@ -50,7 +58,7 @@
     {{ 'اختر رقم الجهاز لكل طالب استلم جهازاً. اترك الحقل فارغاً للطالب الغائب أو الذي لم يستلم جهازاً — التعبئة غير مشروطة بالعدد.' if lang == 'ar' else 'Select the device number for each student who received a device. Leave it blank for an absent student or one who did not receive a device — filling every row is not required.' }}
   </p>
   <div style="overflow-x:auto">
-  <table class="co-table">
+  <table class="co-table" id="coTable">
     <thead>
       <tr><th class="seq-col">#</th><th>{{ 'اسم الطالب' if lang == 'ar' else 'Student Name' }}</th><th>{{ 'رقم الجهاز' if lang == 'ar' else 'Device Number' }}</th></tr>
     </thead>
@@ -61,7 +69,7 @@
         <td>{{ s.name }}</td>
         <td>
           <select data-student-id="{{ s.id }}" onchange="updateDeviceAvailability()">
-            <option value="">-- {{ 'لم يُسلَّم' if lang == 'ar' else 'Not handed out' }} --</option>
+            <option value="">-- {{ 'لم يُستلَم' if lang == 'ar' else 'Not handed out' }} --</option>
             {% for n in range(1, laptop_count + 1) %}
             <option value="{{ n }}" {% if existing_map.get(s.id) == n %}selected{% endif %}>{{ n }}</option>
             {% endfor %}
@@ -71,6 +79,11 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
+
+  <div class="device-count-box" id="deviceCountBox">
+    <i class="fas fa-laptop-house"></i>
+    <span id="deviceCountText"></span>
   </div>
 
   <div style="margin-top:16px">
@@ -84,7 +97,7 @@
   <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:20px" onclick="submitCheckout()" id="submitBtn">
     <i class="fas fa-paper-plane"></i> {{ 'إرسال' if lang == 'ar' else 'Submit' }}
   </button>
-  <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:10px" onclick="window.print()">
+  <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:10px" onclick="printCheckoutForm()">
     <i class="fas fa-print"></i> {{ 'طباعة' if lang == 'ar' else 'Print' }}
   </button>
   {% else %}
@@ -101,6 +114,15 @@
 const LANG = '{{ lang }}';
 const AR = LANG === 'ar';
 const REQ_ID = {{ b.req_id|tojson }};
+const B_META = {
+  reqId: {{ b.req_id|tojson }},
+  name: {{ b.name|tojson }},
+  stage: {{ b.stage_name|tojson }},
+  grade: {{ b.grade_name|tojson }},
+  section: {{ b.section_name|tojson }},
+  period: {{ (b.period_number|tojson) if b.period_number else 'null' }},
+  date: {{ b.booking_date|tojson }}
+};
 
 function showAlert(msg, type) {
   document.getElementById('alertBox').innerHTML =
@@ -120,6 +142,99 @@ function updateDeviceAvailability() {
       opt.disabled = !!(holder && holder !== sel);
     });
   });
+  updateDeviceCount();
+}
+
+function updateDeviceCount() {
+  const box = document.getElementById('deviceCountText');
+  if (!box) return;
+  const selects = Array.from(document.querySelectorAll('select[data-student-id]'));
+  const used = selects.filter(sel => sel.value).length;
+  const total = selects.length;
+  box.textContent = AR
+    ? `الأجهزة المستخدمة ${used} من ${total}`
+    : `Devices used: ${used} of ${total}`;
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function printCheckoutForm() {
+  const selects = Array.from(document.querySelectorAll('select[data-student-id]'));
+  const rows = selects.map(sel => {
+    const tr = sel.closest('tr');
+    const tds = tr.querySelectorAll('td');
+    const seq = tds[0] ? tds[0].textContent.trim() : '';
+    const name = tds[1] ? tds[1].textContent.trim() : '';
+    const device = sel.value ? sel.value : (AR ? '—' : '—');
+    return { seq, name, device };
+  });
+  const used = rows.filter(r => r.value !== '').length;
+  const usedCount = selects.filter(sel => sel.value).length;
+  const total = selects.length;
+  const notes = (document.getElementById('checkoutNotes') || {}).value || '';
+
+  const periodLabel = B_META.period ? ((AR ? 'الحصة ' : 'Period ') + B_META.period) : '';
+
+  const rowsHtml = rows.map(r => `
+    <tr>
+      <td>${esc(r.seq)}</td>
+      <td>${esc(r.name)}</td>
+      <td style="text-align:center">${r.device === '' ? (AR ? 'لم يُستلَم' : 'Not received') : esc(r.device)}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html dir="${AR ? 'rtl' : 'ltr'}" lang="${LANG}">
+<head>
+<meta charset="UTF-8">
+<title>${AR ? 'تقرير تسليم الأجهزة' : 'Device Handover Report'} - ${esc(B_META.reqId)}</title>
+<style>
+  body { font-family: Arial, Tahoma, sans-serif; padding: 24px; color: #1a1a1a; }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  .sub { color: #555; font-size: .85rem; margin-bottom: 18px; }
+  table.meta { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: .92rem; }
+  table.meta td { padding: 5px 8px; border-bottom: 1px solid #ddd; }
+  table.meta td.label { font-weight: 700; width: 140px; }
+  table.rows { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  table.rows th, table.rows td { border: 1px solid #bbb; padding: 8px 10px; text-align: ${AR ? 'right' : 'left'}; }
+  table.rows th { background: #f0f0f0; }
+  .count-line { margin-top: 16px; font-weight: 700; font-size: .95rem; }
+  .notes-box { margin-top: 16px; font-size: .9rem; }
+  .notes-box .label { font-weight: 700; margin-bottom: 4px; }
+  @media print { body { padding: 10px; } }
+</style>
+</head>
+<body>
+  <h1>${AR ? 'تقرير تسليم أجهزة الحاسوب' : 'Laptop Handover Report'}</h1>
+  <div class="sub">${AR ? 'رقم الحجز' : 'Request ID'}: ${esc(B_META.reqId)}</div>
+  <table class="meta">
+    <tr><td class="label">${AR ? 'المعلم/ة' : 'Teacher'}</td><td>${esc(B_META.name)}</td></tr>
+    <tr><td class="label">${AR ? 'المرحلة' : 'Stage'}</td><td>${esc(B_META.stage)}</td></tr>
+    <tr><td class="label">${AR ? 'الصف' : 'Grade'}</td><td>${esc(B_META.grade)}</td></tr>
+    <tr><td class="label">${AR ? 'الشعبة' : 'Section'}</td><td>${esc(B_META.section)}</td></tr>
+    <tr><td class="label">${AR ? 'الحصة' : 'Period'}</td><td>${esc(periodLabel)}</td></tr>
+    <tr><td class="label">${AR ? 'التاريخ' : 'Date'}</td><td>${esc(B_META.date)}</td></tr>
+  </table>
+  <table class="rows">
+    <thead>
+      <tr><th style="width:44px">#</th><th>${AR ? 'اسم الطالب' : 'Student Name'}</th><th style="width:120px">${AR ? 'رقم الجهاز' : 'Device Number'}</th></tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+  </table>
+  <div class="count-line">${AR ? `الأجهزة المستخدمة ${usedCount} من ${total}` : `Devices used: ${usedCount} of ${total}`}</div>
+  ${notes.trim() ? `<div class="notes-box"><div class="label">${AR ? 'ملاحظات' : 'Notes'}</div><div>${esc(notes)}</div></div>` : ''}
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=850,height=1000');
+  if (!win) { showAlert(AR ? 'الرجاء السماح بالنوافذ المنبثقة للطباعة' : 'Please allow pop-ups to print', 'error'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 250);
 }
 
 async function submitCheckout() {
