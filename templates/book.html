@@ -42,6 +42,19 @@
   @keyframes slideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
   @keyframes slideDown { from { opacity:0; transform:translateX(-50%) translateY(-20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
   @keyframes fadeOut { from { opacity:1; } to { opacity:0; } }
+
+  #email.not-found {
+    background: #fdf2f2;
+    border-color: #e2b3b3;
+    color: #a83232;
+    font-style: italic;
+  }
+  .alert-warning {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: #fff8e6; border: 1.5px solid #f0d488; color: #8a6a10;
+    border-radius: 10px; padding: 12px 16px; font-size: .88rem; line-height: 1.7;
+  }
+  .alert-warning i { margin-top: 2px; }
 </style>
 {% endblock %}
 
@@ -107,10 +120,23 @@
         <datalist id="teacherNamesList"></datalist>
       </div>
       <div class="form-group">
-        <label>{{ 'البريد الإلكتروني' if lang == 'ar' else 'Email' }} <span class="req">*</span></label>
-        <input type="email" id="email" placeholder="example@email.com" dir="ltr">
+        <label>{{ 'البريد الإلكتروني المسجّل' if lang == 'ar' else 'Registered Email' }}</label>
+        <input type="email" id="email" placeholder="{{ 'أدخل اسم المعلم/ة أولاً' if lang == 'ar' else 'Enter the teacher name first' }}" dir="ltr">
       </div>
     </div>
+
+    <div id="guestEmailAlert" class="alert-warning" style="display:none;margin-bottom:16px">
+      <i class="fas fa-exclamation-triangle"></i>
+      <span id="guestEmailAlertText"></span>
+    </div>
+
+    <div class="form-row" id="guestEmailRow" style="display:none">
+      <div class="form-group">
+        <label>{{ 'بريدك الإلكتروني' if lang == 'ar' else 'Your Email' }} <span class="req">*</span></label>
+        <input type="email" id="guestEmail" placeholder="example@email.com" dir="ltr">
+      </div>
+    </div>
+
     <div class="form-row">
       <div class="form-group">
         <label>{{ 'رقم الهاتف' if lang == 'ar' else 'Phone Number' }}</label>
@@ -235,6 +261,7 @@ function onStageChange() {
     nameInput.value = '';
     nameInput.placeholder = AR ? 'اختر المرحلة أولاً' : 'Select a stage first';
     document.getElementById('teacherNamesList').innerHTML = '';
+    resetTeacherLookupUI();
     return;
   }
   gradeSel.innerHTML = `<option value="">${AR ? '-- اختر الصف --' : '-- Select Grade --'}</option>` +
@@ -363,6 +390,17 @@ function showToast(msg, type) {
   setTimeout(() => { toast.style.animation='fadeOut .3s ease'; setTimeout(()=>toast.remove(), 300); }, 4000);
 }
 
+function isGuestMode() {
+  const row = document.getElementById('guestEmailRow');
+  return row.style.display !== 'none';
+}
+
+function getEffectiveEmail() {
+  return isGuestMode()
+    ? document.getElementById('guestEmail').value.trim()
+    : document.getElementById('email').value.trim();
+}
+
 async function submitBooking() {
   clearAlert();
   if (!document.getElementById('policyAgree').checked) {
@@ -371,7 +409,7 @@ async function submitBooking() {
   }
   const btn = document.getElementById('submitBtn');
   const name  = document.getElementById('fullName').value.trim();
-  const email = document.getElementById('email').value.trim();
+  const email = getEffectiveEmail();
   const stageId   = document.getElementById('stageSel').value;
   const gradeId   = document.getElementById('gradeSel').value;
   const sectionId = document.getElementById('sectionSel').value;
@@ -450,17 +488,60 @@ async function loadTeacherNames(stageId) {
   } catch (e) {}
 }
 
+function resetTeacherLookupUI() {
+  const emailField = document.getElementById('email');
+  const guestAlert = document.getElementById('guestEmailAlert');
+  const guestRow = document.getElementById('guestEmailRow');
+  const guestEmailInput = document.getElementById('guestEmail');
+
+  emailField.value = '';
+  emailField.classList.remove('not-found');
+  emailField.placeholder = AR ? 'أدخل اسم المعلم/ة أولاً' : 'Enter the teacher name first';
+  guestAlert.style.display = 'none';
+  guestRow.style.display = 'none';
+  guestEmailInput.value = '';
+}
+
 async function onTeacherNameChange() {
   const name = document.getElementById('fullName').value.trim();
-  if (!name) return;
+  const emailField = document.getElementById('email');
+  const guestAlert = document.getElementById('guestEmailAlert');
+  const guestAlertText = document.getElementById('guestEmailAlertText');
+  const guestRow = document.getElementById('guestEmailRow');
+  const guestEmailInput = document.getElementById('guestEmail');
+
+  if (!name) {
+    resetTeacherLookupUI();
+    return;
+  }
 
   try {
     const res = await fetch('/api/teacher-lookup?name=' + encodeURIComponent(name));
     const data = await res.json();
-    if (!data.found) return;
+
+    if (!data.found) {
+      // Name isn't in the registered teacher list — show the "not found"
+      // state and let the person continue as a guest with a manual email.
+      emailField.value = '';
+      emailField.placeholder = AR ? 'غير موجود' : 'Not found';
+      emailField.classList.add('not-found');
+
+      guestAlertText.textContent = AR
+        ? 'اسمك غير موجود في قائمة المعلمين المسجّلين. يمكنك المتابعة كزائر بإدخال بريدك الإلكتروني أدناه.'
+        : "Your name wasn't found in the registered teacher list. You can continue as a guest by entering your email below.";
+      guestAlert.style.display = 'flex';
+      guestRow.style.display = '';
+      return;
+    }
+
+    // Found: restore the normal registered-email state and hide the guest fallback UI.
+    emailField.classList.remove('not-found');
+    emailField.placeholder = 'example@email.com';
+    guestAlert.style.display = 'none';
+    guestRow.style.display = 'none';
+    guestEmailInput.value = '';
 
     // Auto-fill the email if the teacher hasn't already typed one manually.
-    const emailField = document.getElementById('email');
     if (data.email && !emailField.value.trim()) {
       emailField.value = data.email;
     }
