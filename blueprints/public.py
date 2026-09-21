@@ -8,7 +8,7 @@ from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod,
 from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
                             get_new_notify_emails_with_actions, get_new_notify_emails_readonly, get_approved_notify_emails,
-                            get_blocked_for_date, is_valid_email, sanitize_email)
+                            get_blocked_for_date, is_valid_email, sanitize_email, get_period_time)
 from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification, send_approve, send_reject
 
 public_bp = Blueprint('public', __name__)
@@ -167,7 +167,8 @@ def check_slot():
     if err:
         return jsonify({'ok': False, 'error': err})
 
-    blk = check_blocked(bdate, period.start_time or '', period.end_time or '', stage.trolley_code)
+    slot_start, slot_end = get_period_time(grade.id, period, bdate)
+    blk = check_blocked(bdate, slot_start, slot_end, stage.trolley_code)
     if blk['blocked']:
         msg = f'التاريخ غير متاح: {blk["reason"]}'
         if blk.get('blkFromT'):
@@ -206,7 +207,8 @@ def submit_booking():
     if err:
         return jsonify({'success': False, 'error': err}), 400
 
-    blk = check_blocked(booking_date, period.start_time or '', period.end_time or '', stage.trolley_code)
+    slot_start, slot_end = get_period_time(grade.id, period, booking_date)
+    blk = check_blocked(booking_date, slot_start, slot_end, stage.trolley_code)
     if blk['blocked']:
         msg = f'التاريخ غير متاح: {blk["reason"]}'
         if blk.get('blkFromT'):
@@ -244,8 +246,8 @@ def submit_booking():
         grade_name    = grade.name_ar,
         section_name  = section.name_ar,
         period_number = period.number,
-        start_time    = period.start_time or '',
-        end_time      = period.end_time or '',
+        start_time    = slot_start,
+        end_time      = slot_end,
         notes         = f.get('notes', ''),
         attachments   = ','.join(att_urls),
         status        = 'pending',
@@ -438,6 +440,7 @@ def api_amend_by_user():
     if conflict:
         return jsonify({'success': False, 'error': conflict}), 400
 
+    slot_start, slot_end = get_period_time(grade.id, period, booking_date)
     was_approved = b.status == 'approved'
     b.name          = f.get('fullName', b.name)
     b.phone         = f.get('phone', b.phone or '')
@@ -453,8 +456,8 @@ def api_amend_by_user():
     b.grade_name    = grade.name_ar
     b.section_name  = section.name_ar
     b.period_number = period.number
-    b.start_time    = period.start_time or ''
-    b.end_time      = period.end_time or ''
+    b.start_time    = slot_start
+    b.end_time      = slot_end
     b.notes         = f.get('notes', b.notes or '')
     b.action_date   = datetime.utcnow()
     if was_approved:
@@ -623,6 +626,7 @@ def api_submit_checkout():
 @public_bp.route('/api/available-periods')
 def api_available_periods():
     stage_id = request.args.get('stageId', type=int)
+    grade_id = request.args.get('gradeId', type=int)
     booking_date = request.args.get('date', '')
 
     if not stage_id or not booking_date:
@@ -644,12 +648,13 @@ def api_available_periods():
 
     result = []
     for p in periods:
-        blk = check_blocked(booking_date, p.start_time or '', p.end_time or '', stage.trolley_code)
+        slot_start, slot_end = get_period_time(grade_id, p, booking_date)
+        blk = check_blocked(booking_date, slot_start, slot_end, stage.trolley_code)
         available = (p.number not in booked_numbers) and not blk['blocked']
         result.append({
             'id': p.id, 'number': p.number,
             'label': p.label_ar or f'الحصة {p.number}',
-            'startTime': p.start_time or '', 'endTime': p.end_time or '',
+            'startTime': slot_start, 'endTime': slot_end,
             'available': available,
         })
 
