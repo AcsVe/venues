@@ -46,7 +46,7 @@
     <span><b>{{ 'المرحلة' if lang == 'ar' else 'Stage' }}:</b> {{ b.stage_name }}</span>
     <span><b>{{ 'الصف' if lang == 'ar' else 'Grade' }}:</b> {{ b.grade_name }}</span>
     <span><b>{{ 'الشعبة' if lang == 'ar' else 'Section' }}:</b> {{ b.section_name }}</span>
-    <span><b>{{ 'الحصة' if lang == 'ar' else 'Period' }}:</b> {{ (('الحصة ' if lang == 'ar' else 'Period ') ~ b.period_number) if b.period_number else '' }}</span>
+    <span><b>{{ 'الحصة' if lang == 'ar' else 'Period' }}:</b> {{ (('الحصة ' if lang == 'ar' else 'Period ') ~ b.period_number) if b.period_number else '' }}{% if b.start_time and b.end_time %} ({{ b.start_time }} - {{ b.end_time }}){% endif %}</span>
     <span><b>{{ 'التاريخ' if lang == 'ar' else 'Date' }}:</b> {{ b.booking_date }}</span>
   </div>
 </div>
@@ -121,6 +121,8 @@ const B_META = {
   grade: {{ b.grade_name|tojson }},
   section: {{ b.section_name|tojson }},
   period: {{ (b.period_number|tojson) if b.period_number else 'null' }},
+  periodStart: {{ (b.start_time|tojson) if b.start_time else 'null' }},
+  periodEnd: {{ (b.end_time|tojson) if b.end_time else 'null' }},
   date: {{ b.booking_date|tojson }}
 };
 
@@ -175,7 +177,8 @@ function printCheckoutForm() {
   const total = selects.length;
   const notes = (document.getElementById('checkoutNotes') || {}).value || '';
 
-  const periodLabel = B_META.period ? ((AR ? 'الحصة ' : 'Period ') + B_META.period) : '';
+  const periodTimeStr = (B_META.periodStart && B_META.periodEnd) ? ` (${B_META.periodStart} - ${B_META.periodEnd})` : '';
+  const periodLabel = B_META.period ? ((AR ? 'الحصة ' : 'Period ') + B_META.period + periodTimeStr) : '';
 
   const rowsHtml = rows.map(r => `
     <tr>
