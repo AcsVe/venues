@@ -282,6 +282,34 @@ class Period(db.Model):
         }
 
 
+class GradePeriodTime(db.Model):
+    """Per-grade, per-weekday override of a period's start/end time. Grades
+    within the same stage can run different bell schedules on different
+    days (e.g. a shorter Tuesday, or a different timetable for grades 7-9
+    vs 10-12) — this table lets each (grade, weekday, period) combination
+    carry its own time, while `Period.start_time/end_time` stays as the
+    shared fallback for any grade/day that has no override here.
+    weekday follows Python's date.weekday(): Monday=0 .. Sunday=6."""
+    __tablename__ = 'grade_period_times'
+    id            = db.Column(db.Integer, primary_key=True)
+    grade_id      = db.Column(db.Integer, db.ForeignKey('grades.id'), nullable=False)
+    weekday       = db.Column(db.Integer, nullable=False)
+    period_number = db.Column(db.Integer, nullable=False)
+    start_time    = db.Column(db.String(5), nullable=False)
+    end_time      = db.Column(db.String(5), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('grade_id', 'weekday', 'period_number', name='uq_grade_period_time'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'gradeId': self.grade_id, 'weekday': self.weekday,
+            'periodNumber': self.period_number,
+            'startTime': self.start_time, 'endTime': self.end_time,
+        }
+
+
 class AppSetting(db.Model):
     """Simple key/value store for site-wide toggles (auto-approve bookings,
     etc.) — one row per setting, so new switches can be added later without
@@ -424,6 +452,8 @@ def init_db(app):
             db.session.add(Period(number=n, label_ar=f'الحصة {_ordinal_ar(n)}', active=True))
         db.session.commit()
 
+    _seed_grade_period_times()
+
 
 _ORDINALS_AR_F = {  # feminine — used for الحصة (period)
     1: 'الأولى', 2: 'الثانية', 3: 'الثالثة', 4: 'الرابعة', 5: 'الخامسة',
@@ -441,3 +471,79 @@ def _ordinal_ar(n):
 
 def _ordinal_ar_m(n):
     return _ORDINALS_AR_M.get(n, str(n))
+
+
+# ── One-time seed for the 2026/2027 grade 7-12 bell schedule ───────────────
+# Regular days = Sunday, Monday, Wednesday, Thursday. Tuesday runs a shorter
+# schedule. Friday/Saturday are not school days, so they carry no rows.
+# Python weekday(): Monday=0, Tuesday=1, Wednesday=2, Thursday=3, ..., Sunday=6.
+_REGULAR_WEEKDAYS = [6, 0, 2, 3]   # Sun, Mon, Wed, Thu
+_TUESDAY_WEEKDAY  = [1]
+
+_GRADE_710_SCHEDULE = {
+    # grade numbers 7, 8, 9 share one timetable; 10, 11, 12 share another.
+    (7, 8, 9): {
+        'regular': {1: ('08:00', '08:45'), 2: ('08:45', '09:30'), 3: ('09:30', '10:15'),
+                    4: ('10:35', '11:20'), 5: ('11:20', '12:05'), 6: ('12:05', '12:50'),
+                    7: ('13:05', '13:50'), 8: ('13:50', '14:35')},
+        'tuesday': {1: ('08:00', '08:35'), 2: ('08:35', '09:10'), 3: ('09:10', '09:45'),
+                    4: ('10:00', '10:35'), 5: ('10:35', '11:10'), 6: ('11:10', '11:45'),
+                    7: ('12:00', '12:35'), 8: ('12:35', '13:20')},
+    },
+    (10, 11, 12): {
+        'regular': {1: ('08:00', '08:45'), 2: ('08:45', '09:30'), 3: ('09:30', '10:15'),
+                    4: ('10:15', '11:00'), 5: ('11:40', '12:25'), 6: ('12:25', '13:10'),
+                    7: ('13:10', '13:50'), 8: ('13:50', '14:35')},
+        'tuesday': {1: ('08:00', '08:35'), 2: ('08:35', '09:10'), 3: ('09:10', '09:45'),
+                    4: ('09:45', '10:20'), 5: ('10:50', '11:25'), 6: ('11:25', '12:00'),
+                    7: ('12:00', '12:35'), 8: ('12:35', '13:20')},
+    },
+}
+
+
+def _grade_number(g):
+    """Best-effort extraction of the numeric grade (7, 8, 9...) from a Grade
+    row, so the seed can match real grades however they were labeled."""
+    import re
+    for label in (g.name_en, g.name_ar):
+        if not label:
+            continue
+        m = re.search(r'\d+', label)
+        if m:
+            return int(m.group())
+    for num, word in _ORDINALS_AR_M.items():
+        if g.name_ar and word in g.name_ar:
+            return num
+    return None
+
+
+def _seed_grade_period_times():
+    """Seed the grade 7-12 bell schedule once, matching existing Grade rows
+    by their numeric label. If the expected grades 7-12 can't all be
+    identified (e.g. they were renamed), seeding is skipped entirely rather
+    than guessing — an admin can fill the schedule in from the panel."""
+    if GradePeriodTime.query.count() > 0:
+        return
+
+    grades_by_number = {}
+    for g in Grade.query.all():
+        n = _grade_number(g)
+        if n is not None and n not in grades_by_number:
+            grades_by_number[n] = g
+
+    for numbers, schedule in _GRADE_710_SCHEDULE.items():
+        if not all(n in grades_by_number for n in numbers):
+            continue  # can't confidently match this group — leave for manual entry
+        for n in numbers:
+            grade = grades_by_number[n]
+            for weekday in _REGULAR_WEEKDAYS:
+                for period_number, (start, end) in schedule['regular'].items():
+                    db.session.add(GradePeriodTime(
+                        grade_id=grade.id, weekday=weekday, period_number=period_number,
+                        start_time=start, end_time=end))
+            for weekday in _TUESDAY_WEEKDAY:
+                for period_number, (start, end) in schedule['tuesday'].items():
+                    db.session.add(GradePeriodTime(
+                        grade_id=grade.id, weekday=weekday, period_number=period_number,
+                        start_time=start, end_time=end))
+    db.session.commit()
