@@ -526,14 +526,24 @@ def _grade_number(g):
     return None
 
 
+# Bump this whenever a row in _GRADE_SCHEDULES is corrected. A group whose
+# applied version (stored in app_settings) is behind this number gets its
+# rows deleted and reseeded from the dict below on the next deploy — this
+# is what lets a schedule *correction* (not just a first-time seed) reach
+# production. Once a group is caught up to this version, it is left alone
+# again — including any manual edit made from the admin panel — until this
+# number is bumped again for a further correction.
+_SCHEDULE_VERSION = 2  # v2: fixed the grades 5-6 regular-day schedule (breaks restored)
+
+
 def _seed_grade_period_times():
-    """Seed each known grade-group bell schedule once, matching existing
-    Grade rows by their numeric label. A group is skipped if its grades
-    can't all be confidently identified (e.g. renamed), or if any of its
-    grades already carries a schedule — whether seeded on an earlier
-    deploy or entered manually from the admin panel — so this is safe to
-    extend with new groups and re-run on every deploy without touching
-    data that already exists."""
+    """Seed each known grade-group bell schedule, matching existing Grade
+    rows by their numeric label. A group is skipped if its grades can't
+    all be confidently identified (e.g. renamed). Otherwise its rows are
+    (re)written only if its stored schedule version is behind
+    _SCHEDULE_VERSION — first deploy ever, or a schedule correction — so
+    this is safe to re-run on every deploy without clobbering manual
+    admin edits made after a group is caught up."""
     grades_by_number = {}
     for g in Grade.query.all():
         n = _grade_number(g)
@@ -544,11 +554,15 @@ def _seed_grade_period_times():
         if not all(n in grades_by_number for n in numbers):
             continue  # can't confidently match this group — leave for manual entry
 
+        version_key = 'grade_schedule_version_' + '_'.join(str(n) for n in numbers)
+        applied = AppSetting.query.get(version_key)
+        applied_version = int(applied.value) if (applied and applied.value or '').isdigit() else 0
+        if applied_version >= _SCHEDULE_VERSION:
+            continue  # this group is already up to date — don't touch admin-edited data
+
         group_grade_ids = [grades_by_number[n].id for n in numbers]
-        already_seeded = GradePeriodTime.query.filter(
-            GradePeriodTime.grade_id.in_(group_grade_ids)).count() > 0
-        if already_seeded:
-            continue  # this group already has a schedule — don't overwrite it
+        GradePeriodTime.query.filter(
+            GradePeriodTime.grade_id.in_(group_grade_ids)).delete(synchronize_session=False)
 
         for n in numbers:
             grade = grades_by_number[n]
@@ -562,4 +576,10 @@ def _seed_grade_period_times():
                     db.session.add(GradePeriodTime(
                         grade_id=grade.id, weekday=weekday, period_number=period_number,
                         start_time=start, end_time=end))
+
+        if applied:
+            applied.value = str(_SCHEDULE_VERSION)
+        else:
+            db.session.add(AppSetting(key=version_key, value=str(_SCHEDULE_VERSION)))
+
     db.session.commit()
