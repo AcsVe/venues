@@ -3,10 +3,11 @@ from functools import wraps
 from flask import (Blueprint, render_template, request, jsonify,
                    session, redirect, url_for, current_app, send_file)
 from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact,
-                    Teacher, Student, BookingCheckout, CheckoutLine, BookingReminder, PushSubscription, AppSetting)
+                    Teacher, Student, BookingCheckout, CheckoutLine, BookingReminder, PushSubscription,
+                    AppSetting, GradePeriodTime)
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
                             get_all_contact_emails, get_approved_notify_emails, check_conflict, check_blocked,
-                            resolve_stage_grade_section_by_name)
+                            resolve_stage_grade_section_by_name, get_period_time)
 from utils.email_utils import (send_approve, send_reject, send_cancel,
                                 send_pending, send_update, send_staff_notification)
 
@@ -410,9 +411,10 @@ def api_update_booking():
     b.stage_name    = stage.name_ar
     b.grade_name    = grade.name_ar
     b.section_name  = section.name_ar
+    slot_start, slot_end = get_period_time(grade.id, period, booking_date)
     b.period_number = period.number
-    b.start_time    = period.start_time or ''
-    b.end_time      = period.end_time or ''
+    b.start_time    = slot_start
+    b.end_time      = slot_end
     b.notes         = f.get('notes', b.notes or '')
     b.action_date   = datetime.utcnow()
 
@@ -718,6 +720,108 @@ def api_delete_period():
                         'error': f'لا يمكن حذف هذه الحصة — يوجد بها {n} حجز. احذف الحجوزات المرتبطة أولاً.'}), 400
 
     db.session.delete(p)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+# ── Per-grade / per-weekday period times ───────────────────────────────────
+# Lets a grade run a different bell schedule on different days (e.g. a
+# shorter Tuesday, or a different timetable for one grade group vs another)
+# instead of the single shared time on Period. A weekday follows Python's
+# date.weekday(): Monday=0 .. Sunday=6.
+@admin_bp.route('/api/grade-period-times')
+@login_required
+def api_grade_period_times():
+    grade_id = request.args.get('gradeId', type=int)
+    if not grade_id:
+        return jsonify({'error': 'الصف مطلوب'}), 400
+    rows = GradePeriodTime.query.filter_by(grade_id=grade_id).all()
+    return jsonify([r.to_dict() for r in rows])
+
+
+@admin_bp.route('/api/set-grade-period-times', methods=['POST'])
+@login_required
+def api_set_grade_period_times():
+    """Batch upsert: set every period's time for one grade across one or
+    more weekdays in a single call. A row with both times blank deletes
+    any existing override for that (grade, weekday, period) — falling
+    back to the shared Period time again."""
+    data = request.get_json(silent=True) or {}
+    grade_id = data.get('gradeId')
+    weekdays = data.get('weekdays') or []
+    times = data.get('times') or []  # [{periodNumber, startTime, endTime}]
+
+    grade = Grade.query.get(grade_id)
+    if not grade:
+        return jsonify({'success': False, 'error': 'الصف غير موجود'}), 400
+    try:
+        weekdays = [int(w) for w in weekdays]
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'أيام غير صحيحة'}), 400
+    if not weekdays:
+        return jsonify({'success': False, 'error': 'يرجى اختيار يوم واحد على الأقل'}), 400
+
+    for weekday in weekdays:
+        if not (0 <= weekday <= 6):
+            continue
+        for row in times:
+            try:
+                period_number = int(row.get('periodNumber'))
+            except (TypeError, ValueError):
+                continue
+            start_time = (row.get('startTime') or '').strip()
+            end_time   = (row.get('endTime') or '').strip()
+
+            existing = GradePeriodTime.query.filter_by(
+                grade_id=grade.id, weekday=weekday, period_number=period_number).first()
+
+            if not start_time or not end_time:
+                if existing:
+                    db.session.delete(existing)
+                continue
+
+            if existing:
+                existing.start_time = start_time
+                existing.end_time = end_time
+            else:
+                db.session.add(GradePeriodTime(
+                    grade_id=grade.id, weekday=weekday, period_number=period_number,
+                    start_time=start_time, end_time=end_time))
+
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/api/copy-grade-period-times', methods=['POST'])
+@login_required
+def api_copy_grade_period_times():
+    """Copy one grade's whole schedule (all weekdays/periods) onto one or
+    more other grades — handy when several grades share the same bell
+    schedule (e.g. grades 7, 8 and 9)."""
+    data = request.get_json(silent=True) or {}
+    from_grade_id = data.get('fromGradeId')
+    to_grade_ids = data.get('toGradeIds') or []
+
+    source_rows = GradePeriodTime.query.filter_by(grade_id=from_grade_id).all()
+    if not source_rows:
+        return jsonify({'success': False, 'error': 'لا يوجد جدول لنسخه لهذا الصف'}), 400
+
+    try:
+        to_grade_ids = [int(g) for g in to_grade_ids]
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'صفوف غير صحيحة'}), 400
+
+    for grade_id in to_grade_ids:
+        if grade_id == from_grade_id:
+            continue
+        if not Grade.query.get(grade_id):
+            continue
+        GradePeriodTime.query.filter_by(grade_id=grade_id).delete()
+        for r in source_rows:
+            db.session.add(GradePeriodTime(
+                grade_id=grade_id, weekday=r.weekday, period_number=r.period_number,
+                start_time=r.start_time, end_time=r.end_time))
+
     db.session.commit()
     return jsonify({'success': True})
 
