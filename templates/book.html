@@ -283,6 +283,7 @@ function resetPeriodOptions() {
 
 async function refreshPeriodAvailability() {
   const stageId = document.getElementById('stageSel').value;
+  const gradeId = document.getElementById('gradeSel').value;
   const bookingDate = document.getElementById('bookingDate').value;
   const periodSel = document.getElementById('periodSel');
 
@@ -295,7 +296,8 @@ async function refreshPeriodAvailability() {
   periodSel.disabled = true;
 
   try {
-    const res = await fetch(`/api/available-periods?stageId=${stageId}&date=${bookingDate}`);
+    const gradeParam = gradeId ? `&gradeId=${gradeId}` : '';
+    const res = await fetch(`/api/available-periods?stageId=${stageId}${gradeParam}&date=${bookingDate}`);
     const periods = await res.json();
     if (!Array.isArray(periods)) { resetPeriodOptions(); return; }
 
@@ -330,6 +332,10 @@ function onGradeChange() {
   sectionSel.innerHTML = `<option value="">${AR ? '-- اختر الشعبة --' : '-- Select Section --'}</option>` +
     grade.sections.map(sec => `<option value="${sec.id}">${AR ? sec.nameAr : (sec.nameEn||sec.nameAr)}</option>`).join('');
   sectionSel.disabled = false;
+
+  // Period times can differ by grade (e.g. a different bell schedule for
+  // grades 7-9 vs 10-12), so re-fetch the period list whenever the grade changes.
+  refreshPeriodAvailability();
 }
 
 function showTrolleyInfo(stage) {
