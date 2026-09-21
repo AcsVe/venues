@@ -47,6 +47,31 @@ def check_conflict(trolley_code, booking_date, period_number, exclude_req_id=Non
     return None
 
 
+def get_period_time(grade_id, period, booking_date):
+    """Return (start_time, end_time) for `period` on `booking_date`
+    (yyyy-MM-dd), using the grade's own weekday-specific schedule
+    (GradePeriodTime) when one exists, and falling back to the period's
+    shared default time otherwise. `period` may be a Period object or
+    None; `grade_id` may be None."""
+    default_start = (period.start_time or '') if period else ''
+    default_end   = (period.end_time or '') if period else ''
+    if not (grade_id and period and booking_date):
+        return default_start, default_end
+
+    from models import GradePeriodTime
+    try:
+        weekday = datetime.strptime(booking_date, '%Y-%m-%d').weekday()
+    except (ValueError, TypeError):
+        return default_start, default_end
+
+    row = GradePeriodTime.query.filter_by(
+        grade_id=grade_id, weekday=weekday, period_number=period.number
+    ).first()
+    if row:
+        return row.start_time, row.end_time
+    return default_start, default_end
+
+
 def check_blocked(booking_date, start_time, end_time, trolley_code):
     """Returns {'blocked': bool, 'reason': str, 'fullBlock': bool}.
     trolley_code may be '' to mean 'applies to all trolleys'."""
