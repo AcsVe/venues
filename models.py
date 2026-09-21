@@ -480,8 +480,9 @@ def _ordinal_ar_m(n):
 _REGULAR_WEEKDAYS = [6, 0, 2, 3]   # Sun, Mon, Wed, Thu
 _TUESDAY_WEEKDAY  = [1]
 
-_GRADE_710_SCHEDULE = {
-    # grade numbers 7, 8, 9 share one timetable; 10, 11, 12 share another.
+_GRADE_SCHEDULES = {
+    # grade numbers 7, 8, 9 share one timetable; 10, 11, 12 share another;
+    # 5, 6 share a third (no breaks between periods).
     (7, 8, 9): {
         'regular': {1: ('08:00', '08:45'), 2: ('08:45', '09:30'), 3: ('09:30', '10:15'),
                     4: ('10:35', '11:20'), 5: ('11:20', '12:05'), 6: ('12:05', '12:50'),
@@ -496,6 +497,14 @@ _GRADE_710_SCHEDULE = {
                     7: ('13:10', '13:50'), 8: ('13:50', '14:35')},
         'tuesday': {1: ('08:00', '08:35'), 2: ('08:35', '09:10'), 3: ('09:10', '09:45'),
                     4: ('09:45', '10:20'), 5: ('10:50', '11:25'), 6: ('11:25', '12:00'),
+                    7: ('12:00', '12:35'), 8: ('12:35', '13:20')},
+    },
+    (5, 6): {
+        'regular': {1: ('08:00', '08:45'), 2: ('08:45', '09:30'), 3: ('09:30', '10:15'),
+                    4: ('10:15', '11:00'), 5: ('11:00', '11:45'), 6: ('11:45', '12:30'),
+                    7: ('12:30', '13:15'), 8: ('13:15', '14:00')},
+        'tuesday': {1: ('08:00', '08:35'), 2: ('08:35', '09:10'), 3: ('09:10', '09:45'),
+                    4: ('10:00', '10:35'), 5: ('10:35', '11:10'), 6: ('11:25', '12:00'),
                     7: ('12:00', '12:35'), 8: ('12:35', '13:20')},
     },
 }
@@ -518,22 +527,29 @@ def _grade_number(g):
 
 
 def _seed_grade_period_times():
-    """Seed the grade 7-12 bell schedule once, matching existing Grade rows
-    by their numeric label. If the expected grades 7-12 can't all be
-    identified (e.g. they were renamed), seeding is skipped entirely rather
-    than guessing — an admin can fill the schedule in from the panel."""
-    if GradePeriodTime.query.count() > 0:
-        return
-
+    """Seed each known grade-group bell schedule once, matching existing
+    Grade rows by their numeric label. A group is skipped if its grades
+    can't all be confidently identified (e.g. renamed), or if any of its
+    grades already carries a schedule — whether seeded on an earlier
+    deploy or entered manually from the admin panel — so this is safe to
+    extend with new groups and re-run on every deploy without touching
+    data that already exists."""
     grades_by_number = {}
     for g in Grade.query.all():
         n = _grade_number(g)
         if n is not None and n not in grades_by_number:
             grades_by_number[n] = g
 
-    for numbers, schedule in _GRADE_710_SCHEDULE.items():
+    for numbers, schedule in _GRADE_SCHEDULES.items():
         if not all(n in grades_by_number for n in numbers):
             continue  # can't confidently match this group — leave for manual entry
+
+        group_grade_ids = [grades_by_number[n].id for n in numbers]
+        already_seeded = GradePeriodTime.query.filter(
+            GradePeriodTime.grade_id.in_(group_grade_ids)).count() > 0
+        if already_seeded:
+            continue  # this group already has a schedule — don't overwrite it
+
         for n in numbers:
             grade = grades_by_number[n]
             for weekday in _REGULAR_WEEKDAYS:
