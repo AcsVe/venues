@@ -434,6 +434,33 @@
           </table>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fas fa-calendar-week"></i> أوقات الحصص حسب الصف واليوم</div>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:14px;line-height:1.7">
+          يمكن لكل صف اعتماد توقيت حصص مختلف عن باقي صفوف مرحلته، ويختلف باختلاف اليوم أيضاً (مثال: يوم الثلاثاء أقصر). اختر الصف والأيام، ثم أدخل وقت كل حصة. اترك حقلي "من" و"إلى" فارغين لأي حصة لإلغاء توقيتها الخاص والعودة للتوقيت الافتراضي المشترك.
+        </p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>الصف</label>
+            <select id="gptGrade" onchange="onGptGradeChange()"></select>
+          </div>
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-weight:700;font-size:.85rem;display:block;margin-bottom:8px">الأيام</label>
+          <div id="gptWeekdays" style="display:flex;flex-wrap:wrap;gap:14px"></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>الحصة</th><th>من</th><th>إلى</th></tr></thead>
+            <tbody id="gptTable"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="saveGpt()"><i class="fas fa-save"></i> حفظ توقيت هذا الصف</button>
+          <button class="btn btn-outline" onclick="openGptCopy()"><i class="fas fa-copy"></i> نسخ هذا الجدول إلى صفوف أخرى</button>
+        </div>
+      </div>
     </div>
 
     <!-- ── BLOCKED TAB ── -->
@@ -915,6 +942,21 @@
   </div>
 </div>
 
+<!-- ── COPY GRADE PERIOD TIMES MODAL ── -->
+<div class="modal-overlay" id="gptCopyModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title"><i class="fas fa-copy"></i> نسخ جدول الحصص إلى صفوف أخرى</div>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:10px">
+      سيتم نسخ كامل الجدول (كل الأيام والحصص) من الصف الحالي إلى الصفوف المحددة، مع استبدال أي جدول موجود لديها.
+    </p>
+    <div id="gptCopyTargets" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="confirmGptCopy()"><i class="fas fa-copy"></i> نسخ</button>
+      <button class="btn btn-outline" onclick="closeModal('gptCopyModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── TOAST ── -->
 <div class="toast" id="toast"></div>
 
@@ -975,6 +1017,22 @@ const I18N_EN = {
   "إضافة حصة": "Add Period",
   "من": "From",
   "إلى": "To",
+  "أوقات الحصص حسب الصف واليوم": "Period times by grade and weekday",
+  "يمكن لكل صف اعتماد توقيت حصص مختلف عن باقي صفوف مرحلته، ويختلف باختلاف اليوم أيضاً (مثال: يوم الثلاثاء أقصر). اختر الصف والأيام، ثم أدخل وقت كل حصة. اترك حقلي \"من\" و\"إلى\" فارغين لأي حصة لإلغاء توقيتها الخاص والعودة للتوقيت الافتراضي المشترك.":
+    "Each grade can run a different bell schedule than the rest of its stage, and that can also vary by weekday (e.g. a shorter Tuesday). Pick the grade and the days, then enter each period's time. Leave a period's \"From\"/\"To\" blank to clear its own time and fall back to the shared default.",
+  "حفظ توقيت هذا الصف": "Save this grade's schedule",
+  "نسخ هذا الجدول إلى صفوف أخرى": "Copy this schedule to other grades",
+  "نسخ جدول الحصص إلى صفوف أخرى": "Copy period schedule to other grades",
+  "سيتم نسخ كامل الجدول (كل الأيام والحصص) من الصف الحالي إلى الصفوف المحددة، مع استبدال أي جدول موجود لديها.":
+    "The whole schedule (every day and period) will be copied from the current grade onto the selected grades, replacing any schedule they already have.",
+  "نسخ": "Copy",
+  "الأحد": "Sunday", "الاثنين": "Monday", "الثلاثاء": "Tuesday", "الأربعاء": "Wednesday", "الخميس": "Thursday",
+  "لا توجد صفوف": "No grades yet",
+  "يرجى اختيار الصف": "Please select a grade",
+  "يرجى اختيار يوم واحد على الأقل": "Please select at least one day",
+  "لا توجد صفوف أخرى": "No other grades",
+  "يرجى اختيار صف واحد على الأقل": "Please select at least one grade",
+  "تم النسخ ✓": "Copied ✓",
   "إضافة فترة محظورة": "Add Blocked Period",
   "من تاريخ": "From date",
   "إلى تاريخ": "To date",
@@ -1235,7 +1293,7 @@ function applyStaticLang() {
   if (activeTab) {
     const id = activeTab.id.replace('tab-', '');
     if (id === 'bookings') renderTable();
-    if (id === 'halls') { renderStagesTree(); renderPeriodsTable(); }
+    if (id === 'halls') { renderStagesTree(); renderPeriodsTable(); populateGptGradeSelect(); }
     if (id === 'blocked') loadBlocked();
     if (id === 'contacts') loadContactsTab();
     if (id === 'teachers') loadTeachersTab();
@@ -2075,6 +2133,7 @@ async function loadHalls() {
     STRUCTURE.map(s => `<option value="${s.trolleyCode}">${esc(s.nameAr)}</option>`).join('');
 
   renderStagesTree();
+  populateGptGradeSelect();
 }
 
 function renderStagesTree() {
@@ -2294,6 +2353,114 @@ async function deletePeriod(id) {
   const data = await api('/admin/api/delete-period', {id});
   if (data.success) { showToast('تم الحذف'); renderPeriodsTable(); }
   else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+// ── Per-grade / per-weekday period times ────────────────────────
+// weekday follows Python's date.weekday(): Monday=0 .. Sunday=6.
+// Friday/Saturday are not school days, so they're left out of this UI.
+const GPT_WEEKDAYS = [
+  {value: 6, label: 'الأحد'}, {value: 0, label: 'الاثنين'}, {value: 1, label: 'الثلاثاء'},
+  {value: 2, label: 'الأربعاء'}, {value: 3, label: 'الخميس'},
+];
+let gptRows = [];   // GradePeriodTime rows currently loaded for the selected grade
+
+function flatGrades() {
+  return STRUCTURE.flatMap(s => s.grades.map(g => ({...g, stageNameAr: s.nameAr, stageNameEn: s.nameEn})));
+}
+
+function populateGptGradeSelect() {
+  const sel = document.getElementById('gptGrade');
+  if (!sel) return;
+  const prev = sel.value;
+  const grades = flatGrades();
+  sel.innerHTML = grades.map(g =>
+    `<option value="${g.id}">${esc(AR ? g.nameAr : (g.nameEn||g.nameAr))} — ${esc(AR ? g.stageNameAr : (g.stageNameEn||g.stageNameAr))}</option>`
+  ).join('') || `<option value="">-- ${t('لا توجد صفوف')} --</option>`;
+  if (grades.some(g => String(g.id) === prev)) sel.value = prev;
+  onGptGradeChange();
+}
+
+async function onGptGradeChange() {
+  const gradeId = document.getElementById('gptGrade').value;
+  document.getElementById('gptWeekdays').innerHTML = GPT_WEEKDAYS.map(d => `
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;font-size:.88rem">
+      <input type="checkbox" class="gptWeekdayChk" value="${d.value}" onchange="onGptWeekdaySelectionChange()" style="width:16px;height:16px;accent-color:var(--primary)">
+      ${t(d.label)}
+    </label>`).join('');
+
+  gptRows = gradeId ? await fetch(`/admin/api/grade-period-times?gradeId=${gradeId}`).then(r => r.json()) : [];
+  renderGptTable();
+}
+
+function checkedGptWeekdays() {
+  return Array.from(document.querySelectorAll('.gptWeekdayChk:checked')).map(el => parseInt(el.value, 10));
+}
+
+function onGptWeekdaySelectionChange() {
+  renderGptTable();
+}
+
+function renderGptTable() {
+  const weekdays = checkedGptWeekdays();
+  // Prefill from the loaded rows only when exactly one day is checked —
+  // with several days checked at once, times are entered fresh and then
+  // saved identically across all of them.
+  const singleDay = weekdays.length === 1 ? weekdays[0] : null;
+
+  document.getElementById('gptTable').innerHTML = (PERIODS || []).map(p => {
+    let start = '', end = '';
+    if (singleDay !== null) {
+      const row = gptRows.find(r => r.weekday === singleDay && r.periodNumber === p.number);
+      if (row) { start = row.startTime; end = row.endTime; }
+    }
+    return `
+    <tr>
+      <td>${esc(p.label)}</td>
+      <td><input type="time" class="gptStart" data-period="${p.number}" value="${start}" style="padding:6px 8px"></td>
+      <td><input type="time" class="gptEnd" data-period="${p.number}" value="${end}" style="padding:6px 8px"></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="3" style="text-align:center;color:var(--muted)">${t('لا توجد حصص بعد')}</td></tr>`;
+}
+
+async function saveGpt() {
+  const gradeId = document.getElementById('gptGrade').value;
+  if (!gradeId) { showToast(t('يرجى اختيار الصف'), '#c0392b'); return; }
+  const weekdays = checkedGptWeekdays();
+  if (!weekdays.length) { showToast(t('يرجى اختيار يوم واحد على الأقل'), '#c0392b'); return; }
+
+  const times = Array.from(document.querySelectorAll('#gptTable tr')).map(tr => {
+    const startEl = tr.querySelector('.gptStart');
+    const endEl = tr.querySelector('.gptEnd');
+    if (!startEl) return null;
+    return { periodNumber: parseInt(startEl.dataset.period, 10), startTime: startEl.value, endTime: endEl.value };
+  }).filter(Boolean);
+
+  const data = await api('/admin/api/set-grade-period-times', { gradeId, weekdays, times });
+  if (data.success) {
+    showToast(t('تم الحفظ ✓'));
+    onGptGradeChange();
+  } else showToast(data.error || t('خطأ'), '#c0392b');
+}
+
+function openGptCopy() {
+  const gradeId = document.getElementById('gptGrade').value;
+  if (!gradeId) { showToast(t('يرجى اختيار الصف'), '#c0392b'); return; }
+  const grades = flatGrades().filter(g => String(g.id) !== String(gradeId));
+  document.getElementById('gptCopyTargets').innerHTML = grades.map(g => `
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" class="gptCopyTarget" value="${g.id}">
+      ${esc(AR ? g.nameAr : (g.nameEn||g.nameAr))} — ${esc(AR ? g.stageNameAr : (g.stageNameEn||g.stageNameAr))}
+    </label>`).join('') || `<p style="color:var(--muted)">${t('لا توجد صفوف أخرى')}</p>`;
+  openModal('gptCopyModal');
+}
+
+async function confirmGptCopy() {
+  const fromGradeId = document.getElementById('gptGrade').value;
+  const toGradeIds = Array.from(document.querySelectorAll('.gptCopyTarget:checked')).map(el => el.value);
+  if (!toGradeIds.length) { showToast(t('يرجى اختيار صف واحد على الأقل'), '#c0392b'); return; }
+  const data = await api('/admin/api/copy-grade-period-times', { fromGradeId, toGradeIds });
+  if (data.success) { showToast(t('تم النسخ ✓')); closeModal('gptCopyModal'); }
+  else showToast(data.error || t('خطأ'), '#c0392b');
 }
 
 // ── Blocked ────────────────────────────────────────────────────
