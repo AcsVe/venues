@@ -47,7 +47,7 @@
     <span><b>{{ 'الصف' if lang == 'ar' else 'Grade' }}:</b> {{ b.grade_name }}</span>
     <span><b>{{ 'الشعبة' if lang == 'ar' else 'Section' }}:</b> {{ b.section_name }}</span>
     <span><b>{{ 'الحصة' if lang == 'ar' else 'Period' }}:</b> {{ (('الحصة ' if lang == 'ar' else 'Period ') ~ b.period_number) if b.period_number else '' }}{% if b.start_time and b.end_time %} ({{ b.start_time }} - {{ b.end_time }}){% endif %}</span>
-    <span><b>{{ 'التاريخ' if lang == 'ar' else 'Date' }}:</b> {{ b.booking_date }}</span>
+    <span><b>{{ 'التاريخ' if lang == 'ar' else 'Date' }}:</b> {% if day_name %}{{ day_name }} - {% endif %}{{ b.booking_date }}</span>
   </div>
 </div>
 
@@ -123,7 +123,8 @@ const B_META = {
   period: {{ (b.period_number|tojson) if b.period_number else 'null' }},
   periodStart: {{ (b.start_time|tojson) if b.start_time else 'null' }},
   periodEnd: {{ (b.end_time|tojson) if b.end_time else 'null' }},
-  date: {{ b.booking_date|tojson }}
+  date: {{ b.booking_date|tojson }},
+  dayName: {{ day_name|tojson }}
 };
 
 function showAlert(msg, type) {
@@ -217,7 +218,7 @@ function printCheckoutForm() {
     <tr><td class="label">${AR ? 'الصف' : 'Grade'}</td><td>${esc(B_META.grade)}</td></tr>
     <tr><td class="label">${AR ? 'الشعبة' : 'Section'}</td><td>${esc(B_META.section)}</td></tr>
     <tr><td class="label">${AR ? 'الحصة' : 'Period'}</td><td>${esc(periodLabel)}</td></tr>
-    <tr><td class="label">${AR ? 'التاريخ' : 'Date'}</td><td>${esc(B_META.date)}</td></tr>
+    <tr><td class="label">${AR ? 'التاريخ' : 'Date'}</td><td>${B_META.dayName ? esc(B_META.dayName) + ' - ' : ''}${esc(B_META.date)}</td></tr>
   </table>
   <table class="rows">
     <thead>
