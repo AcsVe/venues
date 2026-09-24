@@ -47,6 +47,21 @@ def check_conflict(trolley_code, booking_date, period_number, exclude_req_id=Non
     return None
 
 
+_WEEKDAY_NAMES_AR = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد']
+_WEEKDAY_NAMES_EN = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+
+def weekday_name(booking_date, lang='ar'):
+    """Bilingual day-of-week name for a 'YYYY-MM-DD' date string (e.g.
+    'الأحد' / 'Sunday'), or '' if the date can't be parsed."""
+    try:
+        idx = datetime.strptime(booking_date, '%Y-%m-%d').weekday()
+    except (ValueError, TypeError):
+        return ''
+    names = _WEEKDAY_NAMES_AR if lang == 'ar' else _WEEKDAY_NAMES_EN
+    return names[idx]
+
+
 def get_period_time(grade_id, period, booking_date):
     """Return (start_time, end_time) for `period` on `booking_date`
     (yyyy-MM-dd), using the grade's own weekday-specific schedule
@@ -158,6 +173,17 @@ def get_handover_notify_emails(stage_id=None):
     a teacher submits a device handover form for this stage."""
     from models import Contact
     q = Contact.query.filter_by(notify_handover=True)
+    if stage_id is not None:
+        q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
+    return [c.email for c in q.all() if is_valid_email(c.email)]
+
+
+def get_staff_reminder_emails(stage_id=None):
+    """Contacts opted in to receive the staff booking reminders: the daily
+    "there are bookings today" summary and the per-booking nudge sent
+    shortly before each period starts."""
+    from models import Contact
+    q = Contact.query.filter_by(notify_staff_reminder=True)
     if stage_id is not None:
         q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
     return [c.email for c in q.all() if is_valid_email(c.email)]
