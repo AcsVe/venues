@@ -3,17 +3,22 @@ form a short while after their approved booking's period has ended."""
 from datetime import datetime, timedelta, date, timezone
 
 
-def _period_end_datetime(booking_date_str, end_time_str):
-    """Combine a booking's date with its period's end time. Returns None if
-    either piece is missing (caller then falls back to a day-based check)."""
-    if not end_time_str:
+def _combine_date_time(booking_date_str, time_str):
+    """Combine a booking's date with a time string (its period's start or
+    end time). Returns None if either piece is missing (caller then falls
+    back to a day-based check)."""
+    if not time_str:
         return None
     try:
         y, m, d = (int(x) for x in booking_date_str.split('-'))
-        hh, mm = (int(x) for x in end_time_str.split(':'))
+        hh, mm = (int(x) for x in time_str.split(':'))
         return datetime(y, m, d, hh, mm)
     except (ValueError, TypeError):
         return None
+
+
+# Kept as an alias — older call sites in this module use this name.
+_period_end_datetime = _combine_date_time
 
 
 def check_and_send_reminders(app):
@@ -75,6 +80,123 @@ def check_and_send_reminders(app):
             from models import db
             db.session.commit()
             print(f"[reminders] sent {sent_count} checkout reminder(s)", flush=True)
+
+
+def check_and_send_daily_staff_summary(app):
+    """Runs periodically. Once a day, at or after the admin-configured time,
+    emails everyone opted in to the staff reminder list a summary of which
+    stages/trolleys have at least one approved booking today. Sends at most
+    once per calendar day (tracked in app_settings), and only if enabled."""
+    with app.app_context():
+        from models import AppSetting, Booking
+        from utils.helpers import get_staff_reminder_emails, weekday_name
+        from utils.email_utils import send_daily_staff_summary
+
+        if not AppSetting.get_bool('staff_daily_summary_enabled', False):
+            return
+
+        jordan_now = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=3)
+        today_str = jordan_now.strftime('%Y-%m-%d')
+        send_at = AppSetting.get_str('staff_daily_summary_time', '07:00')
+        try:
+            hh, mm = (int(x) for x in send_at.split(':'))
+        except ValueError:
+            hh, mm = 7, 0
+
+        if (jordan_now.hour, jordan_now.minute) < (hh, mm):
+            return
+        if AppSetting.get_str('staff_daily_summary_last_date', '') == today_str:
+            return  # already sent today
+
+        emails = get_staff_reminder_emails()
+        if not emails:
+            AppSetting.set_str('staff_daily_summary_last_date', today_str)
+            return
+
+        bookings_today = Booking.query.filter(
+            Booking.booking_date == today_str,
+            Booking.status.in_(['approved', 'completed']),
+        ).all()
+
+        counts = {}
+        for b in bookings_today:
+            key = b.stage_name or ''
+            if not key:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+
+        if counts:
+            stage_lines = [{'stage': stage, 'count': n} for stage, n in counts.items()]
+            try:
+                send_daily_staff_summary(emails, weekday_name(today_str, 'ar'), today_str, stage_lines)
+            except Exception as e:
+                print(f"[email] daily staff summary failed: {e}", flush=True)
+
+        # Mark as sent for today either way — a quiet day shouldn't retry
+        # every 10 minutes and there is nothing to report on it anyway.
+        AppSetting.set_str('staff_daily_summary_last_date', today_str)
+
+
+def check_and_send_upcoming_period_reminders(app):
+    """Runs periodically. For each of today's approved bookings, sends
+    staff-reminder recipients a heads-up once the booking's period is due
+    to start within the admin-configured lead time — a one-shot nudge,
+    never repeated for the same booking."""
+    with app.app_context():
+        from models import db, AppSetting, Booking
+        from utils.helpers import get_staff_reminder_emails
+        from utils.email_utils import send_upcoming_booking_reminder
+
+        lead_raw = AppSetting.get_str('staff_reminder_lead_minutes', '')
+        try:
+            lead_minutes = int(lead_raw)
+        except ValueError:
+            return  # feature is off until the admin sets a lead time
+        if lead_minutes <= 0:
+            return
+
+        jordan_now = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=3)
+        today_str = jordan_now.strftime('%Y-%m-%d')
+
+        candidates = Booking.query.filter(
+            Booking.booking_date == today_str,
+            Booking.status.in_(['approved', 'completed']),
+            Booking.staff_reminder_sent.is_(False),
+        ).all()
+
+        if not candidates:
+            return
+
+        emails = get_staff_reminder_emails()
+        if not emails:
+            return
+
+        sent_count = 0
+        for b in candidates:
+            start_dt = _combine_date_time(b.booking_date, b.start_time)
+            if start_dt is None:
+                continue
+            remind_at = start_dt - timedelta(minutes=lead_minutes)
+            if jordan_now < remind_at:
+                continue  # too early still
+
+            ctx = {
+                'reqId': b.req_id, 'name': b.name, 'title': b.event_title,
+                'stage': b.stage_name, 'grade': b.grade_name, 'section': b.section_name,
+                'periodLabel': f'الحصة {b.period_number}' if b.period_number else '',
+                'date': b.booking_date, 'startTime': b.start_time, 'endTime': b.end_time,
+            }
+            try:
+                send_upcoming_booking_reminder(emails, ctx, lead_minutes)
+            except Exception as e:
+                print(f"[email] upcoming booking reminder failed for {b.req_id}: {e}", flush=True)
+
+            b.staff_reminder_sent = True
+            sent_count += 1
+
+        if sent_count:
+            db.session.commit()
+            print(f"[reminders] sent {sent_count} upcoming-booking staff reminder(s)", flush=True)
 
 
 def check_and_send_scheduled_reminders(app):
