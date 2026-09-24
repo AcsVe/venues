@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, date
 from functools import wraps
 from flask import (Blueprint, render_template, request, jsonify,
@@ -7,7 +8,7 @@ from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod, C
                     AppSetting, GradePeriodTime)
 from utils.helpers import (is_valid_email, sanitize_email, save_upload,
                             get_all_contact_emails, get_approved_notify_emails, check_conflict, check_blocked,
-                            resolve_stage_grade_section_by_name, get_period_time)
+                            resolve_stage_grade_section_by_name, get_period_time, weekday_name)
 from utils.email_utils import (send_approve, send_reject, send_cancel,
                                 send_pending, send_update, send_staff_notification)
 
@@ -95,6 +96,9 @@ def api_get_settings():
         'autoApproveBookings': AppSetting.get_bool('auto_approve_bookings', False),
         'autoPrintReceipts': AppSetting.get_bool('auto_print_receipts', False),
         'disableCheckoutFormLink': AppSetting.get_bool('disable_checkout_form_link', False),
+        'staffDailySummaryEnabled': AppSetting.get_bool('staff_daily_summary_enabled', False),
+        'staffDailySummaryTime': AppSetting.get_str('staff_daily_summary_time', '07:00'),
+        'staffReminderLeadMinutes': AppSetting.get_str('staff_reminder_lead_minutes', ''),
     })
 
 
@@ -108,6 +112,16 @@ def api_update_settings():
         AppSetting.set_bool('auto_print_receipts', bool(data['autoPrintReceipts']))
     if 'disableCheckoutFormLink' in data:
         AppSetting.set_bool('disable_checkout_form_link', bool(data['disableCheckoutFormLink']))
+    if 'staffDailySummaryEnabled' in data:
+        AppSetting.set_bool('staff_daily_summary_enabled', bool(data['staffDailySummaryEnabled']))
+    if 'staffDailySummaryTime' in data:
+        val = str(data['staffDailySummaryTime'] or '').strip()
+        if re.match(r'^\d{2}:\d{2}$', val):
+            AppSetting.set_str('staff_daily_summary_time', val)
+    if 'staffReminderLeadMinutes' in data:
+        val = str(data['staffReminderLeadMinutes'] or '').strip()
+        if val == '' or val.isdigit():
+            AppSetting.set_str('staff_reminder_lead_minutes', val)
     return jsonify({'success': True})
 
 
@@ -907,6 +921,8 @@ def api_update_contact():
         c.new_readonly = bool(data['newReadonly'])
     if 'notifyApproved' in data:
         c.notify_approved = bool(data['notifyApproved'])
+    if 'notifyStaffReminder' in data:
+        c.notify_staff_reminder = bool(data['notifyStaffReminder'])
     db.session.commit()
     return jsonify({'success': True})
 
@@ -1340,6 +1356,7 @@ def api_checkout_report():
         for line in co.lines:
             lines_out.append({
                 'reqId': b.req_id, 'teacher': b.name, 'date': b.booking_date,
+                'dayName': weekday_name(b.booking_date, 'ar'),
                 'stage': b.stage_name, 'grade': b.grade_name, 'section': b.section_name,
                 'periodNumber': b.period_number,
                 'studentName': line.student_name, 'laptopNumber': line.laptop_number,
@@ -1353,11 +1370,47 @@ def api_checkout_report():
 
     missing_out = [{
         'reqId': b.req_id, 'teacher': b.name, 'email': b.email, 'date': b.booking_date,
+        'dayName': weekday_name(b.booking_date, 'ar'),
         'stage': b.stage_name, 'grade': b.grade_name, 'section': b.section_name,
         'status': b.status,
     } for b in missing]
 
     return jsonify({'lines': lines_out, 'missing': missing_out})
+
+
+@admin_bp.route('/api/resend-checkout-form', methods=['POST'])
+@login_required
+def api_resend_checkout_form():
+    """Manually re-sends the device-handover form reminder email to the
+    teacher for one booking — for when the admin wants to nudge them again
+    regardless of whether the automatic one-shot reminder already fired."""
+    data = request.get_json(silent=True) or {}
+    b = Booking.query.filter_by(req_id=data.get('reqId', '')).first()
+    if not b:
+        return jsonify({'success': False, 'error': 'الحجز غير موجود'}), 404
+    if b.status not in ('approved', 'completed'):
+        return jsonify({'success': False, 'error': 'الحجز غير معتمد بعد'}), 400
+    if not is_valid_email(b.email):
+        return jsonify({'success': False, 'error': 'لا يوجد بريد إلكتروني صحيح لهذا الحجز'}), 400
+
+    base_url = current_app.config.get('BASE_URL', '')
+    checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url else ''
+    ctx = {
+        'reqId': b.req_id, 'name': b.name, 'email': b.email,
+        'title': b.event_title, 'stage': b.stage_name, 'grade': b.grade_name,
+        'section': b.section_name,
+        'periodLabel': f'الحصة {b.period_number}' if b.period_number else '',
+        'date': b.booking_date, 'startTime': b.start_time, 'endTime': b.end_time,
+        'checkoutUrl': checkout_url,
+    }
+    from utils.email_utils import send_checkout_reminder
+    try:
+        ok = send_checkout_reminder(ctx)
+    except Exception as e:
+        print(f"[email] resend checkout form failed for {b.req_id}: {e}", flush=True)
+        ok = False
+
+    return jsonify({'success': ok, 'error': None if ok else 'تعذّر إرسال البريد — تأكد من إعدادات البريد بالخادم'})
 
 
 @admin_bp.route('/api/send-checkout-report', methods=['POST'])
