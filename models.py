@@ -157,6 +157,7 @@ class Booking(db.Model):
     attachments   = db.Column(db.Text)   # comma-separated URLs
     status        = db.Column(db.String(20), default='pending')  # pending/approved/completed/rejected/cancelled
     checkout_reminder_sent = db.Column(db.Boolean, default=False)
+    staff_reminder_sent = db.Column(db.Boolean, default=False)  # one-shot "your period starts soon" nudge to staff
     reject_reason = db.Column(db.Text)
     cc_emails     = db.Column(db.Text)   # semicolon-separated
     action_date   = db.Column(db.DateTime)
@@ -335,6 +336,23 @@ class AppSetting(db.Model):
             row.value = '1' if value else '0'
         db.session.commit()
 
+    @staticmethod
+    def get_str(key, default=''):
+        row = AppSetting.query.get(key)
+        if row is None or row.value is None:
+            return default
+        return row.value
+
+    @staticmethod
+    def set_str(key, value):
+        row = AppSetting.query.get(key)
+        if row is None:
+            row = AppSetting(key=key, value=value)
+            db.session.add(row)
+        else:
+            row.value = value
+        db.session.commit()
+
 
 class BlockedPeriod(db.Model):
     """A date/time range during which a stage's trolley (or all trolleys, if
@@ -371,6 +389,7 @@ class Contact(db.Model):
     new_readonly    = db.Column(db.Boolean, default=False)  # if notify_new is also True, strips the approve/reject links for this contact — informational only
     notify_approved = db.Column(db.Boolean, default=False)  # plain notice once a booking is approved (no action links)
     notify_handover = db.Column(db.Boolean, default=False)  # auto-notified when a teacher submits a device handover for this stage
+    notify_staff_reminder = db.Column(db.Boolean, default=False)  # gets the daily "bookings today" summary + the per-booking reminder before each period starts
     created_at      = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -383,6 +402,7 @@ class Contact(db.Model):
             'newReadonly': self.new_readonly or False,
             'notifyApproved': self.notify_approved or False,
             'notifyHandover': self.notify_handover or False,
+            'notifyStaffReminder': self.notify_staff_reminder or False,
             'date': self.created_at.strftime('%Y-%m-%d') if self.created_at else '',
         }
 
@@ -416,6 +436,8 @@ def init_db(app):
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS approved_by VARCHAR(200)")
+            conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notify_staff_reminder BOOLEAN DEFAULT FALSE")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS staff_reminder_sent BOOLEAN DEFAULT FALSE")
             # Contacts can now repeat the same email across different stages —
             # drop the old single-column unique constraint if present.
             try:
