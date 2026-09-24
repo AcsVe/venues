@@ -468,6 +468,71 @@ def send_checkout_reminder(data):
                  _base_html(content_ar, content_en, '#e67e22'))
 
 
+def esc(s):
+    return str(s or '').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
+def send_daily_staff_summary(emails, day_name, date_str, stage_lines):
+    """Sent once a day (if enabled) to staff who opted in, listing which
+    trolleys/stages have at least one approved booking today."""
+    if not emails:
+        return True
+    date_label = f'{day_name} - {date_str}' if day_name else date_str
+    rows_ar = ''.join(
+        f'<tr><td style="padding:6px 8px;background:#f0f7f8;font-weight:600">{esc(l["stage"])}</td>'
+        f'<td style="padding:6px 8px;border-bottom:1px solid #eee">{l["count"]}</td></tr>'
+        for l in stage_lines
+    )
+    rows_en = rows_ar  # stage names are stored bilingually per booking already, kept as-is
+
+    content_ar = f"""
+    <h2 style="color:#247680;margin-top:0">🚚 يوجد حجوزات للعربة اليوم</h2>
+    <p>فيما يلي عدد حجوزات عربات الحواسيب المعتمدة لليوم <strong>{date_label}</strong>:</p>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">
+      <tr><th style="text-align:right;padding:6px 8px;background:#e8f0f2">المرحلة / العربة</th><th style="text-align:right;padding:6px 8px;background:#e8f0f2">عدد الحجوزات</th></tr>
+      {rows_ar}
+    </table>
+    """
+    content_en = f"""
+    <h2 style="color:#247680;margin-top:0">🚚 There are trolley bookings today</h2>
+    <p>Approved laptop-trolley bookings for <strong>{date_label}</strong>:</p>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">
+      <tr><th style="text-align:left;padding:6px 8px;background:#e8f0f2">Stage / Trolley</th><th style="text-align:left;padding:6px 8px;background:#e8f0f2">Bookings</th></tr>
+      {rows_en}
+    </table>
+    """
+    html = _base_html(content_ar, content_en)
+    ok = True
+    for email in emails:
+        result = _send(email, '', f"[الرائد العربي / Al-Raed] حجوزات اليوم {date_str}", html)
+        ok = ok and result
+    return ok
+
+
+def send_upcoming_booking_reminder(emails, data, lead_minutes):
+    """Sent to staff a configurable number of minutes before a booking's
+    period starts, so whoever prepares the trolley/devices gets a heads-up
+    beyond the one-time daily summary."""
+    if not emails:
+        return True
+    content_ar = f"""
+    <h2 style="color:#8e44ad;margin-top:0">⏰ تذكير — حجز خلال {lead_minutes} دقيقة</h2>
+    <p>يوجد حجز عربة حواسيب سيبدأ خلال حوالي {lead_minutes} دقيقة.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">{_rows_ar(data, bg='#f5eef8')}</table>
+    """
+    content_en = f"""
+    <h2 style="color:#8e44ad;margin-top:0">⏰ Reminder — booking in {lead_minutes} minutes</h2>
+    <p>A laptop trolley booking is starting in about {lead_minutes} minutes.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0">{_rows_en(data, bg='#f5eef8')}</table>
+    """
+    html = _base_html(content_ar, content_en, '#8e44ad')
+    ok = True
+    for email in emails:
+        result = _send(email, '', f"[الرائد العربي / Al-Raed] تذكير حجز #{data.get('reqId','')}", html)
+        ok = ok and result
+    return ok
+
+
 def _action_buttons_html(data, lang):
     """Approve/Reject buttons for the 'new booking' staff email — only
     rendered when the caller supplied token-secured action URLs."""
