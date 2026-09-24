@@ -8,7 +8,8 @@ from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod,
 from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
                             get_new_notify_emails_with_actions, get_new_notify_emails_readonly, get_approved_notify_emails,
-                            get_blocked_for_date, is_valid_email, sanitize_email, get_period_time)
+                            get_blocked_for_date, is_valid_email, sanitize_email, get_period_time,
+                            weekday_name)
 from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification, send_approve, send_reject
 
 public_bp = Blueprint('public', __name__)
@@ -543,8 +544,11 @@ def checkout_form(req_id):
         for line in existing.lines:
             existing_map[line.student_id] = line.laptop_number
 
+    day_name = weekday_name(b.booking_date, lang)
+
     return render_template('checkout.html', b=b, students=students, lang=lang,
-                           existing_map=existing_map, laptop_count=LAPTOP_COUNT)
+                           existing_map=existing_map, laptop_count=LAPTOP_COUNT,
+                           day_name=day_name)
 
 
 @public_bp.route('/api/submit-checkout', methods=['POST'])
