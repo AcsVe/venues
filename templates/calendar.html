@@ -269,8 +269,9 @@ function openDayModal(dateStr, bookings, blocked) {
   if (visibleBks.length) {
     visibleBks.sort((a,b) => (a.periodNumber||0) - (b.periodNumber||0));
     visibleBks.forEach(function(bk) {
-      const timeStr = bk.startTime && bk.endTime ? (bk.startTime + ' - ' + bk.endTime) :
-        (bk.periodNumber ? (AR ? 'الحصة ' + bk.periodNumber : 'Period ' + bk.periodNumber) : '');
+      const periodStr = bk.periodNumber ? (AR ? 'الحصة ' + bk.periodNumber : 'Period ' + bk.periodNumber) : '';
+      const timeRange = bk.startTime && bk.endTime ? (bk.startTime + ' - ' + bk.endTime) : '';
+      const timeStr = periodStr && timeRange ? (periodStr + ' (' + timeRange + ')') : (periodStr || timeRange);
       html += '<div class="bk-card"><div class="bk-meta">' +
         '<span><i class="fas fa-laptop"></i> ' + esc(bk.stage || bk.hall) + '</span>' +
         (timeStr ? '<span><i class="fas fa-clock"></i> ' + timeStr + '</span>' : '') +
