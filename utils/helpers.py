@@ -1,0 +1,273 @@
+import re
+import os
+import uuid
+from datetime import date, datetime
+from werkzeug.utils import secure_filename
+from flask import current_app
+
+
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf',
+                      'doc', 'docx', 'xls', 'xlsx', 'zip', 'rar', 'txt', 'csv'}
+
+
+def is_valid_email(email):
+    if not email:
+        return False
+    return bool(re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email.strip()))
+
+
+def sanitize_email(email):
+    if not email:
+        return ''
+    return re.sub(r'[\x00-\x1F\x7F-\x9F\u200B-\u200D\uFEFF\u00A0]', '', str(email).strip())
+
+
+def gen_req_id():
+    import uuid
+    return 'BK-' + uuid.uuid4().hex[:10].upper()
+
+
+def check_conflict(trolley_code, booking_date, period_number, exclude_req_id=None):
+    """A trolley can only be used by one class at a time: same trolley + same
+    date + same period = conflict. Returns an error string, or None."""
+    from models import Booking
+    q = Booking.query.filter(
+        Booking.trolley_code == trolley_code,
+        Booking.booking_date == booking_date,
+        Booking.period_number == period_number,
+        Booking.status.notin_(['rejected', 'cancelled'])
+    )
+    if exclude_req_id:
+        q = q.filter(Booking.req_id != exclude_req_id)
+
+    existing = q.first()
+    if existing:
+        return (f'العربة محجوزة مسبقاً في هذه الحصة بتاريخ {booking_date} '
+                f'({existing.stage_name or ""} - {existing.grade_name or ""} {existing.section_name or ""})')
+    return None
+
+
+_WEEKDAY_NAMES_AR = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد']
+_WEEKDAY_NAMES_EN = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+
+def weekday_name(booking_date, lang='ar'):
+    """Bilingual day-of-week name for a 'YYYY-MM-DD' date string (e.g.
+    'الأحد' / 'Sunday'), or '' if the date can't be parsed."""
+    try:
+        idx = datetime.strptime(booking_date, '%Y-%m-%d').weekday()
+    except (ValueError, TypeError):
+        return ''
+    names = _WEEKDAY_NAMES_AR if lang == 'ar' else _WEEKDAY_NAMES_EN
+    return names[idx]
+
+
+def get_period_time(grade_id, period, booking_date):
+    """Return (start_time, end_time) for `period` on `booking_date`
+    (yyyy-MM-dd), using the grade's own weekday-specific schedule
+    (GradePeriodTime) when one exists, and falling back to the period's
+    shared default time otherwise. `period` may be a Period object or
+    None; `grade_id` may be None."""
+    default_start = (period.start_time or '') if period else ''
+    default_end   = (period.end_time or '') if period else ''
+    if not (grade_id and period and booking_date):
+        return default_start, default_end
+
+    from models import GradePeriodTime
+    try:
+        weekday = datetime.strptime(booking_date, '%Y-%m-%d').weekday()
+    except (ValueError, TypeError):
+        return default_start, default_end
+
+    row = GradePeriodTime.query.filter_by(
+        grade_id=grade_id, weekday=weekday, period_number=period.number
+    ).first()
+    if row:
+        return row.start_time, row.end_time
+    return default_start, default_end
+
+
+def is_friday(booking_date):
+    """True if `booking_date` ('YYYY-MM-DD') falls on a Friday — Friday is
+    not a school day, so bookings are not allowed on it. Returns False if
+    the date can't be parsed (caller's own required-field check handles
+    a missing/invalid date)."""
+    try:
+        return datetime.strptime(booking_date, '%Y-%m-%d').weekday() == 4
+    except (ValueError, TypeError):
+        return False
+
+
+def check_blocked(booking_date, start_time, end_time, trolley_code):
+    """Returns {'blocked': bool, 'reason': str, 'fullBlock': bool}.
+    trolley_code may be '' to mean 'applies to all trolleys'."""
+    from models import BlockedPeriod
+    blocks = BlockedPeriod.query.all()
+    for blk in blocks:
+        if booking_date < blk.from_date or booking_date > blk.to_date:
+            continue
+        if blk.hall and trolley_code and blk.hall != trolley_code:
+            continue
+        if not blk.from_time or not blk.to_time:
+            return {'blocked': True, 'reason': blk.reason or 'فترة غير متاحة', 'fullBlock': True}
+        if not start_time or not end_time:
+            return {'blocked': True, 'reason': blk.reason or 'فترة غير متاحة',
+                    'blkFromT': blk.from_time, 'blkToT': blk.to_time}
+        if start_time < blk.to_time and end_time > blk.from_time:
+            return {'blocked': True, 'reason': blk.reason or 'فترة غير متاحة',
+                    'blkFromT': blk.from_time, 'blkToT': blk.to_time}
+    return {'blocked': False}
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def save_upload(file_obj):
+    """Save uploaded file and return its URL path."""
+    if not file_obj or not allowed_file(file_obj.filename):
+        return None
+    ext = file_obj.filename.rsplit('.', 1)[1].lower()
+    fname = secure_filename(f'{uuid.uuid4().hex}.{ext}')
+    upload_dir = current_app.config['UPLOAD_FOLDER']
+    file_obj.save(os.path.join(upload_dir, fname))
+    return f'/uploads/{fname}'
+
+
+def get_all_contact_emails(stage_id=None):
+    """Contacts assigned to a specific stage are notified only for that
+    stage's bookings; contacts with no stage assigned are notified for all."""
+    from models import Contact
+    q = Contact.query
+    if stage_id is not None:
+        q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
+    return [c.email for c in q.all() if is_valid_email(c.email)]
+
+
+
+def get_new_notify_emails_with_actions(stage_id=None):
+    """Contacts who get the 'new pending booking' notice WITH the one-click
+    approve/reject links — the default for anyone with notify_new set and
+    not explicitly marked read-only."""
+    from models import Contact
+    q = Contact.query.filter(
+        (Contact.notify_new == True) | (Contact.notify_new.is_(None))
+    ).filter((Contact.new_readonly == False) | (Contact.new_readonly.is_(None)))
+    if stage_id is not None:
+        q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
+    return [c.email for c in q.all() if is_valid_email(c.email)]
+
+
+def get_new_notify_emails_readonly(stage_id=None):
+    """Contacts who get the 'new pending booking' notice for awareness only
+    — no approve/reject links, so they can't act on it from the email."""
+    from models import Contact
+    q = Contact.query.filter_by(notify_new=True, new_readonly=True)
+    if stage_id is not None:
+        q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
+    return [c.email for c in q.all() if is_valid_email(c.email)]
+
+
+def get_approved_notify_emails(stage_id=None):
+    """Contacts who opted in to a plain notice once a booking is approved
+    (manually or automatically) — no approve/reject links, since it's
+    already decided."""
+    from models import Contact
+    q = Contact.query.filter_by(notify_approved=True)
+    if stage_id is not None:
+        q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
+    return [c.email for c in q.all() if is_valid_email(c.email)]
+
+
+def get_handover_notify_emails(stage_id=None):
+    """Contacts the admin has specifically opted in to be notified whenever
+    a teacher submits a device handover form for this stage."""
+    from models import Contact
+    q = Contact.query.filter_by(notify_handover=True)
+    if stage_id is not None:
+        q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
+    return [c.email for c in q.all() if is_valid_email(c.email)]
+
+
+def get_staff_reminder_emails(stage_id=None):
+    """Contacts opted in to receive the staff booking reminders: the daily
+    "there are bookings today" summary and the per-booking nudge sent
+    shortly before each period starts."""
+    from models import Contact
+    q = Contact.query.filter_by(notify_staff_reminder=True)
+    if stage_id is not None:
+        q = q.filter((Contact.stage_id == stage_id) | (Contact.stage_id.is_(None)))
+    return [c.email for c in q.all() if is_valid_email(c.email)]
+
+
+def get_blocked_for_date(booking_date):
+    """Return list of blocked info dicts for a given date."""
+    from models import BlockedPeriod
+    result = []
+    for blk in BlockedPeriod.query.all():
+        if booking_date < blk.from_date or booking_date > blk.to_date:
+            continue
+        result.append({
+            'reason': blk.reason or 'غير متاح',
+            'fromTime': blk.from_time or '',
+            'toTime': blk.to_time or '',
+            'hall': blk.hall or '',
+        })
+    return result
+
+
+def resolve_stage_grade_section_by_name(stage_name='', grade_name='', section_name=''):
+    """Look up Stage/Grade/Section by their Arabic or English display name
+    (case-insensitive, trimmed) — used for bulk CSV imports where the file
+    names things instead of using internal IDs. Returns (stage, grade,
+    section, error) where error is None on success, or a short message
+    naming exactly what wasn't found."""
+    from models import Stage, Grade, Section
+
+    stage_name = (stage_name or '').strip()
+    grade_name = (grade_name or '').strip()
+    section_name = (section_name or '').strip()
+
+    stage = grade = section = None
+
+    if stage_name:
+        stage = Stage.query.filter(
+            db_ilike(Stage.name_ar, stage_name) | db_ilike(Stage.name_en, stage_name)
+        ).first()
+        if not stage:
+            return None, None, None, f'المرحلة غير موجودة: {stage_name}'
+
+    if grade_name:
+        q = Grade.query.filter(
+            db_ilike(Grade.name_ar, grade_name) | db_ilike(Grade.name_en, grade_name)
+        )
+        if stage:
+            q = q.filter(Grade.stage_id == stage.id)
+        grade = q.first()
+        if not grade:
+            return None, None, None, f'الصف غير موجود: {grade_name}'
+        if not stage:
+            stage = Stage.query.get(grade.stage_id)
+
+    if section_name:
+        q = Section.query.filter(
+            db_ilike(Section.name_ar, section_name) | db_ilike(Section.name_en, section_name)
+        )
+        if grade:
+            q = q.filter(Section.grade_id == grade.id)
+        section = q.first()
+        if not section:
+            return None, None, None, f'الشعبة غير موجودة: {section_name}'
+        if not grade:
+            grade = Grade.query.get(section.grade_id)
+        if not stage:
+            stage = Stage.query.get(grade.stage_id)
+
+    return stage, grade, section, None
+
+
+def db_ilike(column, value):
+    """Case-insensitive exact match helper (works the same on SQLite and
+    Postgres, unlike raw ilike() which SQLite doesn't support natively)."""
+    from sqlalchemy import func
+    return func.lower(column) == value.lower()
