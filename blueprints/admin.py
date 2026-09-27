@@ -895,16 +895,28 @@ def api_add_contacts():
     data  = request.get_json(silent=True) or {}
     items = data.get('list', [])
     added = 0
-    for item in items:
-        em = sanitize_email(item.get('email', ''))
-        stage_id = item.get('stageId') or None
-        if is_valid_email(em):
-            exists = Contact.query.filter_by(email=em, stage_id=stage_id).first()
-            if not exists:
-                db.session.add(Contact(email=em, name=item.get('name', ''), stage_id=stage_id,
-                                        notify_handover=bool(item.get('notifyHandover'))))
-                added += 1
-    db.session.commit()
+    try:
+        for item in items:
+            em = sanitize_email(item.get('email', ''))
+            # stageId arrives as a string from a <select> element's .value
+            # (or as a plain string in the CSV-upload path) — cast it
+            # explicitly instead of relying on the database to coerce it.
+            raw_stage_id = item.get('stageId')
+            try:
+                stage_id = int(raw_stage_id) if raw_stage_id not in (None, '') else None
+            except (TypeError, ValueError):
+                stage_id = None
+            if is_valid_email(em):
+                exists = Contact.query.filter_by(email=em, stage_id=stage_id).first()
+                if not exists:
+                    db.session.add(Contact(email=em, name=item.get('name', ''), stage_id=stage_id,
+                                            notify_handover=bool(item.get('notifyHandover'))))
+                    added += 1
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[contacts] add-contacts failed: {e}", flush=True)
+        return jsonify({'success': False, 'error': 'حدث خطأ أثناء إضافة جهة الاتصال — راجع سجلات الخادم للتفاصيل'}), 500
     return jsonify({'success': True, 'count': added})
 
 
