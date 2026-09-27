@@ -269,15 +269,20 @@ def send_reject(data):
 
 
 def send_cancel(data):
+    reason = (data.get('reason') or '').strip()
+    reason_row_ar = (f'<tr><td style="padding:6px 8px;background:#fef9f0;font-weight:600">سبب الإلغاء</td>'
+                      f'<td style="padding:6px 8px;color:#e67e22;font-weight:600">{esc(reason)}</td></tr>') if reason else ''
+    reason_row_en = (f'<tr><td style="padding:6px 8px;background:#fef9f0;font-weight:600">Cancellation reason</td>'
+                      f'<td style="padding:6px 8px;color:#e67e22;font-weight:600">{esc(reason)}</td></tr>') if reason else ''
     content_ar = f"""
     <h2 style="color:#e67e22;margin-top:0">🚫 تم إلغاء الحجز</h2>
     <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، تم إلغاء طلب الحجز التالي.</p>
-    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_ar(data, bg='#fef9f0')}</table>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_ar(data, bg='#fef9f0')}{reason_row_ar}</table>
     """
     content_en = f"""
     <h2 style="color:#e67e22;margin-top:0">🚫 Booking Cancelled</h2>
     <p>Dear <strong>{data['name']}</strong>, the following booking request has been cancelled.</p>
-    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_en(data, bg='#fef9f0')}</table>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_en(data, bg='#fef9f0')}{reason_row_en}</table>
     """
     return _send(data['email'], data['name'],
                  f"[الرائد العربي / Al-Raed] إلغاء الحجز #{data['reqId']}",
@@ -563,6 +568,8 @@ def send_staff_notification(event_type, data, contacts):
         'revert':  ('🔄', '#e67e22', 'تم إرجاع الحجز لقيد المراجعة', 'Booking reverted to pending'),
     }
     icon, color, title_ar, title_en = labels.get(event_type, ('📌', '#247680', 'إشعار حجز', 'Booking notification'))
+    reason_label_ar = 'سبب الإلغاء' if event_type == 'cancel' else 'سبب الرفض'
+    reason_label_en = 'Cancellation reason' if event_type == 'cancel' else 'Rejection reason'
 
     content_ar = f"""
     <h2 style="color:{color};margin-top:0">{icon} {title_ar}</h2>
@@ -574,7 +581,7 @@ def send_staff_notification(event_type, data, contacts):
         ('المرحلة / الصف / الشعبة', _class_label(data)),
         ('الحصة', data.get('periodLabel')),
         ('التاريخ', data.get('date')),
-        ('سبب الرفض', f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
+        (reason_label_ar, f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
     ], '#f0f7f8')}</table>
     {_action_buttons_html(data, 'ar')}
     """
@@ -588,7 +595,7 @@ def send_staff_notification(event_type, data, contacts):
         ('Stage / Grade / Section', _class_label(data)),
         ('Period', data.get('periodLabel')),
         ('Date', data.get('date')),
-        ('Rejection reason', f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
+        (reason_label_en, f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
     ], '#f0f7f8')}</table>
     {_action_buttons_html(data, 'en')}
     """
