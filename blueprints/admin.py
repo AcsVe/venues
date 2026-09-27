@@ -333,6 +333,7 @@ def api_reject():
 def api_cancel():
     data   = request.get_json(silent=True) or {}
     req_id = data.get('reqId', '')
+    reason = (data.get('reason') or '').strip()
 
     b = Booking.query.filter_by(req_id=req_id).first()
     if not b:
@@ -340,13 +341,14 @@ def api_cancel():
     if b.status == 'cancelled':
         return jsonify({'success': False, 'error': 'الحجز ملغي بالفعل'}), 400
 
-    b.status      = 'cancelled'
-    b.action_date = datetime.utcnow()
+    b.status        = 'cancelled'
+    b.cancel_reason = reason
+    b.action_date   = datetime.utcnow()
     db.session.commit()
 
     try:
-        send_staff_notification('cancel', _booking_email_ctx(b), _get_contacts(b.stage_id))
-        send_cancel(_booking_email_ctx(b))
+        send_staff_notification('cancel', _booking_email_ctx(b, reason=reason), _get_contacts(b.stage_id))
+        send_cancel(_booking_email_ctx(b, reason=reason))
     except Exception as e:
         print(f"[email] notification failed: {e}", flush=True)
 
