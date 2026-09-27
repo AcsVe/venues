@@ -159,6 +159,7 @@ class Booking(db.Model):
     checkout_reminder_sent = db.Column(db.Boolean, default=False)
     staff_reminder_sent = db.Column(db.Boolean, default=False)  # one-shot "your period starts soon" nudge to staff
     reject_reason = db.Column(db.Text)
+    cancel_reason = db.Column(db.Text)   # optional, set when an admin cancels a booking
     cc_emails     = db.Column(db.Text)   # semicolon-separated
     action_date   = db.Column(db.DateTime)
     approved_by   = db.Column(db.String(200))  # name of whoever approved the booking
@@ -189,6 +190,7 @@ class Booking(db.Model):
             'att': [a for a in (self.attachments or '').split(',') if a and '[DEL]' not in a],
             'status': self.status,
             'rejectReason': self.reject_reason or '',
+            'cancelReason': self.cancel_reason or '',
             'approvedBy': self.approved_by or '',
             'cc': self.cc_emails or '',
         }
@@ -438,6 +440,7 @@ def init_db(app):
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS approved_by VARCHAR(200)")
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notify_staff_reminder BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS staff_reminder_sent BOOLEAN DEFAULT FALSE")
+            conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancel_reason TEXT")
             # Contacts can now repeat the same email across different stages —
             # drop the old single-column unique constraint if present.
             try:
