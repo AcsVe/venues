@@ -596,6 +596,13 @@ def api_submit_checkout():
         clean_entries.append((student_id, laptop_number))
 
     checkout = BookingCheckout.query.filter_by(booking_id=b.id).first()
+    # Remember whether this booking already had a submitted handover form —
+    # a teacher can resubmit/correct the same form more than once (e.g. to
+    # fix a laptop number), and each resubmission used to re-send the
+    # "device handover" notification to opted-in staff every time, so one
+    # reservation could produce several emails. Only the first submission
+    # should notify; corrections afterward just update the stored data.
+    is_first_submission = checkout is None
     if checkout:
         CheckoutLine.query.filter_by(checkout_id=checkout.id).delete()
     else:
@@ -618,7 +625,7 @@ def api_submit_checkout():
     db.session.commit()
 
     from utils.helpers import get_handover_notify_emails
-    notify_emails = get_handover_notify_emails(b.stage_id)
+    notify_emails = get_handover_notify_emails(b.stage_id) if is_first_submission else []
     if notify_emails:
         try:
             from utils.email_utils import send_handover_notification
