@@ -101,18 +101,19 @@ def jordan_today_str():
     return jordan_now().strftime('%Y-%m-%d')
 
 
-def period_has_ended(booking_date, start_time, end_time):
-    """True when the period's time on `booking_date` (yyyy-MM-dd) has already
-    passed in Jordan local time. Uses the end time (falls back to the start
-    time). If the period has no usable time, it is never treated as ended."""
-    t = (end_time or start_time or '').strip()
+def period_has_started(booking_date, start_time, end_time):
+    """True once the period's start time on `booking_date` (yyyy-MM-dd) has
+    been reached in Jordan local time (so a running or finished period is no
+    longer bookable). Falls back to the end time if there is no start time;
+    a period with no usable time is never treated as started."""
+    t = (start_time or end_time or '').strip()
     if not (booking_date and t):
         return False
     try:
-        end_dt = datetime.strptime(f'{booking_date} {t}', '%Y-%m-%d %H:%M')
+        start_dt = datetime.strptime(f'{booking_date} {t}', '%Y-%m-%d %H:%M')
     except (ValueError, TypeError):
         return False
-    return jordan_now() >= end_dt
+    return jordan_now() >= start_dt
 
 
 def is_friday(booking_date):
