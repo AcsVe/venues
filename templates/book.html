@@ -328,7 +328,7 @@ async function refreshPeriodAvailability() {
     periodSel.innerHTML = `<option value="">${AR ? '-- اختر الحصة --' : '-- Select Period --'}</option>` +
       periods.map(p => {
         const timeStr = p.startTime ? ` (${p.startTime} - ${p.endTime})` : '';
-        const takenLabel = p.available ? '' : (AR ? ' — محجوزة' : ' — Booked');
+        const takenLabel = p.available ? '' : (p.ended ? (AR ? ' — انتهى وقتها' : ' — Time passed') : (AR ? ' — محجوزة' : ' — Booked'));
         return `<option value="${p.id}" ${p.available ? '' : 'disabled'}>${p.label}${timeStr}${takenLabel}</option>`;
       }).join('');
 
@@ -340,6 +340,17 @@ async function refreshPeriodAvailability() {
   }
   periodSel.disabled = false;
 }
+
+// Periods whose time has passed turn grey automatically (like booked ones):
+// re-check every minute while today's date is selected. Skipped while the
+// teacher has the period list open so it never closes under their hand.
+const TODAY_JO = '{{ today }}';
+setInterval(() => {
+  const periodSel = document.getElementById('periodSel');
+  if (document.hidden || document.activeElement === periodSel) return;
+  if (document.getElementById('bookingDate').value !== TODAY_JO) return;
+  refreshPeriodAvailability();
+}, 60000);
 
 function onGradeChange() {
   const stageId = document.getElementById('stageSel').value;

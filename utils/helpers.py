@@ -1,7 +1,7 @@
 import re
 import os
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from werkzeug.utils import secure_filename
 from flask import current_app
 
@@ -85,6 +85,34 @@ def get_period_time(grade_id, period, booking_date):
     if row:
         return row.start_time, row.end_time
     return default_start, default_end
+
+
+def jordan_now():
+    """Current local time in Jordan (naive datetime). The server runs in UTC,
+    so `date.today()` is wrong between 00:00 and 03:00 Jordan time."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo('Asia/Amman')).replace(tzinfo=None)
+    except Exception:
+        return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=3)
+
+
+def jordan_today_str():
+    return jordan_now().strftime('%Y-%m-%d')
+
+
+def period_has_ended(booking_date, start_time, end_time):
+    """True when the period's time on `booking_date` (yyyy-MM-dd) has already
+    passed in Jordan local time. Uses the end time (falls back to the start
+    time). If the period has no usable time, it is never treated as ended."""
+    t = (end_time or start_time or '').strip()
+    if not (booking_date and t):
+        return False
+    try:
+        end_dt = datetime.strptime(f'{booking_date} {t}', '%Y-%m-%d %H:%M')
+    except (ValueError, TypeError):
+        return False
+    return jordan_now() >= end_dt
 
 
 def is_friday(booking_date):

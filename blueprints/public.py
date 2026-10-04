@@ -9,7 +9,7 @@ from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
                             get_new_notify_emails_with_actions, get_new_notify_emails_readonly, get_approved_notify_emails,
                             get_blocked_for_date, is_valid_email, sanitize_email, get_period_time,
-                            weekday_name, is_friday)
+                            weekday_name, is_friday, jordan_today_str, period_has_ended)
 from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification, send_approve, send_reject
 
 public_bp = Blueprint('public', __name__)
@@ -116,7 +116,7 @@ def month_data():
 def book():
     lang = request.args.get('lang', 'ar')
     pre_date = request.args.get('date', '')
-    today = date.today().strftime('%Y-%m-%d')
+    today = jordan_today_str()
 
     if pre_date and pre_date < today:
         msg = 'لا يمكن الحجز بتاريخ سابق' if lang == 'ar' else 'Cannot book a past date'
@@ -189,7 +189,7 @@ def check_slot():
 
 @public_bp.route('/api/submit-booking', methods=['POST'])
 def submit_booking():
-    today = date.today().strftime('%Y-%m-%d')
+    today = jordan_today_str()
 
     if request.content_type and ('multipart' in request.content_type or
                                   'form' in request.content_type):
@@ -215,6 +215,8 @@ def submit_booking():
         return jsonify({'success': False, 'error': err}), 400
 
     slot_start, slot_end = get_period_time(grade.id, period, booking_date)
+    if period_has_ended(booking_date, slot_start, slot_end):
+        return jsonify({'success': False, 'error': 'انتهى وقت هذه الحصة، يرجى اختيار حصة لاحقة'}), 400
     blk = check_blocked(booking_date, slot_start, slot_end, stage.trolley_code)
     if blk['blocked']:
         msg = f'التاريخ غير متاح: {blk["reason"]}'
@@ -447,11 +449,15 @@ def api_amend_by_user():
         if not (stage and grade and section and period):
             return jsonify({'success': False, 'error': 'تعذر إيجاد بيانات الحجز الأصلية'}), 400
 
+    slot_start, slot_end = get_period_time(grade.id, period, booking_date)
+    if (booking_date != b.booking_date or period.id != b.period_id) and \
+            period_has_ended(booking_date, slot_start, slot_end):
+        return jsonify({'success': False, 'error': 'انتهى وقت هذه الحصة، يرجى اختيار حصة لاحقة'}), 400
+
     conflict = check_conflict(stage.trolley_code, booking_date, period.number, req_id)
     if conflict:
         return jsonify({'success': False, 'error': conflict}), 400
 
-    slot_start, slot_end = get_period_time(grade.id, period, booking_date)
     was_approved = b.status == 'approved'
     b.name          = f.get('fullName', b.name)
     b.phone         = f.get('phone', b.phone or '')
@@ -675,12 +681,14 @@ def api_available_periods():
     for p in periods:
         slot_start, slot_end = get_period_time(grade_id, p, booking_date)
         blk = check_blocked(booking_date, slot_start, slot_end, stage.trolley_code)
-        available = (p.number not in booked_numbers) and not blk['blocked']
+        ended = period_has_ended(booking_date, slot_start, slot_end)
+        available = (p.number not in booked_numbers) and not blk['blocked'] and not ended
         result.append({
             'id': p.id, 'number': p.number,
             'label': p.label_ar or f'الحصة {p.number}',
             'startTime': slot_start, 'endTime': slot_end,
             'available': available,
+            'ended': ended,
         })
 
     return jsonify(result)
