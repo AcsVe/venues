@@ -116,6 +116,21 @@ def period_has_started(booking_date, start_time, end_time):
     return jordan_now() >= start_dt
 
 
+def get_base_url():
+    """Public site address used to build the device-handover form link in
+    emails: the configured BASE_URL, or - when that is not set - the address
+    this very request came in on. Without the fallback the link silently
+    vanished from the approval email. Secret one-click approve/reject links
+    deliberately still require BASE_URL (never derived from request headers)."""
+    base = current_app.config.get('BASE_URL', '')
+    if base:
+        return base
+    from flask import request, has_request_context
+    if has_request_context():
+        return request.url_root.rstrip('/')
+    return ''
+
+
 def is_friday(booking_date):
     """True if `booking_date` ('YYYY-MM-DD') falls on a Friday — Friday is
     not a school day, so bookings are not allowed on it. Returns False if

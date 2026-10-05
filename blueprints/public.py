@@ -9,7 +9,7 @@ from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             save_upload, get_all_contact_emails,
                             get_new_notify_emails_with_actions, get_new_notify_emails_readonly, get_approved_notify_emails,
                             get_blocked_for_date, is_valid_email, sanitize_email, get_period_time,
-                            weekday_name, is_friday, jordan_today_str, period_has_started)
+                            weekday_name, is_friday, jordan_today_str, period_has_started, get_base_url)
 from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification, send_approve, send_reject
 
 public_bp = Blueprint('public', __name__)
@@ -302,7 +302,8 @@ def submit_booking():
         booking.action_date = datetime.utcnow()
         booking.approved_by = 'اعتماد تلقائي (Auto-approve)'
         db.session.commit()
-        checkout_url = f"{base_url}/checkout/{req_id}" if base_url and not AppSetting.get_bool('disable_checkout_form_link', False) else ''
+        _base = get_base_url()
+        checkout_url = f"{_base}/checkout/{req_id}" if _base and not AppSetting.get_bool('disable_checkout_form_link', False) else ''
         try:
             contacts = [{'email': e} for e in get_approved_notify_emails(stage.id)]
             send_staff_notification('approve', email_ctx, contacts)
@@ -783,8 +784,8 @@ def quick_approve(req_id):
     if not approved_by:
         return _action_error_page('اسم المعتمِد مطلوب.', 'The approver name is required.')
 
-    base_url = current_app.config.get('BASE_URL', '')
-    checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url and not AppSetting.get_bool('disable_checkout_form_link', False) else ''
+    _base = get_base_url()
+    checkout_url = f"{_base}/checkout/{b.req_id}" if _base and not AppSetting.get_bool('disable_checkout_form_link', False) else ''
 
     b.status = 'approved'
     b.action_date = datetime.utcnow()

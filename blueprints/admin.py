@@ -6,7 +6,7 @@ from flask import (Blueprint, render_template, request, jsonify,
 from models import (db, Booking, Stage, Grade, Section, Period, BlockedPeriod, Contact,
                     Teacher, Student, BookingCheckout, CheckoutLine, BookingReminder, PushSubscription,
                     AppSetting, GradePeriodTime, BookingComment)
-from utils.helpers import (is_valid_email, sanitize_email, save_upload,
+from utils.helpers import (is_valid_email, sanitize_email, save_upload, get_base_url,
                             get_all_contact_emails, get_approved_notify_emails, check_conflict, check_blocked,
                             resolve_stage_grade_section_by_name, get_period_time, weekday_name,
                             get_comment_notify_emails)
@@ -314,7 +314,7 @@ def api_approve():
     b.approved_by = approved_by
     db.session.commit()
 
-    base_url = current_app.config.get('BASE_URL', '')
+    base_url = get_base_url()
     checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url and not AppSetting.get_bool('disable_checkout_form_link', False) else ''
 
     print(f"[email] DEBUG: approve started for {req_id}", flush=True)
@@ -1477,7 +1477,7 @@ def api_resend_checkout_form():
     if not is_valid_email(b.email):
         return jsonify({'success': False, 'error': 'لا يوجد بريد إلكتروني صحيح لهذا الحجز'}), 400
 
-    base_url = current_app.config.get('BASE_URL', '')
+    base_url = get_base_url()
     checkout_url = f"{base_url}/checkout/{b.req_id}" if base_url else ''
     ctx = {
         'reqId': b.req_id, 'name': b.name, 'email': b.email,
