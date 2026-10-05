@@ -283,6 +283,7 @@ function openDayModal(dateStr, bookings, blocked) {
         '<span><i class="fas fa-laptop"></i> ' + esc(bk.stage || bk.hall) + '</span>' +
         (gradeSectionStr ? '<span><i class="fas fa-chalkboard"></i> ' + esc(gradeSectionStr) + '</span>' : '') +
         (timeStr ? '<span><i class="fas fa-clock"></i> ' + timeStr + '</span>' : '') +
+        (bk.teacher ? '<span><i class="fas fa-user"></i> ' + esc(bk.teacher) + '</span>' : '') +
         '<span class="badge badge-' + bk.status + '">' + statusLabel(bk.status) + '</span>' +
         '</div></div>';
     });

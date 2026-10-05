@@ -91,7 +91,8 @@ def month_data():
             if cur > blk.to_date:
                 break
 
-    # Public view: hide sensitive details for privacy
+    # Public view: hide sensitive details (email, phone, notes, attachments).
+    # The teacher's name is shown next to the period/time on the calendar.
     public_bookings = []
     for b in bookings:
         public_bookings.append({
@@ -104,6 +105,7 @@ def month_data():
             'endTime': b.end_time or '',
             'periodNumber': b.period_number,
             'status': b.status,
+            'teacher': b.name or '',   # name only — never email/phone
         })
     return jsonify({
         'bookings': public_bookings,
