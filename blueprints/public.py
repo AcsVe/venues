@@ -94,15 +94,27 @@ def month_data():
     # Public view: hide sensitive details (email, phone, notes, attachments).
     # The teacher's name is shown next to the period/time on the calendar.
     public_bookings = []
+    period_cache = {}
     for b in bookings:
+        # Bookings made before their grade had a bell schedule were stored
+        # without times. Fill them in from the grade's schedule as it is now,
+        # so the calendar shows times as soon as the schedule is set up.
+        start_t, end_t = b.start_time or '', b.end_time or ''
+        if not (start_t and end_t) and b.period_id:
+            if b.period_id not in period_cache:
+                period_cache[b.period_id] = Period.query.get(b.period_id)
+            per = period_cache[b.period_id]
+            if per:
+                cs, ce = get_period_time(b.grade_id, per, b.booking_date)
+                start_t, end_t = start_t or cs or '', end_t or ce or ''
         public_bookings.append({
             'date': b.booking_date,
             'hall': b.trolley_code or b.hall or '',
             'stage': b.stage_name or '',
             'grade': b.grade_name or '',
             'section': b.section_name or '',
-            'startTime': b.start_time or '',
-            'endTime': b.end_time or '',
+            'startTime': start_t,
+            'endTime': end_t,
             'periodNumber': b.period_number,
             'status': b.status,
             'teacher': b.name or '',   # name only — never email/phone
