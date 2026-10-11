@@ -119,28 +119,9 @@ XEqPZq2IE3k9g455XAokrxI6N2LhLDhtu3SMlEulXPw9IcShiKeKf2xO
     app.register_blueprint(public_bp)
     app.register_blueprint(admin_bp, url_prefix='/admin')
 
-    # حماية بسيطة للصفحات العامة: منع الزر الأيمن واختصارات أدوات المطوّر وعرض المصدر وحفظ الصفحة
-    # (لوحة التحكم /admin مستثناة حتى لا تتعطل أدوات الموظفين). ملاحظة: لا شيء يمنع المصدر نهائياً — هذا ردع فقط.
-    _PROTECT_JS = b"""<script>(function(){function ed(e){return e&&e.closest&&e.closest('input,textarea,select,[contenteditable="true"]');}
-document.addEventListener('contextmenu',function(e){if(!ed(e.target))e.preventDefault();});
-document.addEventListener('keydown',function(e){var k=(e.key||'').toLowerCase(),c=e.ctrlKey||e.metaKey;
-if(e.key==='F12'||(c&&e.shiftKey&&'ijck'.indexOf(k)>-1&&k)||(e.metaKey&&e.altKey&&'ijcu'.indexOf(k)>-1&&k)||(c&&!e.shiftKey&&(k==='u'||k==='s'))){e.preventDefault();e.stopPropagation();return false;}},true);
-document.addEventListener('dragstart',function(e){if(e.target&&e.target.tagName==='IMG')e.preventDefault();});})();</script>"""
-
-    @app.after_request
-    def _protect_pages(resp):
-        from flask import request
-        try:
-            if (resp.mimetype == 'text/html' and not resp.direct_passthrough
-                    and not request.path.startswith('/admin') and resp.status_code < 400 or
-                    resp.mimetype == 'text/html' and request.path.rstrip('/') == '/admin/login'):
-                body = resp.get_data()
-                i = body.rfind(b'</body>')
-                if i != -1:
-                    resp.set_data(body[:i] + _PROTECT_JS + body[i:])
-        except Exception:
-            pass
-        return resp
+    # حماية مصدر الصفحات (تشفير + منع الزر الأيمن والاختصارات) — انظر utils/page_shield.py
+    from utils.page_shield import install as _shield
+    _shield(app)
 
     # Served at the ROOT (not /static/sw.js) so its default scope covers the
     # whole site — a service worker's scope is limited to its own directory
