@@ -3,7 +3,8 @@
 • «عرض المصدر» يُظهر كتلة رموز فقط بدل الكود والنصوص.
 • يمنع أيضاً الزر الأيمن واختصارات عرض المصدر/الحفظ/أدوات المطوّر (إلا داخل خانات الكتابة).
 • يشمل لوحة التحكم. لا يلمس ردود JSON والملفات وأجزاء HTML التي تُطلب بالجافاسكربت.
-• للتعطيل مؤقتاً: PAGE_SHIELD=0 في .env
+• للتعطيل مؤقتاً: PAGE_SHIELD=0 في .env — ولإيقاف كشف أدوات المطوّر فقط: DEVTOOLS_GUARD=0
+• كشف أدوات المطوّر: إن كانت مفتوحة لا يظهر المحتوى، وإن فُتحت أثناء التصفح تُمسح الصفحة خلال ثانية.
 
 ملاحظة صريحة: لا شيء يخفي الكود نهائياً عن خبير — هذا يجعله غير مقروء لعامة الناس.
 """
@@ -29,15 +30,28 @@ def _encode(html_bytes):
     return s.translate(table)[::-1], k
 
 
-def _shell(payload, k):
-    # الفك أثناء تحميل الصفحة (document.write داخل head) فتعمل كل السكربتات والأحداث كالمعتاد
+_BLOCK = ('<div style="font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:center;padding:80px 20px;color:#333">'
+          '<div style="font-size:48px">&#128274;</div><h2 style="margin:16px 0 8px">غير مسموح</h2>'
+          '<p>أدوات المطوّر غير مسموح بها في هذا الموقع.<br>أغلقها ثم أعد تحميل الصفحة.</p>'
+          '<p style="color:#888;font-size:13px">Developer tools are not allowed on this site. Close them and reload.</p></div>')
+
+
+def _shell(payload, k, guard_devtools=True):
+    # الفك أثناء تحميل الصفحة (document.write داخل head) فتعمل كل السكربتات والأحداث كالمعتاد.
+    # كشف أدوات المطوّر: عبارة debugger لا تفعل شيئاً والأدوات مغلقة (لا إنذار خاطئ مع التكبير أو صغر النافذة)،
+    # وعندما تكون مفتوحة يتوقف التنفيذ عندها — فنعرف ونمسح الصفحة.
+    dt = ('function O(){var t=performance.now();debugger;return performance.now()-t>120;}'
+          'function X(){try{document.documentElement.innerHTML="<head><meta charset=utf-8></head><body>"+B+"</body>";}catch(e){}}'
+          'if(O()){document.write(B);return;}') if guard_devtools else 'function O(){return false;}function X(){}'
     return ('<!DOCTYPE html><html><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             '<script>(function(){var A="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",'
-            f'k={k},p="{payload}".split("").reverse().join(""),o="";'
+            f'B={_BLOCK!r};' + dt +
+            f'var k={k},p="{payload}".split("").reverse().join(""),o="";'
             'for(var i=0;i<p.length;i++){var c=p.charAt(i),j=A.indexOf(c);o+=j<0?c:A.charAt((j-k+64)%64);}'
             'var b=atob(o),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);'
-            'document.write(new TextDecoder("utf-8").decode(u));})();</script>'
+            'document.write(new TextDecoder("utf-8").decode(u));'
+            'var iv=setInterval(function(){if(O()){clearInterval(iv);X();}},1000);})();</script>'
             '</head><body></body></html>').encode('utf-8')
 
 
@@ -56,7 +70,7 @@ def install(app):
             i = body.rfind(b'</body>')
             body = body[:i] + _GUARD + body[i:] if i != -1 else body + _GUARD
             payload, k = _encode(body)
-            resp.set_data(_shell(payload, k))
+            resp.set_data(_shell(payload, k, os.environ.get('DEVTOOLS_GUARD', '1') != '0'))
             resp.headers['Cache-Control'] = 'no-store'
         except Exception:
             pass
