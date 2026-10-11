@@ -14,6 +14,7 @@ import gzip
 import os
 import shutil
 import sqlite3
+from contextlib import closing
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -63,7 +64,7 @@ def main():
     with gzip.open(src, 'rb') as fi, open(tmp, 'wb') as fo:
         shutil.copyfileobj(fi, fo)
     try:
-        with sqlite3.connect(tmp) as c:
+        with closing(sqlite3.connect(tmp)) as c:
             ok = c.execute('PRAGMA integrity_check').fetchone()[0]
             n = c.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0]
     except sqlite3.DatabaseError as e:
@@ -76,7 +77,7 @@ def main():
     cur = db_path()
     if os.path.isfile(cur):
         safe = os.path.join(data_dir(), f'before-restore-{stamp()}.db')
-        with sqlite3.connect(cur, timeout=60) as s, sqlite3.connect(safe) as d:
+        with closing(sqlite3.connect(cur, timeout=60)) as s, closing(sqlite3.connect(safe)) as d:
             s.backup(d)
         for old in sorted(glob.glob(os.path.join(data_dir(), 'before-restore-*.db')))[:-5]:
             os.remove(old)

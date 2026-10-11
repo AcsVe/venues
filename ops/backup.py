@@ -14,6 +14,7 @@ import gzip
 import os
 import shutil
 import sqlite3
+from contextlib import closing
 import sys
 import zipfile
 
@@ -46,7 +47,7 @@ def backup_db(dest_dir, tag, keep):
     with tempfile.TemporaryDirectory() as tmpd:
         raw = os.path.join(tmpd, name)
         # نسخة متسقة حتى أثناء عمل الموقع (sqlite backup API) — داخل مجلد مؤقت محلي
-        with sqlite3.connect(src, timeout=60) as s, sqlite3.connect(raw) as d:
+        with closing(sqlite3.connect(src, timeout=60)) as s, closing(sqlite3.connect(raw)) as d:
             s.backup(d)
         gz = raw + '.gz'
         with open(raw, 'rb') as fi, gzip.open(gz, 'wb', compresslevel=6) as fo:
