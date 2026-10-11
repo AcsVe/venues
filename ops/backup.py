@@ -21,26 +21,50 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import BASE, backup_root, db_path, die, load_env, stamp, t, uploads_dir  # noqa: E402
 
 
+def _to_dest(local_file, dest_file):
+    """نسخ ملف جاهز إلى مجلد النسخ مرة واحدة. Google Drive يقفل الملفات الجديدة فوراً للمزامنة،
+    لذلك لا نُنشئ ملفات مؤقتة داخله ولا نعيد تسميتها هناك — نحاول عدة مرات إن كان مشغولاً."""
+    import time
+    for attempt in range(6):
+        try:
+            shutil.copyfile(local_file, dest_file)
+            return
+        except PermissionError:
+            if attempt == 5:
+                raise
+            time.sleep(5)
+
+
 def backup_db(dest_dir, tag, keep):
+    import tempfile
     src = db_path()
     if not os.path.isfile(src):
         die(t(f'لا توجد قاعدة بيانات بعد: {src}', f'No database yet: {src}'))
     os.makedirs(dest_dir, exist_ok=True)
     name = f'venues-{stamp()}{"-" + tag if tag else ""}.db'
-    tmp = os.path.join(dest_dir, name + '.tmp')
-    # نسخة متسقة حتى أثناء عمل الموقع (sqlite backup API)
-    with sqlite3.connect(src, timeout=60) as s, sqlite3.connect(tmp) as d:
-        s.backup(d)
-    with open(tmp, 'rb') as fi, gzip.open(os.path.join(dest_dir, name + '.gz.part'), 'wb', compresslevel=6) as fo:
-        shutil.copyfileobj(fi, fo)
-    os.remove(tmp)
     final = os.path.join(dest_dir, name + '.gz')
-    os.replace(final + '.part', final)
+    with tempfile.TemporaryDirectory() as tmpd:
+        raw = os.path.join(tmpd, name)
+        # نسخة متسقة حتى أثناء عمل الموقع (sqlite backup API) — داخل مجلد مؤقت محلي
+        with sqlite3.connect(src, timeout=60) as s, sqlite3.connect(raw) as d:
+            s.backup(d)
+        gz = raw + '.gz'
+        with open(raw, 'rb') as fi, gzip.open(gz, 'wb', compresslevel=6) as fo:
+            shutil.copyfileobj(fi, fo)
+        _to_dest(gz, final)
     # الاحتفاظ بآخر keep نسخة من نفس النوع
     pattern = '*-phone.db.gz' if tag == 'phone' else 'venues-*.db.gz'
     files = sorted(f for f in glob.glob(os.path.join(dest_dir, pattern)) if tag == 'phone' or not f.endswith('-phone.db.gz'))
     for old in files[:-keep] if keep > 0 else []:
-        os.remove(old)
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+    for junk in glob.glob(os.path.join(dest_dir, '*.tmp')) + glob.glob(os.path.join(dest_dir, '*.part')):
+        try:
+            os.remove(junk)   # بقايا محاولات سابقة
+        except OSError:
+            pass
     return final
 
 
@@ -63,8 +87,11 @@ def mirror(src, dst):
 def code_zip(dest_dir):
     os.makedirs(dest_dir, exist_ok=True)
     skip_dirs = {'.git', 'venv', '.venv', 'data', 'uploads', 'backups', 'logs', '__pycache__'}
+    import tempfile
     out = os.path.join(dest_dir, 'venues-code.zip')
-    with zipfile.ZipFile(out + '.part', 'w', zipfile.ZIP_DEFLATED) as z:
+    tmpd = tempfile.mkdtemp()
+    local = os.path.join(tmpd, 'venues-code.zip')
+    with zipfile.ZipFile(local, 'w', zipfile.ZIP_DEFLATED) as z:
         for root, dirs, files in os.walk(BASE):
             dirs[:] = [d for d in dirs if d not in skip_dirs]
             for f in files:
@@ -76,7 +103,8 @@ def code_zip(dest_dir):
                     z.writestr(arc, open(full, 'rb').read().replace(b'\r\n', b'\n'))
                 else:
                     z.write(full, arc)
-    os.replace(out + '.part', out)
+    _to_dest(local, out)
+    shutil.rmtree(tmpd, ignore_errors=True)
 
 
 def main():
