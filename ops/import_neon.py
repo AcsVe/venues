@@ -19,8 +19,11 @@ from common import die, load_env  # noqa: E402
 def main():
     load_env()
     url = os.environ.get('NEON_DATABASE_URL', '').strip() or getpass.getpass('  الصق رابط Neon (DATABASE_URL من Render) ثم Enter: ').strip()
+    url = ''.join(ch for ch in url if ch.isprintable()).strip()
     if not url:
         die('تم الإلغاء')
+    if '://' not in url:
+        die('الرابط لم يُلصق صحيحاً. في PowerShell الصق بزر الفأرة الأيمن (وليس Ctrl+V) — لا يظهر شيء أثناء اللصق، ثم Enter')
     if url.startswith('postgres://'):
         url = 'postgresql+psycopg://' + url[len('postgres://'):]
     elif url.startswith('postgresql://'):
