@@ -1,0 +1,15 @@
+# بيانات محلية — لا تُرفع أبداً إلى GitHub
+.env
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+uploads/
+data/
+backups/
+logs/
+venv/
+.venv/
+pyexe.txt
+__pycache__/
+*.pyc
