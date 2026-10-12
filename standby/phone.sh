@@ -55,7 +55,7 @@ ask_mail() {   # إعدادات البريد (Microsoft 365) — بدونها ي
   rm -f "$SITE/.mail_skip"
   echo "$(T "  ✓ حُفظت إعدادات البريد (تسري عند التشغيل التالي)" "  ✓ Email settings saved (used from the next start)")"
 }
-other_takeover() { pgrep -f "(iaj|rastkt)/standby/phone.sh takeover" >/dev/null 2>&1; }
+other_takeover() { pgrep -f "(iaj|rastkt|attendance)/standby/phone.sh takeover" >/dev/null 2>&1; }
 
 ensure_env() {
   if [ ! -f "$SITE/.env" ]; then
@@ -126,7 +126,7 @@ case "$1" in
     [ -n "$N" ] || die "$(T "لم يُنزَّل شيء" "Nothing was downloaded")"
     pkill -f "$SITE/serve.py" 2>/dev/null || true
     cd "$SITE" && python ops/restore.py --file "$N" --yes
-    say "$(T "تم. بيانات Neon على الهاتف الآن — للتشغيل للعامة: زر $L 1" "Done. Neon data is on the phone - to serve it publicly: $L 1")"
+    say "$(T "تم. بيانات Neon على الهاتف الآن — للتشغيل للعامة: زر VEN 1" "Done. Neon data is on the phone - to serve it publicly: VEN 1")"
     ;;
 
   try)
