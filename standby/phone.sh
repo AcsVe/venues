@@ -45,6 +45,16 @@ kill_my_tunnel() {
 }
 neon_on() { grep -q '^NEON_BACKUP_URL=.' "$SITE/.env" 2>/dev/null; }
 ensure_pg8000() { python -c "import pg8000" 2>/dev/null || pip install -q pg8000 >/dev/null 2>&1 || true; }
+ask_mail() {   # إعدادات البريد (Microsoft 365) — بدونها يعمل النظام لكن لا يُرسل بريداً
+  echo "$(T "  إعدادات البريد من Render ← الخدمة ← Environment (أو من .env على الكمبيوتر):" "  Email settings from Render > service > Environment (or the PC's .env):")"
+  read -r -p "  MS_TENANT_ID: " A; read -r -p "  MS_CLIENT_ID: " B
+  read -r -s -p "  MS_CLIENT_SECRET: " C; echo; read -r -p "  MS_SENDER_EMAIL: " D
+  [ -n "$A" ] && [ -n "$B" ] && [ -n "$C" ] && [ -n "$D" ] || { echo "$(T "  تم التخطي" "  Skipped")"; return 0; }
+  sed -i '/^MS_TENANT_ID=/d;/^MS_CLIENT_ID=/d;/^MS_CLIENT_SECRET=/d;/^MS_SENDER_EMAIL=/d' "$SITE/.env"
+  printf 'MS_TENANT_ID=%s\nMS_CLIENT_ID=%s\nMS_CLIENT_SECRET=%s\nMS_SENDER_EMAIL=%s\n' "$A" "$B" "$C" "$D" >> "$SITE/.env"
+  rm -f "$SITE/.mail_skip"
+  echo "$(T "  ✓ حُفظت إعدادات البريد (تسري عند التشغيل التالي)" "  ✓ Email settings saved (used from the next start)")"
+}
 other_takeover() { pgrep -f "(iaj|rastkt)/standby/phone.sh takeover" >/dev/null 2>&1; }
 
 ensure_env() {
@@ -100,6 +110,10 @@ case "$1" in
     cd "$SITE" && python ops/restore.py --latest "$LOCAL_BK" --uploads --yes
     ;;
 
+  mail)
+    need_code; ensure_env; ask_mail
+    ;;
+
   neon)
     guard; need_code; ensure_env
     neon_on || die "$(T "لا يوجد رابط Neon — شغّل configure وألصقه عند الطلب" "No Neon link - run configure and paste it when asked")"
@@ -129,6 +143,9 @@ case "$1" in
     say "$(T "جلب رمز نفق الهاتف venues-standby من Cloudflare (يُحفظ ولا يظهر)" "Fetching the phone tunnel token from Cloudflare (saved, not shown)")"
     (cd "$SITE" && python ops/cf.py token > "$TOKEN_FILE.tmp") && [ -s "$TOKEN_FILE.tmp" ] && mv "$TOKEN_FILE.tmp" "$TOKEN_FILE" && chmod 600 "$TOKEN_FILE" \
       || { rm -f "$TOKEN_FILE.tmp"; die "$(T "تعذّر — شغّل أولاً على الكمبيوتر 1_setup.bat (ينشئ النفق)" "Failed - run 1_setup.bat on the PC first (it creates the tunnel)")"; }
+    if ! grep -q '^MS_CLIENT_SECRET=.' "$SITE/.env" && [ ! -f "$SITE/.mail_skip" ]; then
+      ask_mail; grep -q '^MS_CLIENT_SECRET=.' "$SITE/.env" || touch "$SITE/.mail_skip"
+    fi
     if ! neon_on && [ ! -f "$SITE/.neon_skip" ]; then
       read -r -s -p "$(T "  (اختياري) الصق رابط Neon لهذا النظام — أو Enter للتخطي: " "  (optional) Paste this system's Neon link - or Enter to skip: ")" NU; echo
       if [ -n "$NU" ]; then echo "NEON_BACKUP_URL=$NU" >> "$SITE/.env"; ensure_pg8000; (cd "$SITE" && python ops/neon_store.py info) || true
@@ -167,6 +184,7 @@ case "$1" in
       read -r -p "$(T "  للتشغيل رغم ذلك اكتب FORCE، أو Enter للإلغاء: " "  To run anyway type FORCE, or Enter to cancel: ")" ANS
       [ "$ANS" = "FORCE" ] || die "$(T "تم الإلغاء" "Cancelled")"
     fi
+    grep -q '^MS_CLIENT_SECRET=.' "$SITE/.env" || say "$(T "⚠ لا توجد إعدادات بريد على الهاتف — لن يُرسل النظام رسائل. لإضافتها: bash $0 mail" "⚠ No email settings on the phone - no emails will be sent. To add them: bash $0 mail")"
     pkill -f "$SITE/serve.py" 2>/dev/null || true
     kill_my_tunnel; sleep 1
     bash "$0" restore
