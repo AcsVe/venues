@@ -274,17 +274,17 @@ def send_approve(data):
 
     content_ar = f"""
     <h2 style="color:#27ae60;margin-top:0">✅ تمت الموافقة على حجزك</h2>
-    <p>عزيزي <strong>{data['name']}</strong>، يسعدنا إخبارك بأنه تمت الموافقة على طلب حجز العربة.</p>
+    <p>عزيزي <strong>{data['name']}</strong>، نُفيدك بأنه تمت الموافقة على طلب حجز العربة.</p>
     {checkout_ar}
     <table style="width:100%;border-collapse:collapse;margin:8px 0 16px">{_rows_ar(data)}</table>
-    <p style="color:#555">نتمنى لكم حصة مفيدة. في حال الحاجة لأي تعديل يُرجى التواصل معنا.</p>
+    <p style="color:#555">في حال الحاجة إلى أي تعديل يُرجى التواصل معنا.</p>
     """
     content_en = f"""
     <h2 style="color:#27ae60;margin-top:0">✅ Your Booking is Approved</h2>
-    <p>Dear <strong>{data['name']}</strong>, we're happy to let you know your trolley booking request has been approved.</p>
+    <p>Dear <strong>{data['name']}</strong>, this is to confirm that your trolley booking request has been approved.</p>
     {checkout_en}
     <table style="width:100%;border-collapse:collapse;margin:8px 0 16px">{_rows_en(data)}</table>
-    <p style="color:#555">We hope you have a great class. Please contact us if you need any changes.</p>
+    <p style="color:#555">Please contact us if you need any changes.</p>
     """
     return _send(data['email'], data['name'],
                  f"[الرائد العربي / Al-Raed] ✅ تمت الموافقة على حجزك #{data['reqId']}",
