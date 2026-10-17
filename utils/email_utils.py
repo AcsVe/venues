@@ -295,7 +295,7 @@ def send_approve(data):
 def send_reject(data):
     content_ar = f"""
     <h2 style="color:#c0392b;margin-top:0">❌ اعتذار — تعذّر اعتماد طلب الحجز</h2>
-    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، نأسف لإخبارك بأنه تعذّر اعتماد طلب حجزك.</p>
+    <p>عزيزي <strong>{data['name']}</strong>، نأسف لإخبارك بأنه تعذّر اعتماد طلب حجزك.</p>
     <table style="width:100%;border-collapse:collapse;margin:12px 0">
       <tr><td style="padding:6px 8px;background:#fdf0f0;font-weight:600;width:40%">رقم الطلب</td><td style="padding:6px 8px;border-bottom:1px solid #eee">{data['reqId']}</td></tr>
       <tr><td style="padding:6px 8px;background:#fdf0f0;font-weight:600">سبب الحجز</td><td style="padding:6px 8px;border-bottom:1px solid #eee">{data.get('title') or '—'}</td></tr>
@@ -326,7 +326,7 @@ def send_cancel(data):
                       f'<td style="padding:6px 8px;color:#e67e22;font-weight:600">{esc(reason)}</td></tr>') if reason else ''
     content_ar = f"""
     <h2 style="color:#e67e22;margin-top:0">🚫 تم إلغاء الحجز</h2>
-    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، تم إلغاء طلب الحجز التالي.</p>
+    <p>عزيزي <strong>{data['name']}</strong>، تم إلغاء طلب الحجز التالي.</p>
     <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_ar(data, bg='#fef9f0')}{reason_row_ar}</table>
     """
     content_en = f"""
@@ -342,7 +342,7 @@ def send_cancel(data):
 def send_update(data):
     content_ar = f"""
     <h2 style="color:#247680;margin-top:0">✏️ تم تعديل بيانات الحجز</h2>
-    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، تم تعديل بيانات طلب حجزك.</p>
+    <p>عزيزي <strong>{data['name']}</strong>، تم تعديل بيانات طلب حجزك.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">{_rows_ar(data)}</table>
     <p style="color:#555">إذا تم التعديل على حجز معتمد، سيُعاد الحجز إلى قيد المراجعة وسيتم إخطارك بالقرار.</p>
     """
@@ -367,7 +367,7 @@ def send_comment_notification(data):
     comment_en = esc(data.get('comment'))
     content_ar = f"""
     <h2 style="color:#247680;margin-top:0">💬 تعليق جديد على حجزك</h2>
-    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، أضاف/ت <strong>{author}</strong> تعليقاً على طلب حجزك.</p>
+    <p>عزيزي <strong>{data['name']}</strong>، أضاف <strong>{author}</strong> تعليقاً على طلب حجزك.</p>
     <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_ar(data)}</table>
     <div style="background:#f0f7f8;border-radius:8px;padding:10px 14px;margin:10px 0;white-space:pre-wrap">{comment_ar}</div>
     """
@@ -385,7 +385,7 @@ def send_comment_notification(data):
 def send_pending(data):
     content_ar = f"""
     <h2 style="color:#e67e22;margin-top:0">🔄 إعادة الحجز لقيد المراجعة</h2>
-    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، تم إعادة طلب حجزك إلى قيد المراجعة.</p>
+    <p>عزيزي <strong>{data['name']}</strong>، تم إعادة طلب حجزك إلى قيد المراجعة.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">{_rows_ar(data, bg='#fef9f0')}</table>
     """
     content_en = f"""
@@ -528,7 +528,7 @@ def send_checkout_reminder(data):
     checkout_url = data.get('checkoutUrl', '')
     content_ar = f"""
     <h2 style="color:#e67e22;margin-top:0">📋 تذكير — نموذج تسليم الأجهزة</h2>
-    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، يرجى العلم أنه لم يتم تسليم سجل استخدام الطلبة للأجهزة الخاص بحجزكم التالي. يُرجى العمل على تعبئته وإرساله في أقرب وقت ممكن.</p>
+    <p>عزيزي <strong>{data['name']}</strong>، يرجى العلم أنه لم يتم تسليم سجل استخدام الطلبة للأجهزة الخاص بحجزكم التالي. يُرجى العمل على تعبئته وإرساله في أقرب وقت ممكن.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0">{_rows_ar(data, bg='#fef9f0')}</table>
     <div style="text-align:center;margin:16px 0">
       <a href="{checkout_url}" style="display:inline-block;background:#27ae60;color:#fff;padding:9px 20px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem">فتح نموذج تسليم الأجهزة</a>
