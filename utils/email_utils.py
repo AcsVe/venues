@@ -1,10 +1,26 @@
 import time
+import base64
 import requests
 from flask import current_app
 
 # Simple in-memory access-token cache (per process). Avoids requesting a
 # fresh token from Azure AD on every single email send.
 _ms_token_cache = {'token': None, 'expires_at': 0}
+
+
+def _qr_png_b64(url):
+    """ترميز رابط كصورة QR (PNG) بصيغة base64 — تُدرج inline في البريد.
+    يعتمد على مكتبة segno (خفيفة، بلا متطلبات). يرجع None عند تعذّرها."""
+    if not url:
+        return None
+    try:
+        import io, segno
+        buf = io.BytesIO()
+        segno.make(url, error='m').save(buf, kind='png', scale=5, border=2)
+        return base64.b64encode(buf.getvalue()).decode('ascii')
+    except Exception as e:
+        print(f'[email] QR generation skipped: {e}', flush=True)
+        return None
 
 
 def _get_ms_access_token():
@@ -46,7 +62,7 @@ def _get_ms_access_token():
         return None
 
 
-def _send_via_graph(to_email, to_name, subject, html_body, bcc_list=None):
+def _send_via_graph(to_email, to_name, subject, html_body, bcc_list=None, inline_images=None):
     token = _get_ms_access_token()
     if not token:
         return False
@@ -61,6 +77,16 @@ def _send_via_graph(to_email, to_name, subject, html_body, bcc_list=None):
         'body': {'contentType': 'HTML', 'content': html_body},
         'toRecipients': [{'emailAddress': {'address': to_email, 'name': to_name or to_email}}],
     }
+    # صور مضمّنة (QR مثلاً) تُشار إليها في الـ HTML عبر src="cid:<cid>"
+    if inline_images:
+        message['attachments'] = [{
+            '@odata.type': '#microsoft.graph.fileAttachment',
+            'name': img.get('name', img['cid'] + '.png'),
+            'contentType': img.get('mime', 'image/png'),
+            'contentId': img['cid'],
+            'isInline': True,
+            'contentBytes': img['b64'],
+        } for img in inline_images if img.get('b64')]
     if bcc_list:
         unique_bcc = list({e.lower(): e for e in bcc_list if e and '@' in e}.values())
         if unique_bcc:
@@ -83,13 +109,13 @@ def _send_via_graph(to_email, to_name, subject, html_body, bcc_list=None):
         return False
 
 
-def _send(to_email, to_name, subject, html_body, bcc_list=None):
+def _send(to_email, to_name, subject, html_body, bcc_list=None, inline_images=None):
     """Send an email via Microsoft 365 (Graph API)."""
     ms_secret = current_app.config.get('MS_CLIENT_SECRET')
     if not ms_secret:
         print(f"[email] MS_CLIENT_SECRET is NOT set — cannot send (to={to_email})", flush=True)
         return False
-    return _send_via_graph(to_email, to_name, subject, html_body, bcc_list)
+    return _send_via_graph(to_email, to_name, subject, html_body, bcc_list, inline_images)
 
 
 def _abs_logo_url():
@@ -211,37 +237,59 @@ def send_confirm(data):
 
 def send_approve(data):
     checkout_url = data.get('checkoutUrl', '')
+    qr_b64 = _qr_png_b64(checkout_url) if checkout_url else None
+    inline_images = [{'cid': 'handoverqr', 'name': 'handover-qr.png', 'b64': qr_b64}] if qr_b64 else None
+    qr_img_ar = ('<img src="cid:handoverqr" alt="QR" width="128" height="128" '
+                 'style="display:block;margin:0 auto;border:4px solid #fff;border-radius:8px;background:#fff">') if qr_b64 else ''
+    qr_cell_ar = (f'<td style="padding:0 10px;vertical-align:middle;text-align:center">{qr_img_ar}'
+                  '<div style="font-size:.72rem;color:#1f7a44;margin-top:4px">امسح الرمز بالجوال</div></td>') if qr_b64 else ''
+    qr_cell_en = (f'<td style="padding:0 10px;vertical-align:middle;text-align:center">{qr_img_ar}'
+                  '<div style="font-size:.72rem;color:#1f7a44;margin-top:4px">Scan with your phone</div></td>') if qr_b64 else ''
+
+    # بطاقة النموذج البارزة — تظهر أعلى الرسالة قبل التفاصيل، بطريقتين: زر كبير + رمز QR
     checkout_ar = f"""
-    <div style="background:#eef7f0;border:1.5px solid #cfead6;border-radius:10px;padding:14px 16px;margin:16px 0">
-      <div style="font-weight:700;color:#1f7a44;margin-bottom:6px">📋 نموذج تسليم الأجهزة</div>
-      <div style="font-size:.9rem;color:#333;margin-bottom:10px">بعد استخدام العربة، يُرجى تعبئة نموذج تسليم الأجهزة لتسجيل رقم الجهاز الذي استلمه كل طالب.</div>
-      <a href="{checkout_url}" style="display:inline-block;background:#27ae60;color:#fff;padding:9px 20px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem">فتح نموذج تسليم الأجهزة</a>
+    <div style="background:#eaf7ee;border:2px solid #27ae60;border-radius:12px;padding:16px;margin:4px 0 18px">
+      <div style="font-weight:800;color:#1f7a44;font-size:1.02rem;margin-bottom:6px">📋 مطلوب: نموذج تسليم الأجهزة</div>
+      <div style="font-size:.9rem;color:#333;margin-bottom:12px">لا يُعتبر الحجز مكتملاً إلا بعد تعبئة نموذج تسليم الأجهزة لتسجيل رقم الجهاز الذي استلمه كل طالب. يمكنك فتحه بإحدى طريقتين:</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>
+        <td style="padding:0 10px;vertical-align:middle;text-align:center">
+          <a href="{checkout_url}" style="display:inline-block;background:#27ae60;color:#fff;padding:13px 26px;border-radius:9px;text-decoration:none;font-weight:800;font-size:.98rem">فتح نموذج التسليم ▸</a>
+          <div style="font-size:.72rem;color:#1f7a44;margin-top:4px">اضغط الزر على الكمبيوتر</div>
+        </td>
+        {qr_cell_ar}
+      </tr></table>
     </div>""" if checkout_url else ''
     checkout_en = f"""
-    <div style="background:#eef7f0;border:1.5px solid #cfead6;border-radius:10px;padding:14px 16px;margin:16px 0">
-      <div style="font-weight:700;color:#1f7a44;margin-bottom:6px">📋 Device Handover Form</div>
-      <div style="font-size:.9rem;color:#333;margin-bottom:10px">After using the trolley, please fill out the handover form to record which laptop number each student received.</div>
-      <a href="{checkout_url}" style="display:inline-block;background:#27ae60;color:#fff;padding:9px 20px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem">Open Handover Form</a>
+    <div style="background:#eaf7ee;border:2px solid #27ae60;border-radius:12px;padding:16px;margin:4px 0 18px">
+      <div style="font-weight:800;color:#1f7a44;font-size:1.02rem;margin-bottom:6px">📋 Required: Device Handover Form</div>
+      <div style="font-size:.9rem;color:#333;margin-bottom:12px">The booking is not complete until you fill out the device handover form recording which laptop each student received. Open it one of two ways:</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>
+        <td style="padding:0 10px;vertical-align:middle;text-align:center">
+          <a href="{checkout_url}" style="display:inline-block;background:#27ae60;color:#fff;padding:13px 26px;border-radius:9px;text-decoration:none;font-weight:800;font-size:.98rem">Open Handover Form ▸</a>
+          <div style="font-size:.72rem;color:#1f7a44;margin-top:4px">Click on a computer</div>
+        </td>
+        {qr_cell_en}
+      </tr></table>
     </div>""" if checkout_url else ''
 
     content_ar = f"""
     <h2 style="color:#27ae60;margin-top:0">✅ تمت الموافقة على حجزك</h2>
-    <p>عزيزي/عزيزتي <strong>{data['name']}</strong>، يسعدنا إخبارك بأنه تمت الموافقة على طلب حجز العربة.</p>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0">{_rows_ar(data)}</table>
+    <p>عزيزي <strong>{data['name']}</strong>، يسعدنا إخبارك بأنه تمت الموافقة على طلب حجز العربة.</p>
     {checkout_ar}
+    <table style="width:100%;border-collapse:collapse;margin:8px 0 16px">{_rows_ar(data)}</table>
     <p style="color:#555">نتمنى لكم حصة مفيدة. في حال الحاجة لأي تعديل يُرجى التواصل معنا.</p>
     """
     content_en = f"""
     <h2 style="color:#27ae60;margin-top:0">✅ Your Booking is Approved</h2>
     <p>Dear <strong>{data['name']}</strong>, we're happy to let you know your trolley booking request has been approved.</p>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0">{_rows_en(data)}</table>
     {checkout_en}
+    <table style="width:100%;border-collapse:collapse;margin:8px 0 16px">{_rows_en(data)}</table>
     <p style="color:#555">We hope you have a great class. Please contact us if you need any changes.</p>
     """
     return _send(data['email'], data['name'],
                  f"[الرائد العربي / Al-Raed] ✅ تمت الموافقة على حجزك #{data['reqId']}",
                  _base_html(content_ar, content_en, '#27ae60'),
-                 bcc_list=data.get('bcc', []))
+                 bcc_list=data.get('bcc', []), inline_images=inline_images)
 
 
 def send_reject(data):
