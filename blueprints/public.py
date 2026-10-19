@@ -10,7 +10,8 @@ from utils.helpers import (gen_req_id, check_conflict, check_blocked,
                             get_new_notify_emails_with_actions, get_new_notify_emails_readonly, get_approved_notify_emails,
                             get_blocked_for_date, is_valid_email, sanitize_email, get_period_time,
                             weekday_name, is_friday, jordan_today_str, period_has_started, get_base_url,
-                            is_pre_break_blocked, PRE_BREAK_MSG)
+                            is_pre_break_blocked, PRE_BREAK_MSG,
+                            teacher_is_blocked, check_consecutive_period, check_section_daily_limit)
 from utils.email_utils import send_confirm, send_cancel, send_update, send_staff_notification, send_approve, send_reject
 
 public_bp = Blueprint('public', __name__)
@@ -202,6 +203,19 @@ def check_slot():
     if conflict:
         return jsonify({'ok': False, 'error': conflict})
 
+    email = sanitize_email(data.get('email', ''))
+    name = (data.get('fullName') or data.get('name') or '').strip()
+    if teacher_is_blocked(email, name):
+        return jsonify({'ok': False, 'error': 'هذا المعلّم معلّق عن الحجز حالياً. يرجى مراجعة الإدارة.'})
+    if AppSetting.get_bool('block_section_multi_per_day', False):
+        err = check_section_daily_limit(section.id, bdate, exclude)
+        if err:
+            return jsonify({'ok': False, 'error': err})
+    if AppSetting.get_bool('block_consecutive_periods', False):
+        err = check_consecutive_period(email, bdate, period.number, exclude)
+        if err:
+            return jsonify({'ok': False, 'error': err})
+
     return jsonify({'ok': True})
 
 
@@ -248,6 +262,18 @@ def submit_booking():
     conflict = check_conflict(stage.trolley_code, booking_date, period.number)
     if conflict:
         return jsonify({'success': False, 'error': conflict}), 400
+
+    sub_email = sanitize_email(f.get('email', ''))
+    if teacher_is_blocked(sub_email, (f.get('fullName') or '').strip()):
+        return jsonify({'success': False, 'error': 'هذا المعلّم معلّق عن الحجز حالياً. يرجى مراجعة الإدارة.'}), 400
+    if AppSetting.get_bool('block_section_multi_per_day', False):
+        err = check_section_daily_limit(section.id, booking_date)
+        if err:
+            return jsonify({'success': False, 'error': err}), 400
+    if AppSetting.get_bool('block_consecutive_periods', False):
+        err = check_consecutive_period(sub_email, booking_date, period.number)
+        if err:
+            return jsonify({'success': False, 'error': err}), 400
 
     att_urls = []
     for file_obj in files:

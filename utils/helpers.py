@@ -47,6 +47,65 @@ def check_conflict(trolley_code, booking_date, period_number, exclude_req_id=Non
     return None
 
 
+def teacher_is_blocked(email, name=''):
+    """هل المعلّم معلّق عن الحجز؟ المطابقة بالبريد (الأدق) أو بالاسم تماماً.
+    يرجع True عند وجود سجل معلّم محظور مطابق، وإلا False."""
+    from models import Teacher
+    email = (email or '').strip().lower()
+    name = (name or '').strip()
+    if not email and not name:
+        return False
+    q = Teacher.query.filter(Teacher.blocked.is_(True))
+    for t in q.all():
+        if email and (t.email or '').strip().lower() == email:
+            return True
+        if name and (t.name or '').strip() == name:
+            return True
+    return False
+
+
+def check_consecutive_period(email, booking_date, period_number, exclude_req_id=None):
+    """يمنع المعلّم نفسه من حجز حصتين متتاليتين في اليوم نفسه (مثل الأولى
+    والثانية، أو الثانية والثالثة). المطابقة بالبريد. يرجع رسالة خطأ أو None."""
+    from models import Booking
+    email = (email or '').strip().lower()
+    if not email or not period_number:
+        return None
+    adj = [period_number - 1, period_number + 1]
+    q = Booking.query.filter(
+        Booking.booking_date == booking_date,
+        Booking.period_number.in_(adj),
+        Booking.status.notin_(['rejected', 'cancelled']),
+    )
+    if exclude_req_id:
+        q = q.filter(Booking.req_id != exclude_req_id)
+    for b in q.all():
+        if (b.email or '').strip().lower() == email:
+            return ('لا يمكن حجز حصتين متتاليتين في اليوم نفسه. '
+                    f'لديك حجز بالحصة ({b.period_number}) بتاريخ {booking_date}.')
+    return None
+
+
+def check_section_daily_limit(section_id, booking_date, exclude_req_id=None):
+    """يمنع حجز العربة للشعبة نفسها أكثر من حصة واحدة في اليوم نفسه.
+    يرجع رسالة خطأ أو None."""
+    from models import Booking
+    if not section_id:
+        return None
+    q = Booking.query.filter(
+        Booking.section_id == section_id,
+        Booking.booking_date == booking_date,
+        Booking.status.notin_(['rejected', 'cancelled']),
+    )
+    if exclude_req_id:
+        q = q.filter(Booking.req_id != exclude_req_id)
+    existing = q.first()
+    if existing:
+        return ('لا يمكن حجز العربة لهذه الشعبة أكثر من حصة واحدة في اليوم نفسه. '
+                f'يوجد حجز قائم بالحصة ({existing.period_number}) بتاريخ {booking_date}.')
+    return None
+
+
 _WEEKDAY_NAMES_AR = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد']
 _WEEKDAY_NAMES_EN = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 

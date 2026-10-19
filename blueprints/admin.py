@@ -166,6 +166,8 @@ def api_get_settings():
         'staffDailySummaryTime': AppSetting.get_str('staff_daily_summary_time', '07:00'),
         'staffReminderLeadMinutes': AppSetting.get_str('staff_reminder_lead_minutes', ''),
         'preBreakPeriodsEnabled': AppSetting.get_bool('pre_break_periods_enabled', True),
+        'blockConsecutivePeriods': AppSetting.get_bool('block_consecutive_periods', False),
+        'blockSectionMultiPerDay': AppSetting.get_bool('block_section_multi_per_day', False),
     })
 
 
@@ -181,6 +183,10 @@ def api_update_settings():
         AppSetting.set_bool('disable_checkout_form_link', bool(data['disableCheckoutFormLink']))
     if 'preBreakPeriodsEnabled' in data:
         AppSetting.set_bool('pre_break_periods_enabled', bool(data['preBreakPeriodsEnabled']))
+    if 'blockConsecutivePeriods' in data:
+        AppSetting.set_bool('block_consecutive_periods', bool(data['blockConsecutivePeriods']))
+    if 'blockSectionMultiPerDay' in data:
+        AppSetting.set_bool('block_section_multi_per_day', bool(data['blockSectionMultiPerDay']))
     if 'staffDailySummaryEnabled' in data:
         AppSetting.set_bool('staff_daily_summary_enabled', bool(data['staffDailySummaryEnabled']))
     if 'staffDailySummaryTime' in data:
@@ -1056,7 +1062,8 @@ def api_add_teacher():
         return jsonify({'success': False, 'error': 'اسم المعلم مطلوب'}), 400
     tch = Teacher(name=data['name'], email=sanitize_email(data.get('email', '')),
                   phone=data.get('phone', ''), stage_id=data.get('stageId') or None,
-                  grade_id=data.get('gradeId') or None, section_id=data.get('sectionId') or None)
+                  grade_id=data.get('gradeId') or None, section_id=data.get('sectionId') or None,
+                  blocked=bool(data.get('blocked', False)))
     db.session.add(tch)
     db.session.commit()
     return jsonify({'success': True, 'id': tch.id})
@@ -1108,8 +1115,25 @@ def api_update_teacher():
     tch.stage_id   = data.get('stageId') or None
     tch.grade_id   = data.get('gradeId') or None
     tch.section_id = data.get('sectionId') or None
+    if 'blocked' in data:
+        tch.blocked = bool(data['blocked'])
     db.session.commit()
     return jsonify({'success': True})
+
+
+@admin_bp.route('/api/block-teachers-bulk', methods=['POST'])
+@login_required
+def api_block_teachers_bulk():
+    """تعليق/رفع تعليق مجموعة من المعلمين عن الحجز دفعة واحدة."""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    blocked = bool(data.get('blocked', True))
+    if not ids:
+        return jsonify({'success': False, 'error': 'لم يتم تحديد أي معلم'}), 400
+    count = (Teacher.query.filter(Teacher.id.in_(ids))
+             .update({Teacher.blocked: blocked}, synchronize_session=False))
+    db.session.commit()
+    return jsonify({'success': True, 'count': count, 'blocked': blocked})
 
 
 @admin_bp.route('/api/delete-teacher', methods=['POST'])

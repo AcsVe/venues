@@ -17,6 +17,7 @@ class Teacher(db.Model):
     stage_id   = db.Column(db.Integer, db.ForeignKey('stages.id'))
     grade_id   = db.Column(db.Integer, db.ForeignKey('grades.id'))
     section_id = db.Column(db.Integer, db.ForeignKey('sections.id'))
+    blocked    = db.Column(db.Boolean, default=False)   # معلّق عن الحجز — تمنعه قواعد الحجز
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -24,6 +25,7 @@ class Teacher(db.Model):
             'id': self.id, 'name': self.name, 'email': self.email or '',
             'phone': self.phone or '', 'stageId': self.stage_id,
             'gradeId': self.grade_id, 'sectionId': self.section_id,
+            'blocked': bool(self.blocked),
         }
 
 
@@ -461,6 +463,7 @@ def init_db(app):
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notify_approved BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS grade_id INTEGER")
             conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS section_id INTEGER")
+            conn.exec_driver_sql("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS approved_by VARCHAR(200)")
             conn.exec_driver_sql("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notify_staff_reminder BOOLEAN DEFAULT FALSE")
             conn.exec_driver_sql("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS staff_reminder_sent BOOLEAN DEFAULT FALSE")
