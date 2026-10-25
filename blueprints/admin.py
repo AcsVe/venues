@@ -1054,6 +1054,57 @@ def api_teachers():
     return jsonify([t.to_dict() for t in teachers])
 
 
+# ── Scrolling ticker (global announcement marquee — the same module as the tickets system) ─────────
+@admin_bp.route('/api/ticker-settings')
+@login_required
+def api_get_ticker_settings():
+    from utils.ticker_utils import get_ticker_config
+    return jsonify(get_ticker_config())
+
+
+@admin_bp.route('/api/ticker-settings', methods=['POST'])
+@login_required
+def api_set_ticker_settings():
+    from utils.ticker_utils import set_ticker_config
+    data = request.get_json(silent=True) or {}
+    cfg = {}
+    if 'enabled' in data:
+        cfg['enabled'] = bool(data['enabled'])
+    if 'html' in data:
+        cfg['html'] = data['html'] or ''
+    if 'htmlEn' in data:
+        cfg['htmlEn'] = data['htmlEn'] or ''
+    if 'speedSeconds' in data:
+        try:
+            cfg['speedSeconds'] = max(5, min(180, int(data['speedSeconds'])))
+        except (TypeError, ValueError):
+            pass
+    if 'pulse' in data:
+        cfg['pulse'] = bool(data['pulse'])
+    if 'pulseSeconds' in data:
+        try:
+            cfg['pulseSeconds'] = max(0.3, min(10, float(data['pulseSeconds'])))
+        except (TypeError, ValueError):
+            pass
+    if data.get('textShadow') in ('none', 'light', 'strong'):
+        cfg['textShadow'] = data['textShadow']
+    if 'rssColor' in data and re.fullmatch(r'#[0-9a-fA-F]{6}', str(data['rssColor'] or '')):
+        cfg['rssColor'] = data['rssColor']
+    if 'rssBold' in data:
+        cfg['rssBold'] = bool(data['rssBold'])
+    if 'rssFontSize' in data:
+        try:
+            cfg['rssFontSize'] = max(10, min(40, int(data['rssFontSize'])))
+        except (TypeError, ValueError):
+            pass
+    if 'logoBetween' in data:
+        cfg['logoBetween'] = bool(data['logoBetween'])
+    if 'rssUrl' in data:
+        url = sanitize_email(data['rssUrl'] or '')          # strips control / zero-width characters
+        cfg['rssUrl'] = url if re.match(r'^https?://', url) else ''
+    return jsonify(set_ticker_config(cfg))
+
+
 @admin_bp.route('/api/teachers-export.csv')
 @login_required
 def api_teachers_export():

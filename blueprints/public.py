@@ -925,3 +925,11 @@ def quick_reject(req_id):
         'تم رفض الحجز', 'Booking Rejected',
         f'تم رفض الحجز رقم {b.req_id} وإشعار {b.name} بالسبب.',
         f'Booking #{b.req_id} has been rejected, and {b.name} has been notified.', '#c0392b')
+
+
+@public_bp.route('/api/ticker')
+def api_ticker():
+    """Public, unauthenticated — the scrolling ticker renders on every page (including for anonymous
+    visitors), so its settings must be readable without a login."""
+    from utils.ticker_utils import build_ticker_payload
+    return jsonify(build_ticker_payload())

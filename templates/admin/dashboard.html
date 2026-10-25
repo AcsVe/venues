@@ -17,7 +17,12 @@
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
   <style>
+    /* The ticker (templates/_ticker.html) spans only the area next to the sidebar, like a frozen header,
+       and the page moves down by its fixed height (38px) while it shows. */
+    #globalTicker, body #globalTicker { inset-inline-start: var(--sidebar); }
+    body.has-ticker .main { padding-top: 38px; }
     :root {
       --primary: #FF5733; --primary-dark: #C43D1F; --primary-light: #FF8563;
       --secondary: #2E4E7A; --secondary-dark: #1B3358; --secondary-light: #5A7CA8;
@@ -350,6 +355,7 @@
   </style>
 </head>
 <body>
+{% include "_ticker.html" %}
 <!-- Sidebar -->
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 <nav class="sidebar" id="sidebar">
@@ -370,6 +376,7 @@
     <button class="nav-item" onclick="showTab('archive')"><i class="fas fa-archive"></i> الأرشفة</button>
     <button class="nav-item" onclick="showTab('settings')"><i class="fas fa-cog"></i> الإعدادات</button>
     <button class="nav-item" onclick="showTab('calview')"><i class="fas fa-calendar-alt"></i> التقويم</button>
+    <button class="nav-item" onclick="showTab('ticker')"><i class="fas fa-bullhorn"></i> الشريط الإعلاني</button>
   </div>
   <div class="sidebar-footer">
     <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
@@ -973,6 +980,67 @@
       <div id="settingsContent"></div>
     </div>
 
+    <!-- ── TICKER TAB — scrolling announcement marquee (the same module as the tickets system) ── -->
+    <div class="tab-panel" id="tab-ticker">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-bullhorn"></i> الشريط الإعلاني المتحرك</div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:14px">
+          <input type="checkbox" id="tickerEnabled"> <span>تفعيل الشريط على كل الصفحات</span>
+        </label>
+        <label style="font-weight:700;display:block;margin-bottom:6px">محتوى الشريط (عربي)</label>
+        <div id="tickerQuill" style="background:#fff;min-height:120px"></div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:6px">يمكنك تلوين النص، تنسيق الخط، وإضافة روابط — لكل الفقرة أو لجزء محدد منها. كل سطر فقرة مستقلة في الشريط.</div>
+        <label style="font-weight:700;display:block;margin:16px 0 6px">محتوى الشريط (إنجليزي)</label>
+        <div id="tickerQuillEn" style="background:#fff;min-height:120px" dir="ltr"></div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:6px">يظهر هذا المحتوى فقط عند تصفح الموقع بالإنجليزية — إن تُرك فارغاً يُستخدم المحتوى العربي بدلاً منه.</div>
+        <div class="form-grid" style="margin-top:16px">
+          <div class="form-group">
+            <label>سرعة الشريط (ثواني لكل دورة)</label>
+            <input type="number" id="tickerSpeed" min="5" max="180" step="1">
+            <div style="font-size:.76rem;color:var(--muted)">رقم أصغر = حركة أسرع</div>
+          </div>
+          <div class="form-group">
+            <label>رابط RSS (اختياري)</label>
+            <input type="text" id="tickerRssUrl" dir="ltr" placeholder="https://example.com/feed.xml">
+          </div>
+          <div class="form-group">
+            <label>لون نص أخبار RSS</label>
+            <input type="color" id="tickerRssColor" style="height:38px;padding:2px;cursor:pointer">
+          </div>
+          <div class="form-group">
+            <label>حجم خط أخبار RSS</label>
+            <input type="number" id="tickerRssFontSize" min="10" max="40" step="1">
+          </div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:10px">
+          <input type="checkbox" id="tickerRssBold"> <span>خط عريض لأخبار RSS</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:10px">
+          <input type="checkbox" id="tickerLogoBetween"> <span>إظهار الشعار بين فقرات الشريط</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:10px">
+          <input type="checkbox" id="tickerPulse" onchange="document.getElementById('tickerPulseSpeedRow').style.display = this.checked ? '' : 'none'">
+          <span>تأثير النبض (وميض)</span>
+        </label>
+        <div class="form-group" id="tickerPulseSpeedRow" style="display:none;margin-top:8px;max-width:260px">
+          <label>سرعة النبض (ثواني لكل ومضة)</label>
+          <input type="number" id="tickerPulseSpeed" min="0.3" max="10" step="0.1">
+        </div>
+        <div class="form-group" style="margin-top:12px;max-width:260px">
+          <label>ظل النص (لوضوح أفضل)</label>
+          <select id="tickerShadow">
+            <option value="none">بدون ظل</option>
+            <option value="light">ظل خفيف</option>
+            <option value="strong">ظل قوي</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+          <button class="btn btn-primary" onclick="saveTickerSettings()"><i class="fas fa-save"></i> حفظ</button>
+          <a class="btn btn-outline" href="/calendar" target="_blank"><i class="fas fa-eye"></i> معاينة على الموقع</a>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -1071,6 +1139,7 @@
 <!-- ── TOAST ── -->
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
 <script>
 // ── Global state ──
 let allBookings = [], hallsList = [], curFilter = 'all', curSearch = '';
@@ -1080,6 +1149,27 @@ let PERIODS = [];
 
 // ── i18n (bilingual admin panel; layout stays RTL, only text swaps) ──
 const I18N_EN = {
+  "الشريط الإعلاني": "Announcement Ticker",
+  "الشريط الإعلاني المتحرك": "Scrolling Announcement Ticker",
+  "تفعيل الشريط على كل الصفحات": "Enable the ticker on every page",
+  "محتوى الشريط (عربي)": "Ticker Content (Arabic)",
+  "محتوى الشريط (إنجليزي)": "Ticker Content (English)",
+  "يمكنك تلوين النص، تنسيق الخط، وإضافة روابط — لكل الفقرة أو لجزء محدد منها. كل سطر فقرة مستقلة في الشريط.": "You can color text, format the font, and add links — for the whole paragraph or just a selected part. Each line is its own item in the ticker.",
+  "يظهر هذا المحتوى فقط عند تصفح الموقع بالإنجليزية — إن تُرك فارغاً يُستخدم المحتوى العربي بدلاً منه.": "This shows only when the site is viewed in English — if left empty, the Arabic content is used instead.",
+  "سرعة الشريط (ثواني لكل دورة)": "Ticker Speed (seconds per loop)",
+  "رقم أصغر = حركة أسرع": "A smaller number = faster movement",
+  "رابط RSS (اختياري)": "RSS Feed URL (optional)",
+  "لون نص أخبار RSS": "RSS Text Color",
+  "حجم خط أخبار RSS": "RSS Font Size (px)",
+  "خط عريض لأخبار RSS": "Bold RSS text",
+  "إظهار الشعار بين فقرات الشريط": "Show the logo between ticker items",
+  "تأثير النبض (وميض)": "Pulse (blinking) effect",
+  "سرعة النبض (ثواني لكل ومضة)": "Pulse Speed (seconds per blink)",
+  "ظل النص (لوضوح أفضل)": "Text Shadow (for better legibility)",
+  "بدون ظل": "None", "ظل خفيف": "Light", "ظل قوي": "Strong",
+  "معاينة على الموقع": "Preview on the site",
+  "تعذّر تحميل محرر النص — تحقق من الاتصال بالإنترنت": "The text editor could not load — check the internet connection",
+
   "التعليقات": "Comments",
   "طلبات الحجز": "Bookings",
   "المراحل والعربات": "Stages & Trolleys",
@@ -1395,7 +1485,7 @@ function captureStaticText() {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
     acceptNode(n) {
       if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-      if (n.parentElement && n.parentElement.closest('script,style')) return NodeFilter.FILTER_REJECT;
+      if (n.parentElement && n.parentElement.closest('script,style,#globalTicker,.ql-editor,.ql-toolbar')) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     }
   });
@@ -1436,6 +1526,7 @@ function toggleLang() {
   AR = !AR;
   localStorage.setItem('adminLang', AR ? 'ar' : 'en');
   applyStaticLang();
+  if (window.reloadTicker) window.reloadTicker();   // the ticker follows the language (text and direction)
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -1463,7 +1554,7 @@ function showTab(name) {
     }
   });
   history.replaceState(null, '', '#' + name);
-  const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), archive:t('الأرشفة'), settings:t('الإعدادات'), calview:t('التقويم المرئي')};
+  const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), archive:t('الأرشفة'), settings:t('الإعدادات'), calview:t('التقويم المرئي'), ticker:t('الشريط الإعلاني')};
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
   if (name === 'calview')  initAdminCal();
@@ -1473,6 +1564,7 @@ function showTab(name) {
   if (name === 'students') loadStudentsTab();
   if (name === 'reports')  { loadReportStats(); loadCheckoutReport(); }
   if (name === 'settings') renderSettingsTab();
+  if (name === 'ticker') loadTickerSettings();
 }
 
 // ── Clock ──
@@ -1536,6 +1628,77 @@ function printLetterheadHtml(bodyHtml, titleAr, titleEn, hideOrgName) {
 }
 
 // ── API helpers ──
+// ── Ticker (scrolling marquee) — the same settings as the tickets system ─────
+let tickerQuillInstance = null;
+let tickerQuillEnInstance = null;
+
+function makeTickerQuill(selector) {
+  const SizeStyle = Quill.import('attributors/style/size');
+  SizeStyle.whitelist = ['12px', '16px', '22px', '32px'];
+  Quill.register(SizeStyle, true);
+  return new Quill(selector, {
+    theme: 'snow',
+    modules: {
+      toolbar: [
+        ['bold', 'italic', 'underline'],
+        [{ color: [] }, { background: [] }],
+        [{ size: ['12px', '16px', '22px', '32px'] }],
+        ['link'],
+        ['clean'],
+      ],
+    },
+  });
+}
+function getTickerQuill() {
+  if (!tickerQuillInstance) {
+    tickerQuillInstance = makeTickerQuill('#tickerQuill');
+    tickerQuillInstance.root.setAttribute('dir', 'rtl');   // Arabic content is written right-to-left
+  }
+  return tickerQuillInstance;
+}
+function getTickerQuillEn() {
+  if (!tickerQuillEnInstance) tickerQuillEnInstance = makeTickerQuill('#tickerQuillEn');
+  return tickerQuillEnInstance;
+}
+
+async function loadTickerSettings() {
+  if (typeof Quill === 'undefined') { showToast(t('تعذّر تحميل محرر النص — تحقق من الاتصال بالإنترنت'), '#c0392b'); return; }
+  const cfg = await fetch('/admin/api/ticker-settings').then(r => r.json());
+  getTickerQuill().root.innerHTML = cfg.html || '';
+  getTickerQuillEn().root.innerHTML = cfg.htmlEn || '';
+  document.getElementById('tickerEnabled').checked = !!cfg.enabled;
+  document.getElementById('tickerSpeed').value = cfg.speedSeconds || 25;
+  document.getElementById('tickerRssUrl').value = cfg.rssUrl || '';
+  document.getElementById('tickerRssColor').value = cfg.rssColor || '#ffffff';
+  document.getElementById('tickerRssFontSize').value = cfg.rssFontSize || 16;
+  document.getElementById('tickerRssBold').checked = cfg.rssBold !== false;
+  document.getElementById('tickerLogoBetween').checked = !!cfg.logoBetween;
+  document.getElementById('tickerPulse').checked = !!cfg.pulse;
+  document.getElementById('tickerPulseSpeed').value = cfg.pulseSeconds || 1.6;
+  document.getElementById('tickerPulseSpeedRow').style.display = cfg.pulse ? '' : 'none';
+  document.getElementById('tickerShadow').value = cfg.textShadow || 'light';
+}
+
+async function saveTickerSettings() {
+  if (typeof Quill === 'undefined') return;
+  await api('/admin/api/ticker-settings', {
+    enabled: document.getElementById('tickerEnabled').checked,
+    html: getTickerQuill().root.innerHTML,
+    htmlEn: getTickerQuillEn().root.innerHTML,
+    speedSeconds: parseInt(document.getElementById('tickerSpeed').value, 10) || 25,
+    rssUrl: document.getElementById('tickerRssUrl').value.trim(),
+    rssColor: document.getElementById('tickerRssColor').value,
+    rssFontSize: parseInt(document.getElementById('tickerRssFontSize').value, 10) || 16,
+    rssBold: document.getElementById('tickerRssBold').checked,
+    logoBetween: document.getElementById('tickerLogoBetween').checked,
+    pulse: document.getElementById('tickerPulse').checked,
+    pulseSeconds: parseFloat(document.getElementById('tickerPulseSpeed').value) || 1.6,
+    textShadow: document.getElementById('tickerShadow').value,
+  });
+  showToast(t('تم الحفظ ✓'));
+  if (window.reloadTicker) window.reloadTicker();   // the live ticker follows the new settings right away
+}
+
 async function api(url, body) {
   const res = await fetch(url, {
     method: 'POST',
@@ -4388,7 +4551,7 @@ loadPeriods();
 
 // Restore whichever tab the URL hash points to (so refresh/reload/shared
 // links keep the same tab instead of always resetting to Bookings).
-const validTabs = ['bookings','halls','blocked','contacts','teachers','students','reports','archive','settings','calview'];
+const validTabs = ['bookings','halls','blocked','contacts','teachers','students','reports','archive','settings','calview','ticker'];
 const initialTab = location.hash.replace('#', '');
 if (validTabs.includes(initialTab)) {
   showTab(initialTab);

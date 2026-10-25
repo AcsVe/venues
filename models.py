@@ -380,6 +380,28 @@ class AppSetting(db.Model):
         db.session.commit()
 
 
+class SiteSetting(db.Model):
+    """Key/value store for long values (the news ticker's rich text) — app_settings.value is only 500
+    characters. A new table, so db.create_all() adds it on start-up; nothing to migrate."""
+    __tablename__ = 'site_settings'
+    key   = db.Column(db.String(80), primary_key=True)
+    value = db.Column(db.Text)
+
+
+def get_setting(key, default=None):
+    row = db.session.get(SiteSetting, key)
+    return row.value if row is not None else default
+
+
+def set_setting(key, value):
+    row = db.session.get(SiteSetting, key)
+    if row is None:
+        row = SiteSetting(key=key)
+        db.session.add(row)
+    row.value = value
+    db.session.commit()
+
+
 class BlockedPeriod(db.Model):
     """A date/time range during which a stage's trolley (or all trolleys, if
     left blank) cannot be booked."""

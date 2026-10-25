@@ -17,6 +17,8 @@
       justify-content: center;
       padding: 20px;
     }
+    body.has-ticker { padding-top: 58px; }           /* the ticker's fixed height (38px) + the usual margin */
+    body.has-ticker .lang-switch { top: 54px; }
     .lang-switch {
       position: fixed; top: 16px; {{ 'left' if lang == 'ar' else 'right' }}: 16px;
       background: rgba(255,255,255,.15); color: #fff; text-decoration: none;
@@ -91,6 +93,7 @@
   </style>
 </head>
 <body>
+  {% include "_ticker.html" %}
   <a class="lang-switch" href="?lang={{ 'en' if lang == 'ar' else 'ar' }}">
     <i class="fas fa-globe"></i> {{ 'EN' if lang == 'ar' else 'عربي' }}
   </a>
