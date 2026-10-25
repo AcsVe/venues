@@ -1099,6 +1099,14 @@ def api_set_ticker_settings():
             pass
     if 'logoBetween' in data:
         cfg['logoBetween'] = bool(data['logoBetween'])
+    for key in ('bgColor', 'textColor'):
+        if key in data and re.fullmatch(r'#[0-9a-fA-F]{6}', str(data[key] or '')):
+            cfg[key] = data[key]
+    if 'bgOpacity' in data:
+        try:
+            cfg['bgOpacity'] = max(0, min(100, int(data['bgOpacity'])))
+        except (TypeError, ValueError):
+            pass
     if 'rssUrl' in data:
         url = sanitize_email(data['rssUrl'] or '')          # strips control / zero-width characters
         cfg['rssUrl'] = url if re.match(r'^https?://', url) else ''

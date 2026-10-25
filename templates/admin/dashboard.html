@@ -1026,6 +1026,21 @@
           <label>سرعة النبض (ثواني لكل ومضة)</label>
           <input type="number" id="tickerPulseSpeed" min="0.3" max="10" step="0.1">
         </div>
+        <div class="form-grid" style="margin-top:14px">
+          <div class="form-group">
+            <label>لون خلفية الشريط</label>
+            <input type="color" id="tickerBgColor" style="height:38px;padding:2px;cursor:pointer" oninput="previewTickerColors()">
+          </div>
+          <div class="form-group">
+            <label><span>شفافية الخلفية:</span> <b id="tickerBgOpacityVal">0%</b></label>
+            <input type="range" id="tickerBgOpacity" min="0" max="100" step="5" style="width:100%" oninput="previewTickerColors()">
+            <div style="font-size:.76rem;color:var(--muted)">0% = شفاف تماماً (كما كان)، 100% = لون كامل</div>
+          </div>
+          <div class="form-group">
+            <label>لون النص</label>
+            <input type="color" id="tickerTextColor" style="height:38px;padding:2px;cursor:pointer" oninput="previewTickerColors()">
+          </div>
+        </div>
         <div class="form-group" style="margin-top:12px;max-width:260px">
           <label>ظل النص (لوضوح أفضل)</label>
           <select id="tickerShadow">
@@ -1168,6 +1183,10 @@ const I18N_EN = {
   "ظل النص (لوضوح أفضل)": "Text Shadow (for better legibility)",
   "بدون ظل": "None", "ظل خفيف": "Light", "ظل قوي": "Strong",
   "معاينة على الموقع": "Preview on the site",
+  "لون خلفية الشريط": "Ticker background colour",
+  "شفافية الخلفية:": "Background opacity:",
+  "0% = شفاف تماماً (كما كان)، 100% = لون كامل": "0% = fully transparent (as before), 100% = solid colour",
+  "لون النص": "Text colour",
   "تعذّر تحميل محرر النص — تحقق من الاتصال بالإنترنت": "The text editor could not load — check the internet connection",
 
   "التعليقات": "Comments",
@@ -1677,6 +1696,22 @@ async function loadTickerSettings() {
   document.getElementById('tickerPulseSpeed').value = cfg.pulseSeconds || 1.6;
   document.getElementById('tickerPulseSpeedRow').style.display = cfg.pulse ? '' : 'none';
   document.getElementById('tickerShadow').value = cfg.textShadow || 'light';
+  document.getElementById('tickerBgColor').value = cfg.bgColor || '#1B3358';
+  document.getElementById('tickerBgOpacity').value = cfg.bgOpacity || 0;
+  document.getElementById('tickerBgOpacityVal').textContent = (cfg.bgOpacity || 0) + '%';
+  document.getElementById('tickerTextColor').value = cfg.textColor || '#ffffff';
+}
+
+
+// Live look of the bar while the colour / opacity controls move (saved with «حفظ»).
+function previewTickerColors() {
+  const op = parseInt(document.getElementById('tickerBgOpacity').value, 10) || 0;
+  document.getElementById('tickerBgOpacityVal').textContent = op + '%';
+  const bar = document.getElementById('globalTicker');
+  if (!bar) return;
+  const n = parseInt(document.getElementById('tickerBgColor').value.slice(1), 16);
+  bar.style.background = op > 0 ? `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${op / 100})` : '';
+  bar.style.setProperty('--ticker-text', document.getElementById('tickerTextColor').value);
 }
 
 async function saveTickerSettings() {
@@ -1694,6 +1729,9 @@ async function saveTickerSettings() {
     pulse: document.getElementById('tickerPulse').checked,
     pulseSeconds: parseFloat(document.getElementById('tickerPulseSpeed').value) || 1.6,
     textShadow: document.getElementById('tickerShadow').value,
+    bgColor: document.getElementById('tickerBgColor').value,
+    bgOpacity: parseInt(document.getElementById('tickerBgOpacity').value, 10) || 0,
+    textColor: document.getElementById('tickerTextColor').value,
   });
   showToast(t('تم الحفظ ✓'));
   if (window.reloadTicker) window.reloadTicker();   // the live ticker follows the new settings right away

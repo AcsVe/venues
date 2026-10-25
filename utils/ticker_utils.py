@@ -22,6 +22,9 @@ DEFAULT_CONFIG = {
     'rssBold': True,       # bold weight for RSS-sourced segments
     'rssFontSize': 16,     # px font size for RSS-sourced segments
     'logoBetween': False, # insert the org logo between each segment
+    'bgColor': '#1B3358', # background colour of the bar
+    'bgOpacity': 0,       # 0-100 % — 0 keeps the bar fully transparent (the original look)
+    'textColor': '#ffffff', # colour of the text that has no colour of its own from the editor
     'rssUrl': '',         # optional RSS feed to pull extra items from
 }
 

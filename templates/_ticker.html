@@ -39,7 +39,7 @@
   #globalTicker:hover .ticker-track { animation-play-state: paused; }
   #globalTicker .ticker-seg { display: flex; align-items: center; white-space: nowrap; direction: ltr; }
   #globalTicker .ticker-item {
-    color: #fff; font-weight: 800; font-size: 1rem;
+    color: var(--ticker-text, #fff); font-weight: 800; font-size: 1rem;
     padding-right: 46px; /* physical (not inline-end): the flex flow itself is pinned LTR above, so the gap
                              must stay on the visual right regardless of each item's own resolved text direction */
     white-space: nowrap !important; /* !important: admin-entered content can carry an inline
@@ -145,6 +145,8 @@
     // Reset before re-fetching, in case the ticker just got disabled or
     // its content became empty.
     bar.style.display = 'none';
+    bar.style.background = '';
+    bar.style.removeProperty('--ticker-text');
     track.className = 'ticker-track'; // reset only the toggle classes below — this must keep the base class
     track.style.animationDuration = '';
     track.style.animationDelay = '';
@@ -184,6 +186,15 @@
       if (data.textShadow === 'strong') track.classList.add('shadow-strong');
       else if (data.textShadow !== 'none') track.classList.add('shadow-light');
       if (data.pulse) track.classList.add('pulse-on');
+      // Background colour and its opacity (0 = fully transparent, the original look), and the colour of
+      // the text that has no colour of its own from the editor.
+      const hex = /^#[0-9a-fA-F]{6}$/.test(data.bgColor || '') ? data.bgColor : '#1B3358';
+      const alpha = Math.max(0, Math.min(100, Number(data.bgOpacity) || 0)) / 100;
+      if (alpha > 0) {
+        const n = parseInt(hex.slice(1), 16);
+        bar.style.background = `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${alpha})`;
+      }
+      if (/^#[0-9a-fA-F]{6}$/.test(data.textColor || '')) bar.style.setProperty('--ticker-text', data.textColor);
 
       // Reveal (still 0-width content isn't measurable while display:none)
       // before computing the animation duration below.
