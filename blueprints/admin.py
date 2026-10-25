@@ -1054,6 +1054,34 @@ def api_teachers():
     return jsonify([t.to_dict() for t in teachers])
 
 
+@admin_bp.route('/api/teachers-export.csv')
+@login_required
+def api_teachers_export():
+    """«تصدير المعلمين لنظام الغياب»: CSV (UTF-8, opens in Excel) with the column names the student-absence
+    system (SAS, 8.iajaward.org) understands in «الموظفون ← استيراد». Optional ?stageId= filter."""
+    import csv
+    import io
+    from flask import Response
+    stage_id = request.args.get('stageId', type=int)
+    q = Teacher.query
+    if stage_id:
+        q = q.filter_by(stage_id=stage_id)
+    stages = {s.id: s.name_ar for s in Stage.query.all()}
+    grades = {g.id: g.name_ar for g in Grade.query.all()}
+    sections = {s.id: s.name_ar for s in Section.query.all()}
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(['الاسم', 'البريد الإلكتروني', 'الهاتف', 'المسمى الوظيفي', 'المرحلة', 'الصف', 'الشعبة', 'الحالة',
+                'المصدر'])
+    for t in q.order_by(Teacher.name).all():
+        w.writerow([t.name, t.email or '', t.phone or '', 'معلم', stages.get(t.stage_id, ''),
+                    grades.get(t.grade_id, ''), sections.get(t.section_id, ''),
+                    'معلّق عن الحجز' if t.blocked else 'فعّال', 'نظام القاعات'])
+    name = 'teachers-for-SAS.csv'
+    return Response('\ufeff' + buf.getvalue(), content_type='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename={name}'})
+
+
 @admin_bp.route('/api/add-teacher', methods=['POST'])
 @login_required
 def api_add_teacher():

@@ -662,6 +662,13 @@
         <input type="file" id="tcFile" accept=".csv,.txt" onchange="uploadTeachers(this)">
       </div>
       <div class="card">
+        <div class="card-title"><i class="fas fa-file-export"></i> تصدير المعلمين لنظام الغياب</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">
+          ملف يُستورد في نظام غياب الطلبة (SAS) من «الموظفون ← إضافة قائمة أو استيراد ملف». يشمل المرحلة المختارة في القائمة أدناه، أو الكل.
+        </p>
+        <button class="btn btn-outline" onclick="exportTeachersForSas()"><i class="fas fa-download"></i> تصدير (Excel / CSV)</button>
+      </div>
+      <div class="card">
         <div class="card-title"><i class="fas fa-list"></i> قائمة المعلمين</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
           <select id="tcFilterStage" onchange="loadTeachers()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit">
@@ -1264,6 +1271,9 @@ const I18N_EN = {
   "حذف هذه المرحلة؟ سيتم حذف صفوفها وشعبها أيضاً.": "Delete this stage? Its grades and sections will also be deleted.",
   "تقرير الحجوزات": "Bookings Report",
   "المعلمون": "Teachers",
+  "تصدير المعلمين لنظام الغياب": "Export the teachers for SAS",
+  "تصدير (Excel / CSV)": "Export (Excel / CSV)",
+  "ملف يُستورد في نظام غياب الطلبة (SAS) من «الموظفون ← إضافة قائمة أو استيراد ملف». يشمل المرحلة المختارة في القائمة أدناه، أو الكل.": "A file to import in the student-absence system (8.iajaward.org): Employees → Add a list or import a file. It holds the stage chosen in the list below, or everyone.",
   "الطلاب": "Students",
   "إضافة معلم/ة": "Add Teacher",
   "الجوال": "Phone",
@@ -3090,6 +3100,11 @@ let selectedTeacherIds = new Set();
 let teachersReqSeq = 0;
 let lastTeachersList = [];
 let teachersSort = {key: null, dir: 'asc'};
+
+function exportTeachersForSas() {
+  const stageId = document.getElementById('tcFilterStage').value;
+  window.location.href = '/admin/api/teachers-export.csv' + (stageId ? `?stageId=${stageId}` : '');
+}
 
 async function loadTeachers() {
   selectedTeacherIds.clear();
