@@ -83,10 +83,10 @@
     #globalTicker .ticker-item { font-size: .88rem; padding-right: 30px; }
   }
 </style>
-<div id="globalTicker"><div class="ticker-track" id="tickerTrack"></div></div>
+<div id="globalTicker" data-notr><div class="ticker-track" id="tickerTrack"></div></div>
 <script>
 (function () {
-  const ORG_LOGO = {{ (config.LOGO_URL or '')|tojson }};
+  const ORG_LOGO = {{ (ticker_logo if ticker_logo is defined else (config.LOGO_URL or ''))|tojson }};
   // NOT a fixed PAGE_LANG constant: the admin dashboard's language toggle
   // (toggleLang() in dashboard.html) switches languages in place — no
   // page reload — updating document.documentElement.lang/dir and then
