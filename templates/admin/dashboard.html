@@ -1903,12 +1903,12 @@ function renderCommentsPanel(reqId, comments) {
   const panel = document.getElementById('bkCommentsPanel');
   const lastAuthor = localStorage.getItem('lastCommentAuthor') || '';
   const list = (comments || []).map(c => `
-    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;gap:10px;font-size:.78rem;color:var(--muted);margin-bottom:4px">
-        <strong style="color:var(--primary)">${esc(c.authorName || (AR?'الإدارة':'Admin'))}</strong>
-        <span>${(c.createdAt||'').replace('T',' ').slice(0,16)}</span>
+    <div style="background:#e3f1f3;border:1px solid #c5e1e5;border-inline-start:5px solid #247680;border-radius:8px;padding:10px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;gap:10px;font-size:.8rem;color:#45666b;margin-bottom:5px">
+        <strong style="color:#247680">💬 ${esc(c.authorName || (AR?'الإدارة':'Admin'))}</strong>
+        <span dir="ltr">${(c.createdAt||'').replace('T',' ').slice(0,16)}</span>
       </div>
-      <div style="font-size:.86rem;white-space:pre-wrap">${esc(c.body)}</div>
+      <div dir="auto" style="font-size:1rem;line-height:1.7;font-weight:600;color:#1a1a1a;white-space:pre-wrap;text-align:start">${esc(c.body)}</div>
     </div>`).join('') || `<div style="color:var(--muted);font-size:.85rem">${AR?'لا توجد تعليقات بعد':'No comments yet'}</div>`;
 
   panel.innerHTML = `

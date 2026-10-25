@@ -358,24 +358,43 @@ def send_update(data):
                  bcc_list=data.get('bcc', []))
 
 
+def _comment_box(author, comment, lang='ar'):
+    """The comment itself, clearly marked: a coloured side bar, a label with the author and the text in a large,
+    dark font. A table (not a div) so Outlook keeps the bar and the background; new lines become <br>
+    (some mail apps ignore white-space:pre-wrap)."""
+    if not comment:
+        return ''
+    rtl = lang == 'ar'
+    side = 'right' if rtl else 'left'
+    label = (f'💬 نص التعليق — {esc(author or "الإدارة")}' if rtl else f'💬 Comment — {esc(author or "Admin")}')
+    text = '<br>'.join(esc(line) for line in str(comment).replace('\r\n', '\n').split('\n'))
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+            f'style="width:100%;margin:12px 0;border-collapse:collapse">'
+            f'<tr><td style="background:#e3f1f3;border-{side}:5px solid #247680;padding:10px 14px;'
+            f'text-align:{side};direction:{"rtl" if rtl else "ltr"}">'
+            f'<div style="color:#247680;font-weight:700;font-size:13px;margin-bottom:6px">{label}</div>'
+            f'<div dir="auto" style="color:#1a1a1a;font-size:16px;line-height:1.7;font-weight:600;text-align:start">{text}</div>'
+            f'</td></tr></table>')
+
+
 def send_comment_notification(data):
     """Sent to the teacher who made the booking whenever an admin adds a
     comment to it, so they see the note without having to check back."""
     author = esc(data.get('commentAuthor') or 'الإدارة')
     author_en = esc(data.get('commentAuthor') or 'Admin')
-    comment_ar = esc(data.get('comment'))
-    comment_en = esc(data.get('comment'))
     content_ar = f"""
     <h2 style="color:#247680;margin-top:0">💬 تعليق جديد على حجزك</h2>
-    <p>عزيزي <strong>{data['name']}</strong>، أضاف <strong>{author}</strong> تعليقاً على طلب حجزك.</p>
-    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_ar(data)}</table>
-    <div style="background:#f0f7f8;border-radius:8px;padding:10px 14px;margin:10px 0;white-space:pre-wrap">{comment_ar}</div>
+    <p>عزيزي <strong>{data['name']}</strong>، أضاف <strong>{author}</strong> تعليقاً على طلب حجزك:</p>
+    {_comment_box(data.get('commentAuthor'), data.get('comment'), 'ar')}
+    <p style="color:#555;margin:14px 0 4px;font-weight:700">تفاصيل الحجز</p>
+    <table style="width:100%;border-collapse:collapse;margin:4px 0 12px">{_rows_ar(data)}</table>
     """
     content_en = f"""
     <h2 style="color:#247680;margin-top:0">💬 New Comment on Your Booking</h2>
-    <p>Dear <strong>{data['name']}</strong>, <strong>{author_en}</strong> added a comment to your booking request.</p>
-    <table style="width:100%;border-collapse:collapse;margin:12px 0">{_rows_en(data)}</table>
-    <div style="background:#f0f7f8;border-radius:8px;padding:10px 14px;margin:10px 0;white-space:pre-wrap">{comment_en}</div>
+    <p>Dear <strong>{data['name']}</strong>, <strong>{author_en}</strong> added a comment to your booking request:</p>
+    {_comment_box(data.get('commentAuthor'), data.get('comment'), 'en')}
+    <p style="color:#555;margin:14px 0 4px;font-weight:700">Booking details</p>
+    <table style="width:100%;border-collapse:collapse;margin:4px 0 12px">{_rows_en(data)}</table>
     """
     return _send(data['email'], data['name'],
                  f"[الرائد العربي / Al-Raed] 💬 تعليق جديد على الحجز #{data['reqId']}",
@@ -646,15 +665,12 @@ def send_staff_notification(event_type, data, contacts):
     reason_label_ar = 'سبب الإلغاء' if event_type == 'cancel' else 'سبب الرفض'
     reason_label_en = 'Cancellation reason' if event_type == 'cancel' else 'Rejection reason'
 
-    comment_box_ar = (f'<div style="background:#f0f7f8;border-radius:8px;padding:10px 14px;margin:10px 0;'
-                       f'white-space:pre-wrap"><strong>{esc(data.get("commentAuthor") or "الإدارة")}:</strong><br>{esc(data.get("comment"))}</div>'
-                       ) if data.get('comment') else ''
-    comment_box_en = (f'<div style="background:#f0f7f8;border-radius:8px;padding:10px 14px;margin:10px 0;'
-                       f'white-space:pre-wrap"><strong>{esc(data.get("commentAuthor") or "Admin")}:</strong><br>{esc(data.get("comment"))}</div>'
-                       ) if data.get('comment') else ''
+    comment_box_ar = _comment_box(data.get('commentAuthor'), data.get('comment'), 'ar')
+    comment_box_en = _comment_box(data.get('commentAuthor'), data.get('comment'), 'en')
 
     content_ar = f"""
     <h2 style="color:{color};margin-top:0">{icon} {title_ar}</h2>
+    {comment_box_ar}
     <table style="width:100%;border-collapse:collapse;margin:12px 0">{_build_rows([
         ('رقم الطلب', f'<strong style="color:#247680">{data.get("reqId","")}</strong>'),
         ('مقدم الطلب', data.get('name')),
@@ -666,11 +682,11 @@ def send_staff_notification(event_type, data, contacts):
         ('ملاحظات المعلم/ة', data.get('notes')),
         (reason_label_ar, f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
     ], '#f0f7f8')}</table>
-    {comment_box_ar}
     {_action_buttons_html(data, 'ar')}
     """
     content_en = f"""
     <h2 style="color:{color};margin-top:0">{icon} {title_en}</h2>
+    {comment_box_en}
     <table style="width:100%;border-collapse:collapse;margin:12px 0">{_build_rows([
         ('Request ID', f'<strong style="color:#247680">{data.get("reqId","")}</strong>'),
         ('Requested by', data.get('name')),
@@ -682,7 +698,6 @@ def send_staff_notification(event_type, data, contacts):
         ("Teacher's notes", data.get('notes')),
         (reason_label_en, f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
     ], '#f0f7f8')}</table>
-    {comment_box_en}
     {_action_buttons_html(data, 'en')}
     """
 
