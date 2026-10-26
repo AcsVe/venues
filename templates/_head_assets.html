@@ -1,0 +1,11 @@
+{# Shared head: icons, fonts, the interface stylesheet and the organization's accent colour. #}
+<meta name="theme-color" content="#0C67EC">
+<link rel="icon" href="/static/brand/system.svg" type="image/svg+xml">
+<link rel="icon" href="/static/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+<link rel="stylesheet" href="{{ asset('css/app.css') }}">
+{# accent is validated as #RRGGBB before it is ever stored (utils/brand.py) #}
+<style>:root{--accent:{{ brand.accent }}}</style>

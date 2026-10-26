@@ -86,7 +86,7 @@
 <div id="globalTicker" data-notr><div class="ticker-track" id="tickerTrack"></div></div>
 <script>
 (function () {
-  const ORG_LOGO = {{ (ticker_logo if ticker_logo is defined else (config.LOGO_URL or ''))|tojson }};
+  const ORG_LOGO = {{ (ticker_logo if ticker_logo is defined else (brand.logo_src if brand is defined else (config.LOGO_URL or '')))|tojson }};
   // NOT a fixed PAGE_LANG constant: the admin dashboard's language toggle
   // (toggleLang() in dashboard.html) switches languages in place — no
   // page reload — updating document.documentElement.lang/dir and then

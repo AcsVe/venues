@@ -4,10 +4,10 @@
 // data — this system needs a live connection to work correctly; the goal
 // here is just a nicer "you're offline" experience, not offline booking.
 
-const CACHE_NAME = 'raed-shell-v3';
+const CACHE_NAME = 'raed-shell-v4';
 const SHELL_ASSETS = [
   '/static/offline.html',
-  '/static/logo.png',
+  '/static/brand/system.svg',
   '/static/icon-192.png',
   '/static/icon-512.png',
   '/static/apple-touch-icon.png',

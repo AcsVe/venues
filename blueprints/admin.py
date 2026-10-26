@@ -76,7 +76,26 @@ def logout():
 @login_required
 def dashboard():
     lang = session.get('admin_lang', 'ar')
-    return render_template('admin/dashboard.html', lang=lang)
+    from utils.brand import graph_status
+    return render_template('admin/dashboard.html', lang=lang, graph=graph_status(),
+                           brand_msg=request.args.get('brand', ''))
+
+
+# ── Identity: names, accent colour, logo (utils/brand.py) ─────────────────
+@admin_bp.route('/brand', methods=['POST'])
+@login_required
+def save_brand():
+    from utils.brand import set_identity, save_logo, remove_logo
+    set_identity(request.form.get('org_ar'), request.form.get('org_en'), request.form.get('accent_color'))
+    status = 'saved'
+    if request.form.get('remove_logo') == '1':
+        remove_logo()
+    else:
+        f = request.files.get('logo')
+        if f and f.filename:
+            if save_logo(f):
+                status = 'badlogo'
+    return redirect(url_for('admin.dashboard', brand=status) + '#settings')
 
 
 # ── Bookings API ──────────────────────────────────────────────────────────

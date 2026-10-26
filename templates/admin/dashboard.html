@@ -3,345 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>لوحة التحكم — {{ config.ORG_AR }}</title>
+  <title>لوحة التحكم — {{ brand.org_ar }}</title>
 
   <!-- PWA: Add to Home Screen (Android + iOS) -->
   <link rel="manifest" href="/static/manifest-admin.json">
-  <meta name="theme-color" content="#1B3358">
-  <link rel="icon" href="/static/icon-192.png" type="image/png">
-  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="إدارة الترولي">
+  <meta name="apple-mobile-web-app-title" content="إدارة الحجز">
   <meta name="mobile-web-app-capable" content="yes">
-
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  {% include '_head_assets.html' %}
   <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
   <style>
-    /* The ticker (templates/_ticker.html) spans only the area next to the sidebar, like a frozen header,
-       and the page moves down by its fixed height (38px) while it shows. */
-    #globalTicker, body #globalTicker { inset-inline-start: var(--sidebar); }
-    body.has-ticker .main { padding-top: 38px; }
-    :root {
-      --primary: #FF5733; --primary-dark: #C43D1F; --primary-light: #FF8563;
-      --secondary: #2E4E7A; --secondary-dark: #1B3358; --secondary-light: #5A7CA8;
-      --accent: #EBB37B;
-      --bg: #f0f4f5; --white: #fff; --text: #1e2a2b; --muted: #6b7c7e;
-      --border: #d4e4e6; --radius: 12px; --sidebar: 240px;
-      --shadow: 0 2px 12px rgba(255,87,51,.10);
-    }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
-    /* Sidebar */
-    .sidebar {
-      width: var(--sidebar); min-height: 100vh;
-      background: linear-gradient(180deg, var(--secondary-dark), var(--secondary));
-      color: #fff; display: flex; flex-direction: column;
-      position: fixed; top: 0; inset-inline-start: 0; bottom: 0; z-index: 150;
-      overflow-y: auto;
-    }
-    .sidebar-logo {
-      padding: 12px 16px;
-      border-bottom: 1px solid rgba(255,255,255,.15);
-      display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-    }
-    .sidebar-logo-chip {
-      background: #fff; border-radius: 8px; padding: 6px 10px;
-      display: flex; align-items: center; width: 100%; box-sizing: border-box;
-    }
-    .sidebar-logo-chip img { height: 44px; max-width: 100%; object-fit: contain; display: block; }
-    .sidebar-logo-text { font-size: .8rem; font-weight: 600; opacity: .8; }
-    .sidebar-nav { flex: 1; padding: 6px 0; }
-    .nav-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 8px 18px; cursor: pointer;
-      font-size: .92rem; font-weight: 600; color: rgba(255,255,255,.8);
-      transition: all .2s; border: none; background: none;
-      width: 100%; text-align: start; font-family: inherit;
-    }
-    .nav-item:hover, .nav-item.active {
-      background: rgba(255,255,255,.15); color: #fff;
-    }
-    .nav-item i { width: 20px; text-align: center; }
-    .nav-badge {
-      margin-inline-start: auto; background: var(--accent); color: #1e2a2b;
-      border-radius: 10px; padding: 1px 8px; font-size: .72rem; font-weight: 800;
-    }
-    .sidebar-footer {
-      padding: 10px 16px; border-top: 1px solid rgba(255,255,255,.15);
-      display: flex; flex-direction: column; gap: 4px;
-    }
-    .sidebar-footer a {
-      display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.7);
-      text-decoration: none; font-size: .85rem; font-weight: 600;
-      padding: 6px 0;
-    }
-    .sidebar-footer a:hover { color: #fff; }
-    .sidebar-footer a#notifyBellBtn.active { color: #27ae60; }
-    .sidebar-footer a#notifyBellBtn.active i { color: #27ae60; }
-    /* Main */
-    .main { margin-inline-start: var(--sidebar); display: flex; flex-direction: column; min-height: 100vh; width: calc(100% - var(--sidebar)); }
-    .topbar {
-      background: #fff; padding: 14px 24px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08);
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    }
-    .topbar h1 { font-size: 1.1rem; font-weight: 800; color: var(--primary); }
-    .topbar-right { display: flex; align-items: center; gap: 10px; }
-    .hamburger { display: none; background: none; border: none; cursor: pointer; color: var(--primary); font-size: 1.4rem; padding: 4px 8px; }
-    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 140; }
-    .sidebar-overlay.open { display: block; }
-    .content { flex: 1; padding: 24px; }
-    /* Tabs */
+    /* The ticker (templates/_ticker.html) sits under the sticky topbar, next to the sidebar, and keeps its
+       fixed 38px height; the content moves down by that height while it shows. */
+    body #globalTicker { top: var(--top-h); inset-inline-start: var(--side-w); z-index: 150; }
+    body.has-ticker .content { padding-top: 62px; }
+    @media (max-width: 991px) { body.has-ticker .content { padding-top: 54px; } }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
-    /* Stats */
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-bottom: 20px; }
-    .stat-card {
-      background: #fff; border-radius: var(--radius);
-      padding: 18px; text-align: center;
-      box-shadow: var(--shadow); border-top: 4px solid var(--primary);
-    }
-    .stat-card.accent  { border-top-color: var(--accent); }
-    .stat-card.green   { border-top-color: #27ae60; }
-    .stat-card.red     { border-top-color: #c0392b; }
-    .stat-card.orange  { border-top-color: #e67e22; }
-    .stat-val { font-size: 2rem; font-weight: 800; color: var(--primary); }
-    .stat-card.accent .stat-val  { color: #a06020; }
-    .stat-card.green  .stat-val  { color: #27ae60; }
-    .stat-card.red    .stat-val  { color: #c0392b; }
-    .stat-card.orange .stat-val  { color: #e67e22; }
-    .stat-label { font-size: .8rem; color: var(--muted); font-weight: 600; margin-top: 4px; }
-    /* Cards */
-    .card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 18px; }
-    .card-title { font-size: 1rem; font-weight: 700; color: var(--primary); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-    /* Filters */
-    .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
-    .filter-btn {
-      padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--border);
-      background: #fff; cursor: pointer; font-family: inherit; font-size: .82rem;
-      font-weight: 600; color: var(--muted); transition: all .2s;
-    }
-    .filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-    .search-input {
-      padding: 7px 12px; border-radius: 8px; border: 1.5px solid var(--border);
-      font-family: inherit; font-size: .88rem; min-width: 200px;
-    }
-    /* Table */
-    /* overflow-x: auto alone silently forces overflow-y to 'auto' too (per
-       spec, an axis can't stay 'visible' once the other isn't), which makes
-       table-wrap its own scroll container — and once it is, position:sticky
-       inside it can only stick relative to table-wrap's OWN scrolling, not
-       the page's. Giving it an explicit max-height turns that into a real,
-       usable internal scroll panel instead of a no-op, so the sticky header
-       below actually has something to stick within. */
-    .table-wrap { overflow-x: auto; overflow-y: auto; max-height: 65vh; }
-    /* border-collapse: separate (not collapse) is required for sticky thead
-       cells to actually stick in table-wrap tables below — border-collapse
-       breaks position:sticky on <th> in every current browser engine.
-       border-spacing:0 keeps the visual result identical to collapse. */
-    table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .88rem; }
-    th { background: #f0f7f8; color: var(--primary); font-weight: 700; padding: 10px 12px; text-align: start; white-space: nowrap; }
-    /* Keep column headers visible while scrolling down a long table — the
-       page itself scrolls vertically (table-wrap only scrolls sideways),
-       so "top: 0" sticks the header to the viewport's top edge. th already
-       has an opaque background above, so rows scrolling underneath it are
-       hidden rather than showing through. */
-    .table-wrap thead th { position: sticky; top: 0; z-index: 5; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
-    td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .home-hello { font-size: 1.35rem; font-weight: 800; color: var(--navy); margin-bottom: 4px; }
+    .home-sub { color: var(--muted); margin-bottom: 18px; font-size: .92rem; }
     /* Pulsing green marker for today's bookings on the visual calendar tab —
-       independent of the status color (approved/pending/etc), so "today" is
-       recognizable at a glance regardless of booking status. */
+       independent of the status color, so "today" is recognizable at a glance. */
     @keyframes todayDotPulse {
-      0%   { box-shadow: 0 0 0 0 rgba(39,174,96,.7); }
-      70%  { box-shadow: 0 0 0 7px rgba(39,174,96,0); }
-      100% { box-shadow: 0 0 0 0 rgba(39,174,96,0); }
+      0%   { box-shadow: 0 0 0 0 rgba(22,163,74,.7); }
+      70%  { box-shadow: 0 0 0 7px rgba(22,163,74,0); }
+      100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); }
     }
     .fc-daygrid-event-dot.today-pulse-dot,
-    .fc-list-event-dot.today-pulse-dot {
-      background: #27ae60 !important;
-      border-color: #27ae60 !important;
-      animation: todayDotPulse 1.4s infinite;
-    }
-    .today-pulse-dot-inline {
-      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-      background: #27ae60; margin-inline-end: 5px; vertical-align: middle;
-      animation: todayDotPulse 1.4s infinite;
-    }
-    tr:hover td { background: #fafefe; }
-    .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px; border-radius: 20px; font-size: .75rem; font-weight: 700; }
-    .badge-pending   { background: #fff3cd; color: #856404; }
-    .badge-approved  { background: #d1e7dd; color: #0a6640; }
-    .badge-completed { background: #cfe2ff; color: #0b3d91; }
-    .badge-rejected  { background: #f8d7da; color: #842029; }
-    .badge-cancelled { background: #e2e3e5; color: #41464b; }
-    /* Comment indicator — a small 💬 count next to the request ID so a
-       glance at the list shows which bookings have an active conversation.
-       It pulses when this browser hasn't opened the booking since the
-       latest comment came in (tracked per-browser in localStorage). */
+    .fc-list-event-dot.today-pulse-dot { background: #16a34a !important; border-color: #16a34a !important; animation: todayDotPulse 1.4s infinite; }
+    .today-pulse-dot-inline { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #16a34a;
+      margin-inline-end: 5px; vertical-align: middle; animation: todayDotPulse 1.4s infinite; }
+    /* Comment indicator next to the request ID; pulses while this browser has not opened the latest comment. */
     .cmt-indicator { display: inline-flex; align-items: center; gap: 2px; font-size: .72rem; font-weight: 700; color: var(--muted); margin-inline-start: 6px; }
     .cmt-indicator.cmt-unseen { color: var(--primary); animation: cmtPulse 1.3s ease-in-out infinite; }
     @keyframes cmtPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: .55; } }
-    /* Actions */
-    .action-btns { display: flex; gap: 4px; flex-wrap: wrap; }
-    .btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 7px; border: none; cursor: pointer; font-family: inherit; font-size: .8rem; font-weight: 600; text-decoration: none; transition: all .2s; white-space: nowrap; }
-    .btn-green   { background: #d1e7dd; color: #0a6640; }
-    .btn-red     { background: #f8d7da; color: #842029; }
-    .btn-orange  { background: #fff3cd; color: #856404; }
-    .btn-blue    { background: #cff4fc; color: #055160; }
-    .btn-primary { background: var(--primary); color: #fff; }
-    .btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
-    .btn-sm { padding: 5px 10px; font-size: .78rem; }
-    .btn:hover { filter: brightness(.93); }
-    /* Forms */
-    .form-group { margin-bottom: 14px; }
-    .form-group label { display: block; font-weight: 700; margin-bottom: 5px; font-size: .88rem; }
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .form-grid.quad { grid-template-columns: repeat(4, 1fr); }
-    input[type=text], input[type=email], input[type=tel], input[type=date], input[type=time],
-    input[type=number], input[type=datetime-local],
-    select, textarea {
-      width: 100%; padding: 8px 11px; border: 1.5px solid var(--border);
-      border-radius: 8px; font-family: inherit; font-size: .88rem;
-      background: #fff; color: var(--text); transition: border-color .2s;
+    @keyframes pulseBadge {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(22,163,74,.6); }
+      50% { transform: scale(1.3); box-shadow: 0 0 0 6px rgba(22,163,74,0); }
     }
-    input:focus, select:focus, textarea:focus {
-      outline: none; border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(255,87,51,.1);
-    }
-    textarea { resize: vertical; min-height: 70px; }
-    /* Modal */
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 200; align-items: center; justify-content: center; }
-    .modal-overlay.open { display: flex; }
-    .modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 600px; width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 12px 50px rgba(0,0,0,.22); }
-    .modal-title { font-size: 1.05rem; font-weight: 800; color: var(--primary); margin-bottom: 18px; }
-    .modal-footer { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
-    /* Alert */
-    .alert { padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: .88rem; font-weight: 600; }
-    .alert-success { background: #d1e7dd; color: #0a6640; }
-    .alert-error   { background: #f8d7da; color: #842029; }
-    /* Toast */
-    .toast {
-      position: fixed; bottom: 24px; left: 24px; z-index: 9999;
-      background: #1e2a2b; color: #fff; padding: 12px 20px;
-      border-radius: 10px; font-size: .9rem; font-weight: 600;
-      box-shadow: 0 4px 20px rgba(0,0,0,.25);
-      transform: translateY(100px); opacity: 0; transition: all .3s;
-    }
-    .toast.show { transform: translateY(0); opacity: 1; }
-    /* Checkbox */
-    input[type=checkbox] { width: auto; accent-color: var(--primary); }
     /* Reports */
     .bar-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .bar-label { min-width: 120px; font-size: .82rem; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
-    .bar-track { flex: 1; background: #f0f7f8; border-radius: 6px; height: 24px; overflow: hidden; }
-    .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-light)); border-radius: 6px; display: flex; align-items: center; padding-right: 6px; transition: width .5s; }
+    .bar-track { flex: 1; background: #eaf1fc; border-radius: 6px; height: 24px; overflow: hidden; }
+    .bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary-dark), var(--primary-light)); border-radius: 6px; display: flex; align-items: center; padding-inline-start: 6px; transition: width .5s; }
     .bar-fill span { color: #fff; font-size: .75rem; font-weight: 700; }
     .period-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 14px; }
-    .period-table th { background: #f0f7f8; padding: 8px 10px; font-weight: 700; color: var(--primary); }
-    .period-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
-    /* Mobile Bottom Nav */
-    .mobile-nav {
-      display: none;
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      background: linear-gradient(180deg, var(--secondary-dark), #0D1B2A);
-      z-index: 200;
-      padding: 6px 0 8px;
-      box-shadow: 0 -3px 16px rgba(0,0,0,.2);
-    }
-    .mobile-nav-items { display: flex; justify-content: space-around; align-items: center; }
-    .mobile-nav-item {
-      display: flex; flex-direction: column; align-items: center; gap: 3px;
-      color: rgba(255,255,255,.65); font-size: .65rem; font-weight: 700;
-      cursor: pointer; background: none; border: none; font-family: inherit;
-      padding: 4px 8px; border-radius: 8px; transition: all .2s; position: relative;
-    }
-    .mobile-nav-item i { font-size: 1.1rem; }
-    .mobile-nav-item.active { color: var(--accent); }
-    .mobile-nav-item .m-badge {
-      position: absolute; top: 0; right: 2px;
-      background: #e74c3c; color: #fff; border-radius: 10px;
-      font-size: .6rem; padding: 1px 5px; font-weight: 800;
-    }
+    .period-table th { padding: 8px 10px; }
+    .period-table td { padding: 7px 10px; border-bottom: 1px solid #e9eef5; }
     #chartsRow { grid-template-columns: 1fr !important; }
-    @media (max-width: 600px) {
-      #chartsRow { grid-template-columns: 1fr !important; }
-    }
-    @media (max-width: 768px) {
-      :root { --sidebar: 0px; }
-      .sidebar {
-        position: fixed !important;
-        top: 0; inset-inline-start: 0; bottom: 0;
-        width: 82vw !important;
-        max-width: 300px;
-        transform: translateX(105%) !important;
-        transition: transform .28s cubic-bezier(.4,0,.2,1);
-        z-index: 300;
-        min-height: 100vh;
-      }
-      html[dir="ltr"] .sidebar { transform: translateX(-105%) !important; }
-      html[dir="ltr"] .sidebar.open { transform: translateX(0) !important; }
-      .sidebar.open { transform: translateX(0) !important; }
-      .main {
-        margin-inline-start: 0 !important;
-        width: 100% !important;
-        max-width: 100vw;
-      }
-      .mobile-nav { display: none !important; }
-      .hamburger { display: inline-flex !important; }
-      .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
-      .form-grid { grid-template-columns: 1fr !important; }
-      .content { padding: 12px !important; }
-      .topbar { padding: 10px 14px !important; }
-      .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .table-wrap table { min-width: 480px; font-size: .8rem; }
-      .stat-card { padding: 14px 10px; }
-      .stat-val { font-size: 1.6rem; }
-    }
-    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 140; }
-    .sidebar-overlay.open { display: block; }
-      .topbar { padding: 10px 14px; }
-      .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .table-wrap table { min-width: 500px; font-size: .8rem; }
-      .hamburger { display: inline-flex !important; }
-      .stat-card { padding: 12px; }
-      .stat-val { font-size: 1.6rem; }
-    }
-    .sidebar-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,.5); z-index: 140;
-    }
-    .sidebar-overlay.open { display: block; }
-    .hamburger { display: inline-flex !important; }
-      .stat-card { padding: 12px; }
-      .stat-val { font-size: 1.6rem; }
-    }
-    .spinner { display: inline-block; width: 16px; height: 16px; border: 2.5px solid rgba(255,87,51,.3); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
-    @media (max-width: 768px) {
-      .sidebar { transform: translateX(110%); transition: transform .28s ease; width: 82vw !important; max-width: 290px; }
-      html[dir="ltr"] .sidebar { transform: translateX(-110%); }
-      html[dir="ltr"] .sidebar.open { transform: translateX(0); }
-      .sidebar.open { transform: translateX(0); }
-      .main { margin-inline-start: 0 !important; width: 100% !important; }
-      .hamburger { display: inline-flex !important; }
-      .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
-      .form-grid { grid-template-columns: 1fr !important; }
-      .content { padding: 12px !important; }
-      .topbar { padding: 10px 14px !important; }
-      .table-wrap { -webkit-overflow-scrolling: touch; }
-      .stat-card { padding: 12px 8px; }
-      .stat-val { font-size: 1.5rem; }
-      .search-input { min-width: unset; width: 100%; }
-      .mobile-nav { display: none !important; }
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes pulseBadge {
-      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(39,174,96,.6); }
-      50% { transform: scale(1.3); box-shadow: 0 0 0 6px rgba(39,174,96,0); }
-    }
-    /* FullCalendar mobile fix */
+    .ql-toolbar.ql-snow, .ql-container.ql-snow { border-color: var(--line) !important; }
+    .ql-toolbar.ql-snow { border-radius: 10px 10px 0 0; background: #f8fafd; }
+    .ql-container.ql-snow { border-radius: 0 0 10px 10px; }
+    /* FullCalendar */
+    #adminCal .fc-button-primary { background: var(--primary); border-color: var(--primary); }
+    #adminCal .fc-button-primary:not(:disabled).fc-button-active, #adminCal .fc-button-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+    #adminCal .fc-toolbar-title { color: var(--navy); font-weight: 800; }
     @media (max-width: 768px) {
       #adminCal .fc-toolbar { flex-wrap: wrap; gap: 6px; }
       #adminCal .fc-toolbar-chunk { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -351,67 +68,100 @@
       #adminCal .fc-scrollgrid { font-size: .75rem; }
       #adminCal .fc-event-title { font-size: .7rem; overflow: hidden; }
       #adminCal { overflow-x: auto; }
+      .bar-label { min-width: 90px; }
     }
   </style>
+  <script src="{{ asset('js/app.js') }}"></script>
 </head>
 <body>
 {% include "_ticker.html" %}
-<!-- Sidebar -->
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-<nav class="sidebar" id="sidebar">
-  <div class="sidebar-logo">
-    {% if config.LOGO_URL %}
-    <div class="sidebar-logo-chip"><img src="{{ config.LOGO_URL }}" alt="logo"></div>
-    {% endif %}
-    <div class="sidebar-logo-text">لوحة التحكم</div>
-  </div>
-  <div class="sidebar-nav">
-    <button class="nav-item active" onclick="showTab('bookings')"><i class="fas fa-calendar-check"></i> طلبات الحجز <span class="nav-badge" id="nbPending">0</span></button>
-    <button class="nav-item" onclick="showTab('halls')"><i class="fas fa-laptop"></i> المراحل والعربات</button>
-    <button class="nav-item" onclick="showTab('blocked')"><i class="fas fa-ban"></i> غير متاح</button>
-    <button class="nav-item" onclick="showTab('contacts')"><i class="fas fa-address-book"></i> جهات الاتصال</button>
-    <button class="nav-item" onclick="showTab('teachers')"><i class="fas fa-chalkboard-teacher"></i> المعلمون</button>
-    <button class="nav-item" onclick="showTab('students')"><i class="fas fa-user-graduate"></i> الطلاب</button>
-    <button class="nav-item" onclick="showTab('reports')"><i class="fas fa-chart-bar"></i> التقارير</button>
-    <button class="nav-item" onclick="showTab('archive')"><i class="fas fa-archive"></i> الأرشفة</button>
-    <button class="nav-item" onclick="showTab('settings')"><i class="fas fa-cog"></i> الإعدادات</button>
-    <button class="nav-item" onclick="showTab('calview')"><i class="fas fa-calendar-alt"></i> التقويم</button>
-    <button class="nav-item" onclick="showTab('ticker')"><i class="fas fa-bullhorn"></i> الشريط الإعلاني</button>
-  </div>
-  <div class="sidebar-footer">
-    <a href="/calendar" target="_blank"><i class="fas fa-globe"></i> الروزنامة العامة</a>
-    <a href="#" id="notifyBellBtn" onclick="requestNotifyPermission();return false;"><i class="fas fa-bell"></i> تفعيل إشعارات الحجوزات الجديدة</a>
-    <a href="#" onclick="toggleLang();return false;"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></a>
-    <a href="#" id="installAppBtn" onclick="handleInstallClick(event)" style="display:none"><i class="fas fa-download"></i> تثبيت التطبيق</a>
-    <a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> خروج</a>
-  </div>
-</nav>
+<!-- Sidebar: grouped navigation (daily work → lists and reports → administration) -->
+<div class="sidebar-overlay" id="sidebarOverlay" data-nav-close></div>
+<aside class="sidebar" id="sidebar" aria-label="القائمة الرئيسية">
+  <a class="side-brand" href="#home" onclick="showTab('home');return false;">
+    {% include '_brand_logo.html' %}
+    <span class="org" id="brandOrg" data-ar="{{ brand.org_ar }}" data-en="{{ brand.org_en }}" data-notr>{{ brand.org_ar }}</span>
+    <span class="sys">{{ brand.sys_ar }}</span>
+  </a>
+  <nav class="side-nav">
+    <button class="nav-item active" data-tab="home" onclick="showTab('home')"><i class="fas fa-house"></i> <span>الرئيسية</span></button>
+    <div class="nav-group">
+      <div class="nav-group-title">العمل اليومي</div>
+      <button class="nav-item" data-tab="bookings" onclick="showTab('bookings')"><i class="fas fa-calendar-check"></i> <span>طلبات الحجز</span> <span class="nav-badge" id="nbPending">0</span></button>
+      <button class="nav-item" data-tab="calview" onclick="showTab('calview')"><i class="fas fa-calendar-days"></i> <span>التقويم</span></button>
+      <button class="nav-item" data-tab="blocked" onclick="showTab('blocked')"><i class="fas fa-ban"></i> <span>غير متاح</span></button>
+      <a class="nav-item" href="/calendar" target="_blank" rel="noopener"><i class="fas fa-globe"></i> <span>الروزنامة العامة</span> <i class="fas fa-arrow-up-right-from-square ext"></i></a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-title">القوائم والتقارير</div>
+      <button class="nav-item" data-tab="teachers" onclick="showTab('teachers')"><i class="fas fa-chalkboard-user"></i> <span>المعلمون</span></button>
+      <button class="nav-item" data-tab="students" onclick="showTab('students')"><i class="fas fa-user-graduate"></i> <span>الطلاب</span></button>
+      <button class="nav-item" data-tab="reports" onclick="showTab('reports')"><i class="fas fa-chart-column"></i> <span>التقارير</span></button>
+      <button class="nav-item" data-tab="archive" onclick="showTab('archive')"><i class="fas fa-box-archive"></i> <span>الأرشفة</span></button>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-title">الإدارة</div>
+      <button class="nav-item" data-tab="halls" onclick="showTab('halls')"><i class="fas fa-sitemap"></i> <span>المراحل والعربات</span></button>
+      <button class="nav-item" data-tab="contacts" onclick="showTab('contacts')"><i class="fas fa-address-book"></i> <span>جهات الاتصال</span></button>
+      <button class="nav-item" data-tab="ticker" onclick="showTab('ticker')"><i class="fas fa-bullhorn"></i> <span>الشريط الإعلاني</span></button>
+      <button class="nav-item" data-tab="settings" onclick="showTab('settings')"><i class="fas fa-gear"></i> <span>الإعدادات</span></button>
+    </div>
+  </nav>
+</aside>
 
 <!-- Main -->
 <div class="main">
-  <div class="topbar">
-    <div style="display:flex;align-items:center;gap:10px">
-      <button class="hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
-      <h1 id="pageTitle">طلبات الحجز</h1>
+  <header class="topbar">
+    <button class="icon-btn nav-toggle" type="button" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="القائمة"><i class="fas fa-bars"></i></button>
+    <div class="page-title" id="pageTitle">الرئيسية</div>
+    <div class="top-actions">
+      <span class="top-clock" id="clockEl" data-notr dir="ltr"></span>
+      <button class="icon-btn" type="button" onclick="refreshAll()" title="تحديث" aria-label="تحديث"><i class="fas fa-rotate"></i></button>
+      <button class="lang-switch lang-btn" type="button" onclick="toggleLang()" data-notr>English</button>
+      <details class="user-menu">
+        <summary><span class="avatar" aria-hidden="true" data-notr>{{ config.ADMIN_USER[:1] }}</span><span class="uname" data-notr>{{ config.ADMIN_USER }}</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
+        <div class="menu">
+          <div class="menu-head"><b>مدير النظام</b><small data-notr>{{ config.ADMIN_USER }}</small></div>
+          <a href="/calendar" target="_blank" rel="noopener"><i class="fas fa-globe"></i> الروزنامة العامة</a>
+          <a href="#" id="notifyBellBtn" onclick="requestNotifyPermission();return false;"><i class="fas fa-bell"></i> تفعيل إشعارات الحجوزات الجديدة</a>
+          <a href="#" id="installAppBtn" onclick="handleInstallClick(event)" style="display:none"><i class="fas fa-download"></i> تثبيت التطبيق</a>
+          <a href="/admin/logout" class="out"><i class="fas fa-right-from-bracket"></i> تسجيل الخروج</a>
+        </div>
+      </details>
     </div>
-    <div class="topbar-right">
-      <button class="btn btn-outline btn-sm" onclick="toggleLang()"><i class="fas fa-language"></i> <span class="lang-btn">EN</span></button>
-      <button class="btn btn-outline btn-sm" onclick="refreshAll()"><i class="fas fa-sync"></i> تحديث</button>
-      <span style="font-size:.85rem;color:var(--muted)" id="clockEl"></span>
-    </div>
-  </div>
+  </header>
   <div class="content">
 
-    <!-- ── BOOKINGS TAB ── -->
-    <div class="tab-panel active" id="tab-bookings">
-      <div class="stats-grid">
-        <div class="stat-card" onclick="filterByStat('all')" style="cursor:pointer" title="عرض كل الطلبات"><div class="stat-val" id="stTotal">-</div><div class="stat-label">إجمالي الطلبات</div></div>
-        <div class="stat-card accent" onclick="filterByStat('pending')" style="cursor:pointer" title="عرض قيد المراجعة"><div class="stat-val" id="stPending">-</div><div class="stat-label">قيد المراجعة</div></div>
-        <div class="stat-card green" onclick="filterByStat('approved')" style="cursor:pointer" title="عرض المعتمدة"><div class="stat-val" id="stApproved">-</div><div class="stat-label">معتمد</div></div>
-        <div class="stat-card" style="background:#cfe2ff;cursor:pointer" onclick="filterByStat('completed')" title="عرض المكتملة"><div class="stat-val" id="stCompleted" style="color:#0b3d91">-</div><div class="stat-label" style="color:#0b3d91">مكتمل</div></div>
-        <div class="stat-card red" onclick="filterByStat('rejected')" style="cursor:pointer" title="عرض المرفوضة"><div class="stat-val" id="stRejected">-</div><div class="stat-label">مرفوض</div></div>
-        <div class="stat-card orange" onclick="filterByStat('cancelled')" style="cursor:pointer" title="عرض الملغية"><div class="stat-val" id="stCancelled">-</div><div class="stat-label">ملغي</div></div>
+    <!-- ── HOME: clickable numbers and quick access ── -->
+    <div class="tab-panel active" id="tab-home">
+      <div class="home-hello">لوحة التحكم</div>
+      <div class="home-sub">كل رقم يفتح قائمة الطلبات مصفّاة بحالته.</div>
+      <div class="section-h">طلبات الحجز</div>
+      <div class="kpis">
+        <div class="kpi" onclick="filterByStat('all')" title="عرض كل الطلبات"><div class="n" id="stTotal">-</div><div class="l">إجمالي الطلبات</div></div>
+        <div class="kpi warn" onclick="filterByStat('pending')" title="عرض قيد المراجعة"><div class="n" id="stPending">-</div><div class="l">قيد المراجعة</div></div>
+        <div class="kpi ok" onclick="filterByStat('approved')" title="عرض المعتمدة"><div class="n" id="stApproved">-</div><div class="l">معتمد</div></div>
+        <div class="kpi info" onclick="filterByStat('completed')" title="عرض المكتملة"><div class="n" id="stCompleted">-</div><div class="l">مكتمل</div></div>
+        <div class="kpi bad" onclick="filterByStat('rejected')" title="عرض المرفوضة"><div class="n" id="stRejected">-</div><div class="l">مرفوض</div></div>
+        <div class="kpi grey" onclick="filterByStat('cancelled')" title="عرض الملغية"><div class="n" id="stCancelled">-</div><div class="l">ملغي</div></div>
+        <div class="kpi" onclick="showTodayBookings()" title="حجوزات اليوم"><div class="n" id="stToday">-</div><div class="l">حجوزات اليوم</div></div>
+        <div class="kpi" onclick="showTab('halls')" title="المراحل والعربات"><div class="n" id="stHalls">-</div><div class="l">المراحل الفعالة</div></div>
       </div>
+      <div class="section-h">الوصول السريع</div>
+      <div class="tiles">
+        <button class="tile" type="button" onclick="showTab('bookings')"><span class="ic"><i class="fas fa-calendar-check"></i></span><b>طلبات الحجز</b><small>الاعتماد والرفض والتعديل والطباعة</small></button>
+        <button class="tile" type="button" onclick="showTab('calview')"><span class="ic"><i class="fas fa-calendar-days"></i></span><b>التقويم</b><small>الحجوزات على تقويم شهري وأسبوعي</small></button>
+        <button class="tile" type="button" onclick="showTab('blocked')"><span class="ic"><i class="fas fa-ban"></i></span><b>غير متاح</b><small>تعطيل يوم أو حصة لمرحلة</small></button>
+        <button class="tile" type="button" onclick="showTab('teachers')"><span class="ic"><i class="fas fa-chalkboard-user"></i></span><b>المعلمون</b><small>الإضافة والاستيراد والنقل والحظر</small></button>
+        <button class="tile" type="button" onclick="showTab('students')"><span class="ic"><i class="fas fa-user-graduate"></i></span><b>الطلاب</b><small>قوائم الشعب لنموذج التسليم</small></button>
+        <button class="tile" type="button" onclick="showTab('reports')"><span class="ic"><i class="fas fa-chart-column"></i></span><b>التقارير</b><small>الإحصاءات وتقرير التسليم</small></button>
+        <button class="tile" type="button" onclick="showTab('halls')"><span class="ic"><i class="fas fa-sitemap"></i></span><b>المراحل والعربات</b><small>المراحل والصفوف والشعب والحصص</small></button>
+        <button class="tile" type="button" onclick="showTab('settings')"><span class="ic"><i class="fas fa-gear"></i></span><b>الإعدادات</b><small>الهوية والبريد وقواعد الحجز</small></button>
+      </div>
+    </div>
+
+    <!-- ── BOOKINGS TAB ── -->
+    <div class="tab-panel" id="tab-bookings">
       <div class="card">
         <div class="filter-bar">
           <button class="filter-btn active" data-filter="all" onclick="filterBk('all',this)">الكل</button>
@@ -755,8 +505,8 @@
         <input type="file" id="rosterFile" accept=".csv,.txt" onchange="uploadRosterAutocreate(this)">
         <div id="rosterImportResult" style="margin-top:12px"></div>
       </div>
-      <div class="card" style="border:1.5px solid #1B3358">
-        <div class="card-title" style="color:#1B3358"><i class="fas fa-exchange-alt"></i> نقل شعبة كاملة</div>
+      <div class="card" >
+        <div class="card-title" ><i class="fas fa-exchange-alt"></i> نقل شعبة كاملة</div>
         <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">
           ينقل كل طلاب شعبة معيّنة إلى شعبة أخرى دفعة وحدة (مفيد عند دمج أو إعادة توزيع الشعب).
         </p>
@@ -772,7 +522,7 @@
             <select id="bulkMoveToSection" style="margin-top:6px"><option value="">الشعبة</option></select>
           </div>
         </div>
-        <button class="btn" style="background:#1B3358;color:#fff" onclick="bulkMoveSection()"><i class="fas fa-exchange-alt"></i> نقل الكل</button>
+        <button class="btn btn-primary" onclick="bulkMoveSection()"><i class="fas fa-exchange-alt"></i> نقل الكل</button>
       </div>
       <div class="card">
         <div class="card-title"><i class="fas fa-list"></i> قائمة الطلاب</div>
@@ -977,6 +727,38 @@
 
     <!-- ── SETTINGS TAB ── -->
     <div class="tab-panel" id="tab-settings">
+      {% if brand_msg == 'saved' %}<div class="alert alert-success"><i class="fas fa-circle-check"></i> تم حفظ الهوية.</div>
+      {% elif brand_msg == 'badlogo' %}<div class="alert alert-error"><i class="fas fa-circle-exclamation"></i> صيغة الشعار غير مدعومة (PNG أو JPG أو WEBP أو SVG).</div>{% endif %}
+      <form class="card" method="post" action="/admin/brand" enctype="multipart/form-data">
+        <div class="card-title"><i class="fas fa-building"></i> الهوية</div>
+        <div class="form-grid">
+          <div class="form-group"><label for="brOrgAr">الاسم بالعربية</label><input type="text" id="brOrgAr" name="org_ar" value="{{ brand.org_ar }}" required>
+            <div class="hint">الاسم الطويل يظهر تحت الشعار على عدة أسطر.</div></div>
+          <div class="form-group"><label for="brOrgEn">الاسم بالإنجليزية</label><input type="text" id="brOrgEn" name="org_en" value="{{ brand.org_en }}" dir="ltr"></div>
+          <div class="form-group"><label for="brAccent">اللون الأساسي</label><input type="color" id="brAccent" name="accent_color" value="{{ brand.accent }}">
+            <div class="hint">الافتراضي: <span class="mono">#0C67EC</span></div></div>
+          <div class="form-group"><label for="brLogo">الشعار</label>
+            <div class="logo-pick">
+              <img src="{{ brand.logo_src }}" alt="">
+              <div><input type="file" id="brLogo" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+              {% if not brand.is_icon %}<label class="check-line"><input type="checkbox" name="remove_logo" value="1"> إزالة الشعار</label>{% endif %}</div>
+            </div>
+            <div class="hint">إلى أن يُرفع شعار تظهر أيقونة النظام.</div></div>
+        </div>
+        <button class="btn btn-primary" type="submit"><i class="fas fa-floppy-disk"></i> حفظ الهوية</button>
+      </form>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-envelope"></i> البريد</div>
+        <div class="graph-status">
+          <b><i class="fab fa-microsoft"></i> Microsoft Graph</b>
+          {% if graph.ready %}<span class="badge ok">مضبوط</span>{% else %}<span class="badge bad">غير مضبوط</span>{% endif %}
+          <span class="badge {{ 'ok' if graph.tenant else 'bad' }}" data-notr>Tenant ID</span>
+          <span class="badge {{ 'ok' if graph.client else 'bad' }}" data-notr>Client ID</span>
+          <span class="badge {{ 'ok' if graph.secret else 'bad' }}" data-notr>Client Secret</span>
+          <span class="muted">المرسل:</span> <span class="mono" data-notr>{{ graph.sender or '—' }}</span>
+          <p class="hint">تُضبط هذه القيم في ملف الإعدادات <span class="mono" data-notr>.env</span> عند التثبيت (<span class="mono" data-notr>1_setup.bat</span>) ولا تُعرض هنا.</p>
+        </div>
+      </div>
       <div id="settingsContent"></div>
     </div>
 
@@ -1164,6 +946,49 @@ let PERIODS = [];
 
 // ── i18n (bilingual admin panel; layout stays RTL, only text swaps) ──
 const I18N_EN = {
+  // interface (sidebar, home, identity and mail cards)
+  "الرئيسية": "Home",
+  "العمل اليومي": "Daily work",
+  "القوائم والتقارير": "Lists and reports",
+  "الإدارة": "Administration",
+  "تثبيت التطبيق": "Install the app",
+  "تسجيل الخروج": "Sign out",
+  "مدير النظام": "System administrator",
+  "حجوزات اليوم": "Today's bookings",
+  "المراحل الفعالة": "Active stages",
+  "الوصول السريع": "Quick access",
+  "نظام حجز عربات الحواسيب": "Laptop Trolleys Booking System",
+  "كل رقم يفتح قائمة الطلبات مصفّاة بحالته.": "Each number opens the bookings list filtered by its status.",
+  "الاعتماد والرفض والتعديل والطباعة": "Approve, reject, edit and print",
+  "الحجوزات على تقويم شهري وأسبوعي": "Bookings on a monthly and weekly calendar",
+  "تعطيل يوم أو حصة لمرحلة": "Disable a day or a period for a stage",
+  "الإضافة والاستيراد والنقل والحظر": "Add, import, move and block",
+  "قوائم الشعب لنموذج التسليم": "Section lists for the handover form",
+  "الإحصاءات وتقرير التسليم": "Statistics and the handover report",
+  "المراحل والصفوف والشعب والحصص": "Stages, grades, sections and periods",
+  "الهوية والبريد وقواعد الحجز": "Identity, mail and booking rules",
+  "الهوية": "Identity",
+  "الاسم بالعربية": "Name in Arabic",
+  "الاسم بالإنجليزية": "Name in English",
+  "الاسم الطويل يظهر تحت الشعار على عدة أسطر.": "A long name wraps under the logo on several lines.",
+  "اللون الأساسي": "Main colour",
+  "الافتراضي:": "Default:",
+  "الشعار": "Logo",
+  "إزالة الشعار": "Remove the logo",
+  "إلى أن يُرفع شعار تظهر أيقونة النظام.": "Until a logo is uploaded, the system icon is shown.",
+  "حفظ الهوية": "Save identity",
+  "تم حفظ الهوية.": "The identity has been saved.",
+  "صيغة الشعار غير مدعومة (PNG أو JPG أو WEBP أو SVG).": "Unsupported logo format (PNG, JPG, WEBP or SVG).",
+  "البريد": "Mail",
+  "مضبوط": "Configured",
+  "غير مضبوط": "Not configured",
+  "المرسل:": "Sender:",
+  "تُضبط هذه القيم في ملف الإعدادات": "These values are set in the settings file",
+  "عند التثبيت (": "during installation (",
+  ") ولا تُعرض هنا.": ") and are never shown here.",
+  "إجمالي الطلبات": "Total Bookings",
+  "مكتمل": "Completed",
+  "الروزنامة العامة": "Public Calendar",
   "الشريط الإعلاني": "Announcement Ticker",
   "الشريط الإعلاني المتحرك": "Scrolling Announcement Ticker",
   "تفعيل الشريط على كل الصفحات": "Enable the ticker on every page",
@@ -1490,9 +1315,9 @@ const I18N_EN = {
   "طباعة نموذج تسجيل الطلبة": "Print Student Registration Form",
 };
 
-const ORG_AR_NAME = {{ config.ORG_AR|tojson }};
-const ORG_EN_NAME = {{ config.ORG_EN|tojson }};
-const ORG_LOGO_URL = {{ config.LOGO_URL|tojson }};
+const ORG_AR_NAME = {{ brand.org_ar|tojson }};
+const ORG_EN_NAME = {{ brand.org_en|tojson }};
+const ORG_LOGO_URL = {{ brand.logo_src|tojson }};
 
 let AR = (localStorage.getItem('adminLang') || '{{ lang }}') !== 'en';
 
@@ -1504,7 +1329,7 @@ function captureStaticText() {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
     acceptNode(n) {
       if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-      if (n.parentElement && n.parentElement.closest('script,style,#globalTicker,.ql-editor,.ql-toolbar')) return NodeFilter.FILTER_REJECT;
+      if (n.parentElement && n.parentElement.closest('script,style,#globalTicker,.ql-editor,.ql-toolbar,[data-notr]')) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     }
   });
@@ -1526,7 +1351,10 @@ function applyStaticLang() {
     const orig = el.dataset.origPlaceholder;
     el.setAttribute('placeholder', AR ? orig : (I18N_EN[orig] || orig));
   });
-  document.querySelectorAll('.lang-btn').forEach(b => b.textContent = AR ? 'EN' : 'AR');
+  document.querySelectorAll('.lang-btn').forEach(b => { b.textContent = AR ? 'English' : 'العربية'; b.lang = AR ? 'en' : 'ar'; });
+  const brandOrg = document.getElementById('brandOrg');
+  if (brandOrg) brandOrg.textContent = AR ? brandOrg.dataset.ar : (brandOrg.dataset.en || brandOrg.dataset.ar);
+  document.title = t('لوحة التحكم') + ' — ' + (AR ? ORG_AR_NAME : ORG_EN_NAME);
   const activeTab = document.querySelector('.tab-panel.active');
   if (activeTab) {
     const id = activeTab.id.replace('tab-', '');
@@ -1567,14 +1395,11 @@ function showTab(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const panel = document.getElementById('tab-' + name);
   if (panel) panel.classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n => {
-    if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'" + name + "'")) {
-      n.classList.add('active');
-    }
-  });
+  document.querySelectorAll('.nav-item[data-tab="' + name + '"]').forEach(n => n.classList.add('active'));
   history.replaceState(null, '', '#' + name);
-  const titles = {bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), archive:t('الأرشفة'), settings:t('الإعدادات'), calview:t('التقويم المرئي'), ticker:t('الشريط الإعلاني')};
+  const titles = {home:t('الرئيسية'), bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), archive:t('الأرشفة'), settings:t('الإعدادات'), calview:t('التقويم المرئي'), ticker:t('الشريط الإعلاني')};
   document.getElementById('pageTitle').textContent = titles[name] || name;
+  if (name === 'home')     loadStats();
   if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
   if (name === 'calview')  initAdminCal();
   if (name === 'blocked')  loadBlocked();
@@ -1589,13 +1414,20 @@ function showTab(name) {
 // ── Clock ──
 function updateClock() {
   const now = new Date();
-  const opts = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn' };
-  document.getElementById('clockEl').textContent = now.toLocaleString(AR ? 'ar' : 'en-US', opts);
+  // 2026-12-31 14:05 (Asia/Amman)
+  let txt;
+  try {
+    const parts = {};
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Amman', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now).forEach(p => parts[p.type] = p.value);
+    txt = `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+  } catch (e) { txt = now.toISOString().slice(0, 16).replace('T', ' '); }
+  document.getElementById('clockEl').textContent = txt;
 }
 setInterval(updateClock, 30000); updateClock();
 
 // ── Toast ──
-function showToast(msg, color = '#FF5733') {
+function showToast(msg, color = '#0f2a52') {
   const toastEl = document.getElementById('toast');
   toastEl.textContent = t(msg);
   toastEl.style.background = color;
@@ -1622,16 +1454,16 @@ function printLetterheadHtml(bodyHtml, titleAr, titleEn, hideOrgName) {
 <meta charset="UTF-8"><title>${title}</title>
 <style>
   body{font-family:Arial,sans-serif;padding:24px;color:#1e2a2b;margin:0}
-  .print-header{display:flex;align-items:center;justify-content:${hideOrgName?'center':'flex-start'};gap:14px;border-bottom:3px solid #FF5733;padding-bottom:14px;margin-bottom:18px}
+  .print-header{display:flex;align-items:center;justify-content:${hideOrgName?'center':'flex-start'};gap:14px;border-bottom:3px solid #0C67EC;padding-bottom:14px;margin-bottom:18px}
   .print-header .org-names{font-weight:800;font-size:15px;line-height:1.5}
-  .print-header .org-names .ar{color:#1B3358}
+  .print-header .org-names .ar{color:#0f2a52}
   .print-header .org-names .en{color:#6b7c7e;font-size:13px}
-  h2{color:#FF5733;margin:0 0 6px}
+  h2{color:#0C67EC;margin:0 0 6px}
   table{width:100%;border-collapse:collapse}
-  th{background:#FF5733;color:#fff;padding:8px;text-align:${AR?'right':'left'};font-size:12px}
+  th{background:#0C67EC;color:#fff;padding:8px;text-align:${AR?'right':'left'};font-size:12px}
   td{padding:7px;border-bottom:1px solid #ddd;font-size:12px}
   .print-footer{margin-top:26px;padding-top:12px;border-top:1px solid #ddd;font-size:11px;color:#888;display:flex;justify-content:space-between}
-  .print-btn{background:#FF5733;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-size:13px}
+  .print-btn{background:#0C67EC;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-size:13px}
   @media print{.print-btn{display:none}}
 </style></head><body>
   <div class="print-header">
@@ -1878,6 +1710,8 @@ async function loadStats() {
     document.getElementById('stRejected').textContent = data.rejected;
     document.getElementById('stCancelled').textContent= data.cancelled;
     document.getElementById('nbPending').textContent  = data.pending;
+    const stToday = document.getElementById('stToday'); if (stToday) stToday.textContent = data.today;
+    const stHalls = document.getElementById('stHalls'); if (stHalls) stHalls.textContent = data.halls;
 
     if (lastKnownPendingCount === null) {
       lastKnownPendingCount = data.pending; // baseline on first load — don't notify about pre-existing ones
@@ -1901,11 +1735,20 @@ function filterBk(f, btn) {
 }
 
 function filterByStat(f) {
+  showTab('bookings');
   const btn = document.querySelector(`.filter-btn[data-filter="${f}"]`);
   if (btn) filterBk(f, btn);
 }
 
 function searchBk(q) { curSearch = q.toLowerCase(); renderTable(); }
+function showTodayBookings() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const today = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  filterByStat('all');
+  const box = document.querySelector('#tab-bookings .search-input');
+  if (box) box.value = today;
+  searchBk(today);
+}
 
 let bookingsSort = {key: null, dir: 'asc'};
 
@@ -1935,7 +1778,7 @@ function renderTable() {
   const tbody = document.getElementById('bkTable');
   let rows = allBookings;
   if (curSearch) rows = rows.filter(b =>
-    (b.reqId + b.name + (b.title||'') + (b.stage||'') + (b.grade||'') + (b.section||'') + b.email).toLowerCase().includes(curSearch)
+    (b.reqId + b.name + (b.title||'') + (b.stage||'') + (b.grade||'') + (b.section||'') + b.email + ' ' + (b.date||'')).toLowerCase().includes(curSearch)
   );
   ['reqId','name','title','stage','grade','section','periodNumber','date','status','checkoutSubmitted'].forEach(k => {
     const el = document.getElementById('bkArrow-' + k);
@@ -2230,7 +2073,7 @@ function openDetail(reqId) {
 
   let footer = '';
   if (b.status === 'approved' || b.status === 'completed') {
-    footer += `<button style="background:#FF5733;color:#fff;border:none;font-weight:700" class="btn" onclick="printDeliveryReceipt('${b.reqId}')" title="${t('إيصال تسليم')}"><i class="fas fa-receipt"></i> ${t('إيصال تسليم')}</button>`;
+    footer += `<button style="background:#0C67EC;color:#fff;border:none;font-weight:700" class="btn" onclick="printDeliveryReceipt('${b.reqId}')" title="${t('إيصال تسليم')}"><i class="fas fa-receipt"></i> ${t('إيصال تسليم')}</button>`;
     footer += `<button class="btn btn-outline" onclick="printStudentForm('${b.reqId}')" title="${t('طباعة نموذج تسجيل الطلبة')}"><i class="fas fa-print"></i> ${t('طباعة نموذج تسجيل الطلبة')}</button>`;
   }
   if (b.status === 'pending') {
@@ -2298,9 +2141,9 @@ function buildReceiptHtml(b) {
   .status-line { margin-top:14px; font-size:13px; color:#333; text-align:center; }
   .footer { margin-top:20px; padding-top:8px; border-top:1px solid #ccc; font-size:10px; color:#666; display:flex; justify-content:space-between; width:100%; max-width:480px; }
   .print-btn {
-    background:#FF5733; color:#fff; border:none; padding:12px 32px; border-radius:8px;
+    background:#0C67EC; color:#fff; border:none; padding:12px 32px; border-radius:8px;
     cursor:pointer; margin-bottom:18px; font-size:16px; font-weight:700;
-    box-shadow:0 3px 10px rgba(255,87,51,.4);
+    box-shadow:0 3px 10px rgba(12,103,236,.4);
   }
   .print-btn:hover { background:#e64a2e; }
   @media print { .print-btn { display:none; } }
@@ -3236,7 +3079,7 @@ async function uploadContacts(input) {
     return {email: (parts[0]||'').trim(), name: (parts[1]||'').trim(), stageId};
   }).filter(x => x.email && x.email.includes('@'));
   const data = await api('/admin/api/add-contacts', {list});
-  showToast(data.success ? `${t('تمت الإضافة')}: ${data.count}` : (data.error||t('خطأ')), data.success ? '#FF5733' : '#c0392b');
+  showToast(data.success ? `${t('تمت الإضافة')}: ${data.count}` : (data.error||t('خطأ')), data.success ? '#0C67EC' : '#c0392b');
   if (data.success) loadContacts();
   input.value = '';
 }
@@ -3496,7 +3339,7 @@ async function uploadTeachers(input) {
   if (data.success) {
     let msg = `${t('تمت الإضافة')}: ${data.count}`;
     if (data.errors && data.errors.length) msg += ` — ${t('تعذّر')}: ${data.errors.length}`;
-    showToast(msg, data.errors && data.errors.length ? '#e67e22' : '#FF5733');
+    showToast(msg, data.errors && data.errors.length ? '#e67e22' : '#0C67EC');
     if (data.errors && data.errors.length) console.warn('Import errors:', data.errors);
   } else {
     showToast(data.error || t('خطأ'), '#c0392b');
@@ -3733,7 +3576,7 @@ async function bulkMoveSelectedStudents() {
     const r = await api('/admin/api/move-student', {id, sectionId});
     if (r.success) okCount++;
   }
-  showToast(`${AR?'تم نقل':'Moved'} ${okCount}/${ids.length}`, okCount === ids.length ? '#FF5733' : '#e67e22');
+  showToast(`${AR?'تم نقل':'Moved'} ${okCount}/${ids.length}`, okCount === ids.length ? '#0C67EC' : '#e67e22');
   loadStudents();
 }
 
@@ -3872,7 +3715,7 @@ async function uploadStudents(input) {
   if (data.success) {
     let msg = `${t('تمت الإضافة')}: ${data.count}`;
     if (data.errors && data.errors.length) msg += ` — ${t('تعذّر')}: ${data.errors.length}`;
-    showToast(msg, data.errors && data.errors.length ? '#e67e22' : '#FF5733');
+    showToast(msg, data.errors && data.errors.length ? '#e67e22' : '#0C67EC');
     if (data.errors && data.errors.length) console.warn('Import errors:', data.errors);
   } else {
     showToast(data.error || t('خطأ'), '#c0392b');
@@ -3964,15 +3807,7 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function refreshAll() { loadBookings(); loadStats(); showToast(t('تم التحديث')); }
 
-// ── Sidebar toggle ──
-function toggleSidebar() {
-  document.querySelector('.sidebar').classList.toggle('open');
-  document.getElementById('sidebarOverlay').classList.toggle('open');
-}
-function closeSidebar() {
-  document.querySelector('.sidebar').classList.remove('open');
-  document.getElementById('sidebarOverlay').classList.remove('open');
-}
+// ── Sidebar toggle: toggleSidebar() / closeSidebar() come from static/js/app.js ──
 
 // ── Admin Calendar ────────────────────────────────────────────
 let adminCalInstance = null;
@@ -4019,7 +3854,7 @@ function renderCal() {
 
   adminCalInstance = new FullCalendar.Calendar(el, {
     locale: AR ? 'ar' : 'en',
-    direction: 'rtl',
+    direction: AR ? 'rtl' : 'ltr',
     initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
     headerToolbar: {
       right: 'prev,next today',
@@ -4484,7 +4319,7 @@ function drawMonthChart(sortedMonths) {
 
   // Line
   ctx.beginPath();
-  ctx.strokeStyle = '#FF5733'; ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#0C67EC'; ctx.lineWidth = 2.5;
   sortedMonths.forEach(([m,v],i) => {
     const x = pad.left + i*step;
     const y = pad.top + ch - (v/mx)*ch;
@@ -4502,7 +4337,7 @@ function drawMonthChart(sortedMonths) {
   ctx.lineTo(pad.left + (sortedMonths.length-1)*step, pad.top+ch);
   ctx.lineTo(pad.left, pad.top+ch);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(255,87,51,.1)';
+  ctx.fillStyle = 'rgba(12,103,236,.1)';
   ctx.fill();
 
   // Dots + labels
@@ -4511,7 +4346,7 @@ function drawMonthChart(sortedMonths) {
     const y = pad.top + ch - (v/mx)*ch;
     ctx.beginPath();
     ctx.arc(x,y,4,0,Math.PI*2);
-    ctx.fillStyle = '#FF5733'; ctx.fill();
+    ctx.fillStyle = '#0C67EC'; ctx.fill();
     ctx.fillStyle = '#1e2a2b'; ctx.font = '10px Tajawal';
     ctx.textAlign = 'center';
     ctx.fillText(v, x, y-10);
@@ -4526,7 +4361,7 @@ function drawHallBars(hallCount) {
   const sorted = Object.entries(hallCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
   if (!sorted.length) { el.innerHTML=`<p style="color:var(--muted);text-align:center">${t('لا توجد بيانات')}</p>`; return; }
   const mx = sorted[0][1];
-  const colors = ['#FF5733','#1B3358','#27ae60','#e67e22','#c0392b','#8e44ad'];
+  const colors = ['#0C67EC','#1B3358','#27ae60','#e67e22','#c0392b','#8e44ad'];
   el.innerHTML = sorted.map(([hall,count],i) => {
     const hallLabel = stageDisplayName(hall);
     const pct = Math.round(count/mx*100);
@@ -4589,7 +4424,7 @@ loadPeriods();
 
 // Restore whichever tab the URL hash points to (so refresh/reload/shared
 // links keep the same tab instead of always resetting to Bookings).
-const validTabs = ['bookings','halls','blocked','contacts','teachers','students','reports','archive','settings','calview','ticker'];
+const validTabs = ['home','bookings','halls','blocked','contacts','teachers','students','reports','archive','settings','calview','ticker'];
 const initialTab = location.hash.replace('#', '');
 if (validTabs.includes(initialTab)) {
   showTab(initialTab);
@@ -4648,26 +4483,6 @@ window.addEventListener('appinstalled', () => {
 });
 </script>
 
-<nav class="mobile-nav">
-  <div class="mobile-nav-items">
-    <button class="mobile-nav-item active" onclick="showTab('bookings',this)">
-      <i class="fas fa-calendar-check"></i><span>الحجوزات</span>
-      <span class="m-badge" id="mBadge" style="display:none">0</span>
-    </button>
-    <button class="mobile-nav-item" onclick="showTab('halls',this)">
-      <i class="fas fa-laptop"></i><span>المراحل</span>
-    </button>
-    <button class="mobile-nav-item" onclick="showTab('blocked',this)">
-      <i class="fas fa-ban"></i><span>محظور</span>
-    </button>
-    <button class="mobile-nav-item" onclick="showTab('contacts',this)">
-      <i class="fas fa-address-book"></i><span>اتصالات</span>
-    </button>
-    <button class="mobile-nav-item" onclick="showTab('reports',this)">
-      <i class="fas fa-chart-bar"></i><span>تقارير</span>
-    </button>
-  </div>
-</nav>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script><script>window.__CMDK_CONFIG={sel:".sidebar .nav-item"};</script>
 <!-- ===== لوحة البحث السريع للتنقّل (Ctrl+K) — مكوّن مستقل ===== -->
 <script>

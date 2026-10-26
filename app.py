@@ -115,6 +115,25 @@ XEqPZq2IE3k9g455XAokrxI6N2LhLDhtu3SMlEulXPw9IcShiKeKf2xO
                 cur.close()
     with app.app_context():
         init_db(app)
+        from utils.brand import ensure_brand
+        ensure_brand(app)          # يحتفظ التثبيت القائم بشعاره، ويبدأ التثبيت الجديد بأيقونة النظام
+
+    # هوية المنظمة (الاسمان، اللون، الشعار) لكل القوالب — utils/brand.py
+    _static_v = {}
+
+    @app.context_processor
+    def _inject_brand():
+        from utils.brand import get_brand
+
+        def asset(path):
+            # رقم نسخة من تاريخ الملف حتى لا يبقى المتصفح على نسخة قديمة (التخزين المؤقت 7 أيام)
+            if path not in _static_v:
+                try:
+                    _static_v[path] = int(os.path.getmtime(os.path.join(app.static_folder, path)))
+                except OSError:
+                    _static_v[path] = 0
+            return f'/static/{path}?v={_static_v[path]}'
+        return {'brand': get_brand(), 'asset': asset, 'now_year': datetime.now().year}
 
     app.register_blueprint(public_bp)
     app.register_blueprint(admin_bp, url_prefix='/admin')

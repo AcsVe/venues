@@ -120,15 +120,9 @@ def _send(to_email, to_name, subject, html_body, bcc_list=None, inline_images=No
 
 def _abs_logo_url():
     """Email clients need an absolute URL — /static/logo.jpg alone won't load."""
-    logo = current_app.config.get('LOGO_URL', '')
-    if not logo:
-        return ''
-    if logo.startswith('http://') or logo.startswith('https://'):
-        return logo
-    base = current_app.config.get('BASE_URL', '')
-    if not base:
-        return ''  # can't build an absolute URL — better to omit than show a broken image
-    return base.rstrip('/') + logo
+    # the organization logo uploaded in Settings, or the system icon (PNG) until one is uploaded
+    from utils.brand import email_logo_url
+    return email_logo_url()
 
 
 def _date_label(date_str, start_time='', end_time=''):
@@ -153,8 +147,9 @@ def _base_html(content_ar, content_en, color='#247680'):
     the reading pane — the table+width+align combo is the reliable
     cross-client fix."""
     logo = _abs_logo_url()
-    org_ar = current_app.config.get('ORG_AR', 'مدرسة الرائد العربي')
-    org_en = current_app.config.get('ORG_EN', 'Al-Raed Al-Arabi School')
+    from utils.brand import get_brand
+    _b = get_brand()
+    org_ar, org_en = _b['org_ar'], _b['org_en']
     logo_html = (f'<img src="{logo}" alt="logo" width="120" style="display:block;margin:0 auto 6px;max-width:120px;height:auto">'
                  if logo else '')
 

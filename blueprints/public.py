@@ -774,7 +774,7 @@ def _action_result_page(title_ar, title_en, msg_ar, msg_en, color='#27ae60'):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title_ar}</title>
 <style>
-  body{{font-family:Tajawal,Arial,sans-serif;background:#eef3f5;margin:0;min-height:100vh;
+  body{{font-family:Tajawal,Arial,sans-serif;background:linear-gradient(135deg,#0C67EC,#0847B0 50%,#0a3a8a);margin:0;min-height:100vh;
        display:flex;align-items:center;justify-content:center;padding:20px}}
   .box{{background:#fff;border-radius:16px;padding:36px 28px;text-align:center;max-width:420px;
        box-shadow:0 8px 30px rgba(0,0,0,.1)}}
@@ -813,7 +813,7 @@ def quick_approve(req_id):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>اعتماد الحجز</title>
 <style>
-  body{{font-family:Tajawal,Arial,sans-serif;background:#eef3f5;margin:0;min-height:100vh;
+  body{{font-family:Tajawal,Arial,sans-serif;background:linear-gradient(135deg,#0C67EC,#0847B0 50%,#0a3a8a);margin:0;min-height:100vh;
        display:flex;align-items:center;justify-content:center;padding:20px}}
   .box{{background:#fff;border-radius:16px;padding:30px 26px;max-width:440px;width:100%;
        box-shadow:0 8px 30px rgba(0,0,0,.1)}}
@@ -882,7 +882,7 @@ def quick_reject(req_id):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>رفض الحجز</title>
 <style>
-  body{{font-family:Tajawal,Arial,sans-serif;background:#eef3f5;margin:0;min-height:100vh;
+  body{{font-family:Tajawal,Arial,sans-serif;background:linear-gradient(135deg,#0C67EC,#0847B0 50%,#0a3a8a);margin:0;min-height:100vh;
        display:flex;align-items:center;justify-content:center;padding:20px}}
   .box{{background:#fff;border-radius:16px;padding:30px 26px;max-width:440px;width:100%;
        box-shadow:0 8px 30px rgba(0,0,0,.1)}}

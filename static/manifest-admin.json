@@ -6,8 +6,8 @@
   "scope": "/admin/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#f0f4f5",
-  "theme_color": "#1B3358",
+  "background_color": "#f0f4fa",
+  "theme_color": "#0C67EC",
   "lang": "ar",
   "dir": "rtl",
   "icons": [

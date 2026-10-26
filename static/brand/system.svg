@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Venues">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3D8EF5"/><stop offset=".55" stop-color="#0C67EC"/><stop offset="1" stop-color="#0847B0"/></linearGradient></defs>
+  <rect width="120" height="120" rx="28" fill="url(#g)"/>
+  <!-- hall: a double-leaf door under an arched frame -->
+  <path d="M28 96V44a32 26 0 0 1 64 0v52z" fill="#fff"/>
+  <path d="M37 96V48a23 18 0 0 1 46 0v48z" fill="#0C67EC"/>
+  <path d="M41 96V50a19 14 0 0 1 17.5-12.5V96z" fill="#fff"/>
+  <path d="M61.5 37.5A19 14 0 0 1 79 50v46H61.5z" fill="#fff"/>
+  <circle cx="55" cy="70" r="2.6" fill="#0C67EC"/>
+  <circle cx="65.5" cy="70" r="2.6" fill="#0C67EC"/>
+  <rect x="22" y="94" width="76" height="6" rx="3" fill="#fff"/>
+  <!-- calendar badge -->
+  <g transform="translate(70 68)">
+    <rect x="0" y="4" width="34" height="32" rx="7" fill="#16a34a" stroke="#fff" stroke-width="3.5"/>
+    <rect x="1.75" y="5.75" width="30.5" height="8" rx="4" fill="#0f7a37"/>
+    <rect x="8" y="0" width="4.5" height="10" rx="2.2" fill="#fff"/>
+    <rect x="21.5" y="0" width="4.5" height="10" rx="2.2" fill="#fff"/>
+    <g fill="#fff"><rect x="7" y="18" width="5" height="4.5" rx="1"/><rect x="14.5" y="18" width="5" height="4.5" rx="1"/><rect x="22" y="18" width="5" height="4.5" rx="1"/>
+    <rect x="7" y="25.5" width="5" height="4.5" rx="1"/><rect x="14.5" y="25.5" width="5" height="4.5" rx="1"/></g>
+  </g>
+</svg>
