@@ -698,7 +698,7 @@ def api_submit_checkout():
             send_handover_notification(notify_emails, {
                 'reqId': b.req_id, 'name': b.name, 'stage': b.stage_name,
                 'grade': b.grade_name, 'section': b.section_name, 'date': b.booking_date,
-                'notes': checkout.notes or '',
+                'notes': b.notes or '', 'handoverNotes': checkout.notes or '',
             }, handed_out)
         except Exception as e:
             print(f"[email] send_handover_notification failed: {e}", flush=True)

@@ -2032,12 +2032,12 @@ function openDetail(reqId) {
       ${drow('المرحلة', stageDisplayName(b.stage)||'-')} ${drow('الصف', b.grade||'-')}
       ${drow('الشعبة', b.section||'-')} ${drow('الحصة', periodStr)}
       ${drow('التاريخ', b.date)}
-      ${drow('ملاحظات', b.notes||'-')}
       ${(b.status === 'approved' || b.status === 'completed') && b.approvedBy ? drow('اعتمد من قبل', `<span style="color:#27ae60;font-weight:700">${esc(b.approvedBy)}</span>`) : ''}
       ${b.rejectReason ? drow('سبب الرفض', `<span style="color:#c0392b">${esc(b.rejectReason)}</span>`) : ''}
       ${b.cancelReason ? drow('سبب الإلغاء', `<span style="color:#e67e22">${esc(b.cancelReason)}</span>`) : ''}
       ${b.att&&b.att.length ? drow('المرفقات', b.att.map(u=>`<a href="${u}" target="_blank" style="color:var(--primary)"><i class="fas fa-paperclip"></i> ${t('ملف')}</a>`).join(' ')) : ''}
     </table>
+    ${teacherNoteBox(b.notes)}
     ${b.status === 'approved' ? `<div id="checkoutSection" style="margin-top:14px"><div style="color:var(--muted);font-size:.85rem">${AR?'جاري تحميل قائمة تسليم الأجهزة...':'Loading device handover list...'}</div></div>` : ''}`;
 
   if (b.status === 'approved') {
@@ -2414,6 +2414,14 @@ async function quickSetPending(reqId) {
   const data = await api('/admin/api/set-pending', {reqId});
   if (data.success) { showToast('أُعيد لقيد المراجعة'); closeModal('bkModal'); loadBookings(); }
   else showToast(data.error || 'خطأ', '#c0392b');
+}
+
+function teacherNoteBox(note, label) {
+  if (!note || !String(note).trim()) return '';
+  const text = esc(String(note)).replace(/\r?\n/g, '<br>');
+  return `<div style="margin-top:12px;background:#fff4dc;border-inline-start:5px solid #e0a100;border-radius:8px;padding:10px 14px">
+    <div style="color:#8a5a00;font-weight:700;font-size:.8rem;margin-bottom:4px"><i class="fas fa-sticky-note"></i> ${label || (AR ? 'ملاحظات المعلم/ة' : "Teacher's notes")}</div>
+    <div dir="auto" style="color:#1a1a1a;font-size:1rem;font-weight:600;line-height:1.7">${text}</div></div>`;
 }
 
 function drow(label, val, forceLtr) {
@@ -4012,7 +4020,7 @@ function openCheckoutDetail(reqId) {
       <div><strong>${t('التاريخ')}:</strong> ${g.dayName ? esc(t(g.dayName)) + ' - ' : ''}${g.date}</div>
       <div><strong>${t('المرحلة')}:</strong> ${esc(stageDisplayName(g.stage)||'')} — <strong>${t('الصف')}:</strong> ${esc(gradeDisplayName(g.grade)||'')} — <strong>${t('الشعبة')}:</strong> ${esc(g.section||'')}</div>
     </div>
-    ${g.notes ? `<div style="background:#fff8e1;border-inline-start:3px solid #f0ad4e;padding:8px 12px;border-radius:4px;margin-bottom:10px;font-size:.88rem"><strong>${AR?'ملاحظة المعلم/ة':'Teacher note'}:</strong> ${esc(g.notes)}</div>` : ''}
+    ${teacherNoteBox(g.notes, AR ? 'ملاحظة المعلم/ة عند التسليم' : 'Teacher note at handover')}
     <table style="width:100%;border-collapse:collapse">
       <tr><th style="text-align:start;padding:8px;background:var(--bg)">${t('الطالب')}</th><th style="text-align:start;padding:8px;background:var(--bg)">${t('رقم الجهاز')}</th></tr>
       ${rows}

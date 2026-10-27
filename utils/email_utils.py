@@ -188,6 +188,30 @@ def _build_rows(pairs, bg):
     return ''.join(out)
 
 
+def _note_box(note, lang='ar', label=None):
+    """The teacher's note, as prominent as a comment: an amber side bar, a label and the text in a large, dark
+    font. A table so Outlook keeps the bar and the background; the text is escaped and new lines become <br>."""
+    if not note or not str(note).strip():
+        return ''
+    rtl = lang == 'ar'
+    side = 'right' if rtl else 'left'
+    label = label or ('📝 ملاحظات المعلم/ة' if rtl else "📝 Teacher's notes")
+    text = '<br>'.join(esc(line) for line in str(note).replace('\r\n', '\n').split('\n'))
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+            f'style="width:100%;margin:12px 0;border-collapse:collapse">'
+            f'<tr><td style="background:#fff4dc;border-{side}:5px solid #e0a100;padding:10px 14px;'
+            f'text-align:{side};direction:{"rtl" if rtl else "ltr"}">'
+            f'<div style="color:#8a5a00;font-weight:700;font-size:13px;margin-bottom:6px">{label}</div>'
+            f'<div dir="auto" style="color:#1a1a1a;font-size:16px;line-height:1.7;font-weight:600;text-align:start">{text}</div>'
+            f'</td></tr></table>')
+
+
+def _note_row(note, lang='ar'):
+    """The note box as a full-width row of a details table (so every email that lists the booking shows it)."""
+    box = _note_box(note, lang)
+    return f'<tr><td colspan="2" style="padding:6px 0 0">{box}</td></tr>' if box else ''
+
+
 def _rows_ar(data, bg='#f0f7f8'):
     date_label = _date_label(data.get('date'), data.get('startTime'), data.get('endTime'))
     return _build_rows([
@@ -196,8 +220,7 @@ def _rows_ar(data, bg='#f0f7f8'):
         ('المرحلة / الصف / الشعبة', _class_label(data)),
         ('الحصة', data.get('periodLabel')),
         ('التاريخ والوقت', date_label),
-        ('ملاحظات المعلم/ة', data.get('notes')),
-    ], bg)
+    ], bg) + _note_row(data.get('notes'), 'ar')
 
 
 def _rows_en(data, bg='#f0f7f8'):
@@ -208,8 +231,7 @@ def _rows_en(data, bg='#f0f7f8'):
         ('Stage / Grade / Section', _class_label(data)),
         ('Period', data.get('periodLabel')),
         ('Date & Time', date_label),
-        ("Teacher's notes", data.get('notes')),
-    ], bg)
+    ], bg) + _note_row(data.get('notes'), 'en')
 
 
 def send_confirm(data):
@@ -435,7 +457,7 @@ def send_handover_notification(emails, booking_ctx, handed_out):
       <tr><th style="text-align:right;padding:6px 8px;background:#e8f0f2">الطالب</th><th style="text-align:right;padding:6px 8px;background:#e8f0f2">رقم الجهاز</th></tr>
       {students_rows_ar}
     </table>
-    {f'<p style="background:#fff8e1;border-inline-start:3px solid #f0ad4e;padding:8px 12px;border-radius:4px"><strong>ملاحظة المعلم/ة:</strong> {booking_ctx.get("notes")}</p>' if booking_ctx.get('notes') else ''}
+    {_note_box(booking_ctx.get('handoverNotes'), 'ar', '📝 ملاحظة المعلم/ة عند التسليم')}
     """
     content_en = f"""
     <h2 style="color:#247680;margin-top:0">✅ Devices Handed Over</h2>
@@ -445,7 +467,7 @@ def send_handover_notification(emails, booking_ctx, handed_out):
       <tr><th style="text-align:left;padding:6px 8px;background:#e8f0f2">Student</th><th style="text-align:left;padding:6px 8px;background:#e8f0f2">Device #</th></tr>
       {students_rows_en}
     </table>
-    {f'<p style="background:#fff8e1;border-inline-start:3px solid #f0ad4e;padding:8px 12px;border-radius:4px"><strong>Teacher note:</strong> {booking_ctx.get("notes")}</p>' if booking_ctx.get('notes') else ''}
+    {_note_box(booking_ctx.get('handoverNotes'), 'en', '📝 Teacher note at handover')}
     """
     html = _base_html(content_ar, content_en)
     ok = True
@@ -674,9 +696,8 @@ def send_staff_notification(event_type, data, contacts):
         ('المرحلة / الصف / الشعبة', _class_label(data)),
         ('الحصة', data.get('periodLabel')),
         ('التاريخ', data.get('date')),
-        ('ملاحظات المعلم/ة', data.get('notes')),
         (reason_label_ar, f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
-    ], '#f0f7f8')}</table>
+    ], '#f0f7f8')}{_note_row(data.get('notes'), 'ar')}</table>
     {_action_buttons_html(data, 'ar')}
     """
     content_en = f"""
@@ -690,9 +711,8 @@ def send_staff_notification(event_type, data, contacts):
         ('Stage / Grade / Section', _class_label(data)),
         ('Period', data.get('periodLabel')),
         ('Date', data.get('date')),
-        ("Teacher's notes", data.get('notes')),
         (reason_label_en, f'<span style="color:#c0392b;font-weight:600">{data.get("reason","")}</span>' if data.get('reason') else None),
-    ], '#f0f7f8')}</table>
+    ], '#f0f7f8')}{_note_row(data.get('notes'), 'en')}</table>
     {_action_buttons_html(data, 'en')}
     """
 
