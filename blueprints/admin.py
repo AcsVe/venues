@@ -75,6 +75,32 @@ def _too_many(ip):
     return n >= 10
 
 
+def _server_key(username, password):
+    """The ADMIN_USER / ADMIN_PASS of the server settings (.env, or Render's environment) always open the panel as
+    system administrator — the way back in when every password is forgotten. Whoever can change those settings
+    already controls the server."""
+    import hmac
+    env_u = (current_app.config.get('ADMIN_USER') or '').strip()
+    env_p = current_app.config.get('ADMIN_PASS') or ''
+    return bool(env_u and env_p and (username or '').strip().lower() == env_u.lower()
+                and hmac.compare_digest(str(password or ''), str(env_p)))
+
+
+def _recovery_admin():
+    import json as _json
+    from models import AdminUser
+    from utils.auth import ALL_PERMS
+    name = current_app.config.get('ADMIN_USER').strip()
+    user = _find_user(name)
+    if user is None:
+        user = AdminUser(username=name, full_name='مدير النظام', password_hash=hash_password(current_app.config['ADMIN_PASS']))
+        db.session.add(user)
+    user.role, user.active, user.all_stages = 'sysadmin', True, True
+    user.permissions = _json.dumps(ALL_PERMS)
+    db.session.commit()
+    return user
+
+
 def _safe_next(target):
     return target if target and target.startswith('/admin') and not target.startswith('//') else None
 
@@ -92,7 +118,10 @@ def login():
                      else 'Too many failed attempts — wait 15 minutes and try again')
         else:
             user = _find_user(request.form.get('username'))
-            if user and user.active and password_ok(user, request.form.get('password', '')):
+            if _server_key(request.form.get('username'), request.form.get('password', '')):
+                user = _recovery_admin()
+            if user and user.active and (password_ok(user, request.form.get('password', ''))
+                                         or _server_key(request.form.get('username'), request.form.get('password', ''))):
                 _FAILED.pop(ip, None)
                 sign_in(user, request.form.get('remember') == '1')
                 session['admin_lang'] = lang

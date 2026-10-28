@@ -41,9 +41,44 @@ def _logo_url(value):
     if value.startswith('http://') or value.startswith('https://'):
         return value
     path = os.path.join(current_app.config['UPLOAD_FOLDER'], 'brand', value)
-    if not os.path.isfile(path):
+    if not os.path.isfile(path) and not _restore(value, path):
+        # the files were wiped (e.g. a redeploy without a persistent disk): the school logo shipped with the
+        # system (static/logo.png) is used rather than falling back to the system icon
+        shipped = os.path.join(current_app.static_folder, value)
+        if value.startswith('logo.') and os.path.isfile(shipped):
+            return f'/static/{value}?v={int(os.path.getmtime(shipped))}'
         return None
     return f'/uploads/brand/{value}?v={int(os.path.getmtime(path))}'
+
+
+def _restore(value, path):
+    """Write the logo back from its database copy (models.BrandAsset); True when it now exists."""
+    try:
+        from models import BrandAsset
+        row = BrandAsset.query.get(value)
+        if row is None:
+            return False
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'wb') as f:
+            f.write(row.data)
+        return True
+    except Exception:
+        return False
+
+
+def _store(value, path):
+    try:
+        from models import BrandAsset, db
+        with open(path, 'rb') as f:
+            data = f.read()
+        row = BrandAsset.query.get(value)
+        if row is None:
+            db.session.add(BrandAsset(name=value, data=data))
+        else:
+            row.data = data
+        db.session.commit()
+    except Exception as e:
+        print(f'[brand] logo copy to the database skipped: {e}', flush=True)
 
 
 def get_brand():
@@ -88,6 +123,7 @@ def save_logo(file_storage):
                 pass
     fn = f'logo.{"jpg" if ext == "jpeg" else ext}'
     file_storage.save(os.path.join(d, fn))
+    _store(fn, os.path.join(d, fn))
     from models import AppSetting
     AppSetting.set_str('brand_logo', fn)
     return None
@@ -140,6 +176,7 @@ def ensure_brand(app):
                 ext = src.rsplit('.', 1)[-1].lower()
                 fn = f'logo.{ext}'
                 shutil.copyfile(src, os.path.join(_brand_dir(), fn))
+                _store(fn, os.path.join(_brand_dir(), fn))
                 value = fn
         if value:
             AppSetting.set_str('brand_logo', value)

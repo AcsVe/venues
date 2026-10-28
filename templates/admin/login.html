@@ -14,7 +14,7 @@
     {% if AR %}<a class="lang-switch" href="?lang=en" lang="en" hreflang="en">English</a>
     {% else %}<a class="lang-switch" href="?lang=ar" lang="ar" hreflang="ar">العربية</a>{% endif %}
   </div>
-  <div class="logo-circle">{% include '_brand_logo.html' %}</div>
+  <div class="logo-circle{{ '' if brand.is_icon else ' logo-wide' }}">{% include '_brand_logo.html' %}</div>
   <div class="brand-title">{{ brand.org_ar if AR else brand.org_en }}</div>
   <div class="brand-sub">{{ brand.sys_ar if AR else brand.sys_en }}</div>
 

@@ -5,7 +5,8 @@
 <style>
   .cal-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
   .cal-nav h2 { font-size:1.3rem; font-weight:800; color:var(--primary); }
-  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
+  .cal-cell { min-width:0; overflow:hidden; }
   .cal-day-name { text-align:center; font-weight:700; font-size:.78rem; color:var(--muted); padding:6px 0; }
   .cal-cell {
     min-height:80px; border-radius:8px; border:1px solid var(--border);
@@ -33,7 +34,7 @@
   .legend-item { display:flex; align-items:center; gap:6px; font-size:.82rem; }
   .legend-dot { width:12px; height:12px; border-radius:3px; }
   .modal-overlay {
-    display:none; position:fixed; inset:0;
+    display:none; position:fixed; top:0; right:0; bottom:0; left:0;
     background:rgba(0,0,0,.45); z-index:1000;
     align-items:center; justify-content:center;
   }

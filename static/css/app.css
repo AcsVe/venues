@@ -106,9 +106,12 @@ html[dir=rtl] .user-menu>summary{padding:4px 4px 4px 10px}
 .form-group label{display:block;font-weight:700;margin-bottom:5px;font-size:.88rem;color:#334155}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .form-grid.quad{grid-template-columns:repeat(4,minmax(0,1fr))}
-:where(input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=file]):not([type=range]),select,textarea){
+/* plain element selectors (not :where()) so older phone browsers style the fields too; the reset below puts
+   checkboxes, radios and sliders back */
+input,select,textarea{
   width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;font-family:inherit;font-size:.92rem;
   background:#fff;color:var(--text);transition:border-color .15s,box-shadow .15s;max-width:100%}
+input[type=checkbox],input[type=radio],input[type=range]{width:auto;padding:0;border:0;border-radius:0;background:none;box-shadow:none}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(12,103,236,.15)}
 :focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 textarea{resize:vertical;min-height:70px}
@@ -217,7 +220,7 @@ tr:hover td{background:#f1f6fe}
   .modal{padding:18px 16px}
   .modal-overlay{padding:12px 8px}
   /* 16px stops iOS from zooming into a focused field */
-  :where(input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=file]),select,textarea){font-size:16px}
+  input,select,textarea{font-size:16px}
   .table-wrap{max-height:none}
   .table-wrap table{font-size:.84rem}
   .table-wrap td{white-space:nowrap}
@@ -337,3 +340,6 @@ html[dir=rtl] .input-group input[dir=ltr]{text-align:right}
 .perm-grid .check-line{margin-top:6px;font-weight:600}
 .check-line.strong{font-weight:800;color:var(--navy)}
 .perm-box.disabled{opacity:.5;pointer-events:none}
+/* an uploaded school logo is usually wide: a rounded white plate instead of the circle */
+.auth-card .logo-circle.logo-wide{width:auto;max-width:240px;height:88px;border-radius:16px;padding:8px 16px;display:inline-flex;margin:30px auto 10px}
+.auth-card .logo-circle.logo-wide img{width:auto;height:100%;max-width:100%;object-fit:contain}

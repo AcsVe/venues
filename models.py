@@ -457,6 +457,15 @@ class Contact(db.Model):
         }
 
 
+class BrandAsset(db.Model):
+    """A copy of the uploaded logo in the database, so it survives hosts whose files are wiped on every deploy
+    (Render without a disk): utils/brand.py writes it back to uploads/brand/ when the file is missing."""
+    __tablename__ = 'brand_assets'
+    name       = db.Column(db.String(100), primary_key=True)
+    data       = db.Column(db.LargeBinary, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 class AdminUser(db.Model):
     """An account of the admin panel. «sysadmin» can do everything (including managing the accounts); a «user»
     sees only the pages and settings ticked in ``permissions`` and, unless ``all_stages``, only the bookings and
