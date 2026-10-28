@@ -55,7 +55,44 @@
     .ql-toolbar.ql-snow, .ql-container.ql-snow { border-color: var(--line) !important; }
     .ql-toolbar.ql-snow { border-radius: 10px 10px 0 0; background: #f8fafd; }
     .ql-container.ql-snow { border-radius: 0 0 10px 10px; }
-    /* FullCalendar */
+    /* FullCalendar — one colour per status (legend chips filter them), soft tinted pills, SAS card look */
+    .cal-legend { display: flex; gap: 6px; flex-wrap: wrap; }
+    .cal-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line, #e3e9f2);
+      background: #fff; font: inherit; font-size: .8rem; font-weight: 700; color: #334155; cursor: pointer; transition: all .15s; }
+    .cal-chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); display: inline-block; }
+    .cal-chip b { background: var(--bg); color: var(--fg); border-radius: 999px; padding: 0 7px; font-size: .72rem; }
+    .cal-chip.off { opacity: .45; text-decoration: line-through; background: #f8fafc; }
+    .cal-chip:hover { border-color: var(--c); }
+    #adminCal { --fc-border-color: #e3e9f2; --fc-today-bg-color: #eef5ff; --fc-neutral-bg-color: #f6f9fd; --fc-page-bg-color: #fff;
+      --fc-list-event-hover-bg-color: #f3f7fd; }
+    #adminCal .fc-scrollgrid { border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 6px 18px rgba(15,23,42,.05); }
+    #adminCal .fc-col-header-cell { background: linear-gradient(#f1f6fe, #e6eefb); }
+    #adminCal .fc-col-header-cell-cushion { color: var(--primary-dark, #0847B0); font-weight: 800; padding: 9px 4px; text-decoration: none; }
+    #adminCal .fc-daygrid-day-number { font-weight: 700; color: #334155; text-decoration: none; padding: 6px 8px; }
+    #adminCal .fc-day-other .fc-daygrid-day-number { color: #b6c2d2; }
+    #adminCal .fc-day-other { background: #fbfcfe; }
+    #adminCal .fc-day-today .fc-daygrid-day-number { background: var(--primary); color: #fff; border-radius: 50%; width: 26px; height: 26px;
+      display: inline-flex; align-items: center; justify-content: center; padding: 0; margin: 5px; }
+    #adminCal .fc-daygrid-day:hover { background: #f7faff; }
+    #adminCal .fc-event.ev { border: 0 !important; border-inline-start: 4px solid var(--c) !important; background: var(--bg) !important;
+      border-radius: 6px; margin: 1px 4px 3px; padding: 2px 6px; box-shadow: 0 1px 2px rgba(15,23,42,.08); cursor: pointer;
+      transition: transform .12s, box-shadow .12s; }
+    #adminCal .fc-event.ev:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(15,23,42,.14); }
+    #adminCal .fc-event.ev .fc-event-main, #adminCal .fc-event.ev .fc-event-title, #adminCal .fc-event.ev .fc-event-time { color: var(--fg) !important; font-weight: 700; font-size: .74rem; }
+    #adminCal .fc-daygrid-event.ev { white-space: normal; }
+    #adminCal .fc-daygrid-event.ev .fc-event-title { white-space: normal; overflow: visible; line-height: 1.35; }
+    #adminCal .fc-daygrid-more-link { font-weight: 700; color: var(--primary); font-size: .74rem; padding: 0 6px; }
+    #adminCal .fc-event.ev-rejected { opacity: .7; }
+    #adminCal .fc-event.ev-rejected .fc-event-title { text-decoration: line-through; }
+    #adminCal .fc-list-event.ev { border: 0 !important; background: transparent !important; box-shadow: none; }
+    #adminCal .fc-list-event-dot { border-color: var(--c) !important; }
+    #adminCal .fc-list-day-cushion { background: #eef4fd; }
+    #adminCal .fc-button { border-radius: 8px !important; font-weight: 700; text-transform: none; box-shadow: none !important; }
+    #adminCal .fc-today-button { background: #fff !important; color: var(--primary) !important; border: 1px solid var(--primary) !important; opacity: 1 !important; }
+    #adminCal .fc-today-button:disabled { color: #94a3b8 !important; border-color: #e3e9f2 !important; }
+    #adminCal .fc-button-group .fc-button { border-radius: 0 !important; }
+    #adminCal .fc-button-group .fc-button:first-child { border-start-start-radius: 8px !important; border-end-start-radius: 8px !important; }
+    #adminCal .fc-button-group .fc-button:last-child { border-start-end-radius: 8px !important; border-end-end-radius: 8px !important; }
     #adminCal .fc-button-primary { background: var(--primary); border-color: var(--primary); }
     #adminCal .fc-button-primary:not(:disabled).fc-button-active, #adminCal .fc-button-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
     #adminCal .fc-toolbar-title { color: var(--navy); font-weight: 800; }
@@ -573,11 +610,7 @@
       <select id="calHallFilter" class="form-select" style="max-width:200px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.88rem" onchange="renderCal()">
         <option value="">كل المراحل</option>
       </select>
-      <span style="font-size:.82rem;color:var(--muted)">
-        <span style="background:#d1e7dd;padding:2px 10px;border-radius:10px;margin-left:6px">معتمد</span>
-        <span style="background:#fff3cd;padding:2px 10px;border-radius:10px;margin-left:6px">قيد المراجعة</span>
-        <span style="background:#f8d7da;padding:2px 10px;border-radius:10px">مرفوض/ملغي</span>
-      </span>
+      <div id="calLegend" class="cal-legend" role="group" aria-label="حالات الحجز"></div>
     </div>
     <div id="adminCal"></div>
   </div>
@@ -3841,21 +3874,56 @@ async function initAdminCal() {
   renderCal();
 }
 
+// One colour per status: the bar (c), the pill background (bg) and the text (fg). Completed bookings (past and
+// handed over) are no longer red like rejected ones; rejected/cancelled are faded and struck through.
+const CAL_STATUS = {
+  approved:  { c: '#16a34a', bg: '#e7f6ee', fg: '#14532d', ar: 'معتمد',        en: 'Approved' },
+  pending:   { c: '#f59e0b', bg: '#fff4dc', fg: '#7a4b00', ar: 'قيد المراجعة', en: 'Pending' },
+  completed: { c: '#0C67EC', bg: '#e8f1fe', fg: '#0a3a8a', ar: 'مكتمل',        en: 'Completed' },
+  rejected:  { c: '#dc2626', bg: '#fdecea', fg: '#991b1b', ar: 'مرفوض/ملغي',   en: 'Rejected/Cancelled' },
+};
+const calStatusOn = new Set(Object.keys(CAL_STATUS));
+function calStatusKey(st) { return st === 'cancelled' ? 'rejected' : (CAL_STATUS[st] ? st : 'rejected'); }
+
+function renderCalLegend(list) {
+  const box = document.getElementById('calLegend');
+  if (!box) return;
+  const counts = {};
+  list.forEach(b => { const k = calStatusKey(b.status); counts[k] = (counts[k] || 0) + 1; });
+  box.innerHTML = Object.entries(CAL_STATUS).map(([k, v]) =>
+    `<button type="button" class="cal-chip${calStatusOn.has(k) ? '' : ' off'}" data-st="${k}" aria-pressed="${calStatusOn.has(k)}"
+      style="--c:${v.c};--bg:${v.bg};--fg:${v.fg}" title="${AR ? 'إظهار/إخفاء' : 'Show/hide'}"><i></i>${AR ? v.ar : v.en}<b>${counts[k] || 0}</b></button>`).join('');
+  box.querySelectorAll('.cal-chip').forEach(btn => btn.onclick = () => {
+    const k = btn.dataset.st;
+    calStatusOn.has(k) ? calStatusOn.delete(k) : calStatusOn.add(k);
+    renderCal();
+  });
+}
+
 function renderCal() {
   const filter = document.getElementById('calHallFilter').value;
-  const events = allBookingsForCal
-    .filter(b => !filter || b.trolleyCode === filter)
-    .map(b => ({
-      id: b.id,
-      title: `${stageDisplayName(b.stage)||''} — ${[b.grade,b.section].filter(Boolean).join(' ')} — ${b.name}`,
-      start: b.date,
-      end: b.date,
-      allDay: true,
-      color: b.status === 'approved' ? '#27ae60'
-           : b.status === 'pending'  ? '#e67e22'
-           : '#c0392b',
-      extendedProps: b
-    }));
+  const inStage = allBookingsForCal.filter(b => !filter || b.trolleyCode === filter);
+  renderCalLegend(inStage);
+  const view = adminCalInstance ? adminCalInstance.view.type : null;
+  const date = adminCalInstance ? adminCalInstance.getDate() : null;
+  const events = inStage
+    .filter(b => calStatusOn.has(calStatusKey(b.status)))
+    .map(b => {
+      const k = calStatusKey(b.status), st = CAL_STATUS[k];
+      const cls = [b.grade, b.section].filter(Boolean).join(' ');
+      const per = b.periodNumber ? `${AR ? 'ح' : 'P'}${b.periodNumber} · ` : '';
+      const timed = !!(b.startTime && /^\d{1,2}:\d{2}/.test(b.startTime));
+      return {
+        id: b.id,
+        title: `${per}${cls ? cls + ' — ' : ''}${b.name}`,
+        start: timed ? `${b.date}T${b.startTime.padStart(5, '0')}` : b.date,
+        end: timed && b.endTime && /^\d{1,2}:\d{2}/.test(b.endTime) ? `${b.date}T${b.endTime.padStart(5, '0')}` : undefined,
+        allDay: !timed,
+        color: st.c,
+        classNames: ['ev', 'ev-' + k],
+        extendedProps: b
+      };
+    });
 
   const el = document.getElementById('adminCal');
   if (adminCalInstance) { adminCalInstance.destroy(); }
@@ -3863,14 +3931,24 @@ function renderCal() {
   adminCalInstance = new FullCalendar.Calendar(el, {
     locale: AR ? 'ar' : 'en',
     direction: AR ? 'rtl' : 'ltr',
-    initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
+    initialView: view || (window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth'),
+    initialDate: date || undefined,
+    dayMaxEvents: 4,
+    eventOrder: 'start,title',
+    eventDisplay: 'block',
+    displayEventTime: false,
+    allDayContent: () => '',
+    buttonText: AR ? { today: 'اليوم', month: 'شهر', week: 'أسبوع', list: 'قائمة' } : { today: 'Today', month: 'Month', week: 'Week', list: 'List' },
+    moreLinkText: n => AR ? `+${n} أخرى` : `+${n} more`,
     headerToolbar: {
       right: 'prev,next today',
       center: 'title',
-      left: window.innerWidth < 768 ? 'dayGridMonth,timeGridThreeDay,listWeek' : 'dayGridMonth,timeGridWeek,listWeek'
+      left: window.innerWidth < 768 ? 'dayGridMonth,dayGridThreeDay,listWeek' : 'dayGridMonth,dayGridWeek,listWeek'
     },
     views: {
-      timeGridThreeDay: { type: 'timeGrid', duration: { days: 3 }, buttonText: 'week' }
+      dayGridThreeDay: { type: 'dayGrid', duration: { days: 3 }, buttonText: AR ? 'أسبوع' : 'Week' },
+      dayGridWeek: { dayMaxEvents: false },
+      listWeek: { displayEventTime: true }
     },
     events: events,
     eventClick: function(info) {
@@ -3891,7 +3969,9 @@ function renderCal() {
         b.title ? `${t('سبب الحجز')}: ${b.title}` : '',
         `${t('الحالة')}: ${sLabels[b.status]||b.status}`,
       ].filter(Boolean);
-      info.el.setAttribute('title', lines.join('\n'));
+      info.el.setAttribute('title', [`${stageDisplayName(b.stage)||''}`].concat(lines).filter(Boolean).join('\n'));
+      const st = CAL_STATUS[calStatusKey(b.status)];
+      info.el.style.setProperty('--c', st.c); info.el.style.setProperty('--bg', st.bg); info.el.style.setProperty('--fg', st.fg);
 
       // Pulsing green dot for bookings dated today, regardless of status —
       // reuses the view's own event dot when there is one (month/list
