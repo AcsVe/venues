@@ -735,3 +735,22 @@ def send_staff_notification(event_type, data, contacts):
                 _send(email, '', subject, html)
             except Exception as e:
                 print(f"[email] staff notification send failed for {email}: {e}", flush=True)
+
+
+def send_password_reset(email, name, link):
+    """«نسيت كلمة المرور» of the admin panel: a one-hour link to choose a new password."""
+    btn = ('<div style="text-align:center;margin:18px 0"><a href="{0}" style="display:inline-block;background:#0C67EC;'
+           'color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:700">{1}</a></div>')
+    content_ar = f"""
+    <h2 style="color:#0C67EC;margin-top:0">🔑 إعادة تعيين كلمة المرور</h2>
+    <p>{esc(name)}، طُلبت إعادة تعيين كلمة المرور لحسابك في لوحة تحكم نظام حجز عربات الحواسيب.</p>
+    {btn.format(esc(link), 'تعيين كلمة مرور جديدة')}
+    <p style="color:#555">الرابط صالح لمدة ساعة واحدة ولمرة واحدة. إن لم تطلب ذلك فتجاهل هذه الرسالة، وتبقى كلمة المرور الحالية كما هي.</p>
+    """
+    content_en = f"""
+    <h2 style="color:#0C67EC;margin-top:0">🔑 Password reset</h2>
+    <p>{esc(name)}, a password reset was requested for your admin account of the laptop trolley booking system.</p>
+    {btn.format(esc(link), 'Choose a new password')}
+    <p style="color:#555">The link works once, for one hour. If you did not ask for it, ignore this message; your password stays the same.</p>
+    """
+    return _send(email, name, '[الرائد العربي / Al-Raed] إعادة تعيين كلمة المرور', _base_html(content_ar, content_en))

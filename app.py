@@ -115,6 +115,8 @@ XEqPZq2IE3k9g455XAokrxI6N2LhLDhtu3SMlEulXPw9IcShiKeKf2xO
                 cur.close()
     with app.app_context():
         init_db(app)
+        from utils.auth import ensure_first_admin
+        ensure_first_admin(app)    # أول تشغيل بعد التحديث: حساب .env يصبح أول مدير نظام
         from utils.brand import ensure_brand
         ensure_brand(app)          # يحتفظ التثبيت القائم بشعاره، ويبدأ التثبيت الجديد بأيقونة النظام
 

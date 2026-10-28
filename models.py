@@ -457,6 +457,64 @@ class Contact(db.Model):
         }
 
 
+class AdminUser(db.Model):
+    """An account of the admin panel. «sysadmin» can do everything (including managing the accounts); a «user»
+    sees only the pages and settings ticked in ``permissions`` and, unless ``all_stages``, only the bookings and
+    lists of the stages in ``stage_ids``. Both are JSON lists stored as text (works on SQLite and PostgreSQL)."""
+    __tablename__ = 'admin_users'
+    id            = db.Column(db.Integer, primary_key=True)
+    username      = db.Column(db.String(80), unique=True, nullable=False)
+    full_name     = db.Column(db.String(200), nullable=False)
+    email         = db.Column(db.String(200))
+    password_hash = db.Column(db.String(300), nullable=False)
+    role          = db.Column(db.String(20), default='user')        # sysadmin | user
+    active        = db.Column(db.Boolean, default=True)
+    all_stages    = db.Column(db.Boolean, default=True)
+    stage_ids     = db.Column(db.Text, default='[]')
+    permissions   = db.Column(db.Text, default='[]')
+    last_login    = db.Column(db.DateTime)
+    created_at    = db.Column(db.DateTime, default=datetime.now)
+
+    @staticmethod
+    def _list(raw):
+        import json
+        try:
+            v = json.loads(raw or '[]')
+            return v if isinstance(v, list) else []
+        except ValueError:
+            return []
+
+    @property
+    def perm_list(self):
+        return [str(p) for p in self._list(self.permissions)]
+
+    @property
+    def stage_list(self):
+        out = []
+        for x in self._list(self.stage_ids):
+            try:
+                out.append(int(x))
+            except (TypeError, ValueError):
+                pass
+        return out
+
+    @property
+    def is_sysadmin(self):
+        return self.role == 'sysadmin'
+
+    def can(self, perm):
+        return self.is_sysadmin or perm in self.perm_list
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'username': self.username, 'fullName': self.full_name, 'email': self.email or '',
+            'role': self.role, 'active': bool(self.active), 'allStages': bool(self.all_stages or self.is_sysadmin),
+            'stageIds': self.stage_list, 'permissions': self.perm_list,
+            'lastLogin': self.last_login.strftime('%Y-%m-%d %H:%M') if self.last_login else '',
+            'createdAt': self.created_at.strftime('%Y-%m-%d') if self.created_at else '',
+        }
+
+
 def init_db(app):
     """Create tables and seed default academic structure if empty."""
     db.create_all()

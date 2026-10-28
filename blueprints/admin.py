@@ -16,6 +16,10 @@ from utils.email_utils import (send_approve, send_reject, send_cancel,
 
 admin_bp = Blueprint('admin', __name__)
 
+from utils.auth import (guard_request, current_user, can, allowed_stage_ids, allowed_trolley_codes, scope_query,
+                        sign_in, password_ok, hash_password, me_json, catalogue, ALL_PERMS, SETTING_FIELD_PERMS)
+admin_bp.before_request(guard_request)
+
 def _get_contacts(stage_id=None):
     from models import Contact
     q = Contact.query
@@ -38,38 +42,266 @@ def _booking_email_ctx(b, **extra):
     return ctx
 
 
-# ── Auth decorator ────────────────────────────────────────────────────────
+# ── Auth decorator (the permission check itself is utils/auth.guard_request) ──
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get('admin_logged_in'):
+        if current_user() is None:
+            if request.path.startswith('/admin/api/'):
+                return jsonify({'success': False, 'error': 'انتهت الجلسة — سجّل الدخول من جديد'}), 401
             return redirect(url_for('admin.login'))
         return f(*args, **kwargs)
     return decorated
 
 
-# ── Login / Logout ────────────────────────────────────────────────────────
+def _find_user(login_name):
+    from models import AdminUser
+    from sqlalchemy import func
+    login_name = (login_name or '').strip()
+    if not login_name:
+        return None
+    return AdminUser.query.filter((func.lower(AdminUser.username) == login_name.lower()) |
+                                  (func.lower(AdminUser.email) == login_name.lower())).first()
+
+
+_FAILED = {}   # ip → [count, first failure] — slows down password guessing
+
+
+def _too_many(ip):
+    n, first = _FAILED.get(ip, (0, datetime.now()))
+    if (datetime.now() - first).total_seconds() > 900:
+        _FAILED.pop(ip, None)
+        return False
+    return n >= 10
+
+
+def _safe_next(target):
+    return target if target and target.startswith('/admin') and not target.startswith('//') else None
+
+
+# ── Login / Logout / password ─────────────────────────────────────────────
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
-    lang = request.args.get('lang') or request.form.get('lang', 'ar')
+    lang = request.args.get('lang') or request.form.get('lang') or session.get('admin_lang', 'ar')
+    AR = lang != 'en'
+    ip = request.headers.get('CF-Connecting-IP') or request.remote_addr or ''
     if request.method == 'POST':
-        u = request.form.get('username', '')
-        p = request.form.get('password', '')
-        if (u == current_app.config['ADMIN_USER'] and
-                p == current_app.config['ADMIN_PASS']):
-            session.permanent = True
-            session['admin_logged_in'] = True
-            session['admin_lang'] = lang
-            return redirect(url_for('admin.dashboard'))
-        error = 'بيانات خاطئة' if lang == 'ar' else 'Invalid credentials'
-    return render_template('admin/login.html', error=error, lang=lang)
+        if _too_many(ip):
+            error = ('محاولات كثيرة غير صحيحة — انتظر 15 دقيقة ثم أعد المحاولة' if AR
+                     else 'Too many failed attempts — wait 15 minutes and try again')
+        else:
+            user = _find_user(request.form.get('username'))
+            if user and user.active and password_ok(user, request.form.get('password', '')):
+                _FAILED.pop(ip, None)
+                sign_in(user, request.form.get('remember') == '1')
+                session['admin_lang'] = lang
+                return redirect(_safe_next(request.form.get('next')) or url_for('admin.dashboard'))
+            n, first = _FAILED.get(ip, (0, datetime.now()))
+            _FAILED[ip] = (n + 1, first)
+            if user and not user.active and password_ok(user, request.form.get('password', '')):
+                error = 'هذا الحساب موقوف — راجع مدير النظام' if AR else 'This account is disabled — contact the system administrator'
+            else:
+                error = 'اسم المستخدم أو كلمة المرور غير صحيحة' if AR else 'Incorrect username or password'
+    return render_template('admin/login.html', error=error, lang=lang, mode='login',
+                           next=_safe_next(request.args.get('next') or request.form.get('next')) or '',
+                           username=request.form.get('username', ''), info=request.args.get('info', ''))
 
 
 @admin_bp.route('/logout')
 def logout():
-    session.pop('admin_logged_in', None)
-    return redirect(url_for('admin.login'))
+    lang = session.get('admin_lang', 'ar')
+    session.clear()
+    return redirect(url_for('admin.login', lang=lang))
+
+
+def _reset_serializer():
+    from itsdangerous import URLSafeTimedSerializer
+    return URLSafeTimedSerializer(current_app.secret_key, salt='admin-password-reset')
+
+
+@admin_bp.route('/forgot', methods=['GET', 'POST'])
+def forgot_password():
+    lang = request.args.get('lang') or request.form.get('lang') or session.get('admin_lang', 'ar')
+    AR = lang != 'en'
+    sent = False
+    if request.method == 'POST':
+        user = _find_user(request.form.get('username'))
+        if user and user.active and user.email:
+            token = _reset_serializer().dumps({'u': user.id, 'p': user.password_hash[-12:]})
+            link = get_base_url() + url_for('admin.reset_password', token=token, lang=lang)
+            try:
+                from utils.email_utils import send_password_reset
+                send_password_reset(user.email, user.full_name, link)
+            except Exception as e:
+                print(f"[email] password reset failed: {e}", flush=True)
+        sent = True      # the same answer whether the account exists or not
+    return render_template('admin/login.html', lang=lang, mode='forgot', sent=sent, error=None)
+
+
+@admin_bp.route('/reset/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    from models import AdminUser
+    from itsdangerous import BadSignature, SignatureExpired
+    lang = request.args.get('lang') or request.form.get('lang') or session.get('admin_lang', 'ar')
+    AR = lang != 'en'
+    user, error = None, None
+    try:
+        data = _reset_serializer().loads(token, max_age=3600)
+        user = AdminUser.query.get(int(data.get('u')))
+        if not user or not user.active or user.password_hash[-12:] != data.get('p'):
+            user = None
+    except (BadSignature, SignatureExpired, ValueError, TypeError):
+        user = None
+    if user is None:
+        return render_template('admin/login.html', lang=lang, mode='reset_bad', error=None)
+    if request.method == 'POST':
+        p1, p2 = request.form.get('password', ''), request.form.get('password2', '')
+        if len(p1) < 8:
+            error = 'كلمة المرور 8 أحرف على الأقل' if AR else 'The password needs at least 8 characters'
+        elif p1 != p2:
+            error = 'كلمتا المرور غير متطابقتين' if AR else 'The passwords do not match'
+        else:
+            user.password_hash = hash_password(p1)
+            db.session.commit()
+            return redirect(url_for('admin.login', lang=lang, info='reset'))
+    return render_template('admin/login.html', lang=lang, mode='reset', token=token, error=error)
+
+
+@admin_bp.route('/api/me')
+@login_required
+def api_me():
+    return jsonify(me_json())
+
+
+@admin_bp.route('/api/change-password', methods=['POST'])
+@login_required
+def change_password():
+    data = request.get_json(silent=True) or {}
+    user = current_user()
+    if not password_ok(user, data.get('current', '')):
+        return jsonify({'success': False, 'error': 'كلمة المرور الحالية غير صحيحة', 'errorEn': 'The current password is wrong'}), 400
+    new = data.get('new', '')
+    if len(new) < 8:
+        return jsonify({'success': False, 'error': 'كلمة المرور 8 أحرف على الأقل', 'errorEn': 'At least 8 characters'}), 400
+    user.password_hash = hash_password(new)
+    db.session.commit()
+    session['admin_pw'] = user.password_hash[-12:]
+    return jsonify({'success': True})
+
+
+# ── Users (system administrator only) ─────────────────────────────────────
+@admin_bp.route('/api/users')
+@login_required
+def api_users():
+    from models import AdminUser
+    users = AdminUser.query.order_by(AdminUser.role.desc(), AdminUser.full_name).all()
+    stages = Stage.query.order_by(Stage.sort_order).all()
+    lang = request.args.get('lang', 'ar')
+    return jsonify({'users': [u.to_dict() for u in users],
+                    'stages': [{'id': s.id, 'nameAr': s.name_ar, 'nameEn': s.name_en or s.name_ar} for s in stages],
+                    'catalogue': catalogue(lang), 'meId': current_user().id})
+
+
+def _sysadmins_left(excluding_ids):
+    from models import AdminUser
+    return AdminUser.query.filter(AdminUser.role == 'sysadmin', AdminUser.active.is_(True),
+                                  ~AdminUser.id.in_(list(excluding_ids) or [-1])).count()
+
+
+@admin_bp.route('/api/save-user', methods=['POST'])
+@login_required
+def api_save_user():
+    import json as _json
+    from models import AdminUser
+    d = request.get_json(silent=True) or {}
+    uid = d.get('id')
+    user = AdminUser.query.get(int(uid)) if uid else None
+    if uid and not user:
+        return jsonify({'success': False, 'error': 'المستخدم غير موجود'}), 404
+    username = (d.get('username') or '').strip()
+    full_name = (d.get('fullName') or '').strip()
+    email = sanitize_email(d.get('email') or '') if (d.get('email') or '').strip() else ''
+    role = 'sysadmin' if d.get('role') == 'sysadmin' else 'user'
+    if not re.match(r'^[A-Za-z0-9_.@-]{3,80}$', username):
+        return jsonify({'success': False, 'error': 'اسم المستخدم 3 أحرف على الأقل (أحرف إنجليزية وأرقام و . _ - @)',
+                        'errorEn': 'Username: at least 3 characters (letters, digits, . _ - @)'}), 400
+    if not full_name:
+        return jsonify({'success': False, 'error': 'الاسم الكامل مطلوب', 'errorEn': 'The full name is required'}), 400
+    if email and not is_valid_email(email):
+        return jsonify({'success': False, 'error': 'البريد الإلكتروني غير صحيح', 'errorEn': 'Invalid email'}), 400
+    clash = _find_user(username)
+    if clash and (not user or clash.id != user.id):
+        return jsonify({'success': False, 'error': 'اسم المستخدم مستخدم لحساب آخر', 'errorEn': 'The username is taken'}), 400
+    if email:
+        clash = _find_user(email)
+        if clash and (not user or clash.id != user.id):
+            return jsonify({'success': False, 'error': 'البريد مستخدم لحساب آخر', 'errorEn': 'The email is used by another account'}), 400
+    password = d.get('password') or ''
+    if not user and len(password) < 8:
+        return jsonify({'success': False, 'error': 'كلمة المرور 8 أحرف على الأقل', 'errorEn': 'Password: at least 8 characters'}), 400
+    if password and len(password) < 8:
+        return jsonify({'success': False, 'error': 'كلمة المرور 8 أحرف على الأقل', 'errorEn': 'Password: at least 8 characters'}), 400
+    active = bool(d.get('active', True))
+    me = current_user()
+    if user and user.is_sysadmin and (role != 'sysadmin' or not active) and _sysadmins_left({user.id}) == 0:
+        return jsonify({'success': False, 'error': 'لا يمكن إيقاف آخر مدير نظام أو تغيير دوره',
+                        'errorEn': 'The last system administrator cannot be disabled or demoted'}), 400
+    if user and user.id == me.id and not active:
+        return jsonify({'success': False, 'error': 'لا يمكن إيقاف الحساب الحالي', 'errorEn': 'You cannot disable your own account'}), 400
+    perms = [p for p in (d.get('permissions') or []) if p in ALL_PERMS]
+    valid_stages = {s.id for s in Stage.query.all()}
+    stage_ids = sorted({int(x) for x in (d.get('stageIds') or []) if str(x).isdigit() and int(x) in valid_stages})
+    all_stages = bool(d.get('allStages'))
+    if role == 'user' and not all_stages and not stage_ids:
+        return jsonify({'success': False, 'error': 'اختر مرحلة واحدة على الأقل أو «كل المراحل»',
+                        'errorEn': 'Choose at least one stage, or «all stages»'}), 400
+    if not user:
+        user = AdminUser(username=username, password_hash=hash_password(password))
+        db.session.add(user)
+    user.username, user.full_name, user.email, user.role, user.active = username, full_name, email or None, role, active
+    user.all_stages = all_stages or role == 'sysadmin'
+    user.stage_ids = _json.dumps(stage_ids)
+    user.permissions = _json.dumps(ALL_PERMS if role == 'sysadmin' else perms)
+    if password and user.id:
+        user.password_hash = hash_password(password)
+    db.session.commit()
+    if user.id == me.id:
+        session['admin_pw'] = user.password_hash[-12:]
+    return jsonify({'success': True, 'user': user.to_dict()})
+
+
+@admin_bp.route('/api/users-bulk', methods=['POST'])
+@login_required
+def api_users_bulk():
+    from models import AdminUser
+    d = request.get_json(silent=True) or {}
+    action = d.get('action')
+    ids = {int(x) for x in (d.get('ids') or []) if str(x).isdigit()}
+    me = current_user()
+    users = AdminUser.query.filter(AdminUser.id.in_(list(ids) or [-1])).all()
+    if not users or action not in ('activate', 'deactivate', 'delete'):
+        return jsonify({'success': False, 'error': 'لم يُحدَّد شيء', 'errorEn': 'Nothing selected'}), 400
+    skipped = []
+    if action == 'activate':
+        for u in users:
+            u.active = True
+    else:
+        sys_ids = {u.id for u in users if u.is_sysadmin}
+        for u in users:
+            if u.id == me.id:
+                skipped.append(u.username)
+                continue
+            if u.is_sysadmin and _sysadmins_left(sys_ids) == 0:
+                skipped.append(u.username)
+                sys_ids.discard(u.id)
+                continue
+            if action == 'deactivate':
+                u.active = False
+            else:
+                db.session.delete(u)
+    db.session.commit()
+    return jsonify({'success': True, 'count': len(users) - len(skipped), 'skipped': skipped})
 
 
 @admin_bp.route('/')
@@ -78,7 +310,8 @@ def dashboard():
     lang = session.get('admin_lang', 'ar')
     from utils.brand import graph_status
     return render_template('admin/dashboard.html', lang=lang, graph=graph_status(),
-                           brand_msg=request.args.get('brand', ''))
+                           brand_msg=request.args.get('brand', ''), me=current_user(), me_json=me_json(),
+                           can=can)
 
 
 # ── Identity: names, accent colour, logo (utils/brand.py) ─────────────────
@@ -103,7 +336,7 @@ def save_brand():
 @login_required
 def api_bookings():
     filt = request.args.get('filter', 'all')
-    q = Booking.query
+    q = scope_query(Booking.query, Booking.stage_id)
     if filt != 'all':
         q = q.filter_by(status=filt)
     bookings = q.order_by(Booking.created_at.desc()).all()
@@ -194,6 +427,10 @@ def api_get_settings():
 @login_required
 def api_update_settings():
     data = request.get_json(silent=True) or {}
+    denied = [k for k in data if k in SETTING_FIELD_PERMS and not can(SETTING_FIELD_PERMS[k])]
+    if denied:
+        return jsonify({'success': False, 'error': 'لا تملك صلاحية لهذا الإعداد',
+                        'errorEn': 'You do not have permission for this setting'}), 403
     if 'autoApproveBookings' in data:
         AppSetting.set_bool('auto_approve_bookings', bool(data['autoApproveBookings']))
     if 'autoPrintReceipts' in data:
@@ -225,9 +462,9 @@ def api_print_queue():
     """Approved bookings whose delivery receipt hasn't been auto-printed
     yet — polled by whichever single browser is designated as the print
     station (see localStorage flag on the client side)."""
-    if not AppSetting.get_bool('auto_print_receipts', False):
+    if not AppSetting.get_bool('auto_print_receipts', False) or not can('settings.printing'):
         return jsonify([])
-    bookings = (Booking.query
+    bookings = (scope_query(Booking.query, Booking.stage_id)
                 .filter(Booking.status.in_(['approved', 'completed']))
                 .filter_by(receipt_printed=False)
                 .order_by(Booking.action_date.asc())
@@ -307,14 +544,18 @@ def api_push_debug():
 def api_stats():
     today = date.today().strftime('%Y-%m-%d')
 
-    total   = Booking.query.count()
-    pending = Booking.query.filter_by(status='pending').count()
-    approved= Booking.query.filter_by(status='approved').count()
-    completed=Booking.query.filter_by(status='completed').count()
-    rejected= Booking.query.filter_by(status='rejected').count()
-    cancelled=Booking.query.filter_by(status='cancelled').count()
-    today_c = Booking.query.filter_by(booking_date=today).count()
-    stages_c = Stage.query.filter_by(active=True).count()
+    if not can(('bookings.view', 'calendar', 'reports')):
+        return jsonify({'total': 0, 'pending': 0, 'approved': 0, 'completed': 0, 'rejected': 0, 'cancelled': 0,
+                        'today': 0, 'halls': 0})
+    BQ = lambda: scope_query(Booking.query, Booking.stage_id)  # noqa: E731
+    total   = BQ().count()
+    pending = BQ().filter_by(status='pending').count()
+    approved= BQ().filter_by(status='approved').count()
+    completed=BQ().filter_by(status='completed').count()
+    rejected= BQ().filter_by(status='rejected').count()
+    cancelled=BQ().filter_by(status='cancelled').count()
+    today_c = BQ().filter_by(booking_date=today).count()
+    stages_c = scope_query(Stage.query, Stage.id).filter_by(active=True).count()
 
     return jsonify({
         'total': total, 'pending': pending, 'approved': approved, 'completed': completed,
@@ -600,7 +841,7 @@ def api_bulk_delete():
 def api_halls():
     """Kept at the same URL for compatibility with the dashboard JS.
     Returns stages with their nested grades/sections."""
-    stages = Stage.query.order_by(Stage.sort_order).all()
+    stages = scope_query(Stage.query, Stage.id).order_by(Stage.sort_order).all()
     return jsonify([s.to_dict(with_grades=True) for s in stages])
 
 
@@ -942,6 +1183,9 @@ def api_copy_grade_period_times():
 @login_required
 def api_blocked():
     blocks = BlockedPeriod.query.order_by(BlockedPeriod.from_date).all()
+    codes = allowed_trolley_codes()
+    if codes is not None:
+        blocks = [b for b in blocks if not b.hall or b.hall in codes]
     return jsonify([b.to_dict() for b in blocks])
 
 
@@ -981,6 +1225,9 @@ def api_delete_blocked():
 @login_required
 def api_contacts():
     contacts = Contact.query.order_by(Contact.created_at.desc()).all()
+    ids = allowed_stage_ids()
+    if ids is not None:
+        contacts = [c for c in contacts if c.stage_id in ids]
     return jsonify([c.to_dict() for c in contacts])
 
 
@@ -1055,7 +1302,7 @@ def api_delete_contact():
 @admin_bp.route('/api/report-data')
 @login_required
 def api_report_data():
-    bookings = Booking.query.filter(
+    bookings = scope_query(Booking.query, Booking.stage_id).filter(
         Booking.status.notin_(['rejected', 'cancelled'])
     ).all()
     return jsonify([b.to_dict() for b in bookings])
@@ -1066,7 +1313,7 @@ def api_report_data():
 @login_required
 def api_teachers():
     stage_id = request.args.get('stageId', type=int)
-    q = Teacher.query
+    q = scope_query(Teacher.query, Teacher.stage_id)
     if stage_id:
         q = q.filter_by(stage_id=stage_id)
     teachers = q.order_by(Teacher.name).all()
@@ -1141,7 +1388,7 @@ def api_teachers_export():
     import io
     from flask import Response
     stage_id = request.args.get('stageId', type=int)
-    q = Teacher.query
+    q = scope_query(Teacher.query, Teacher.stage_id)
     if stage_id:
         q = q.filter_by(stage_id=stage_id)
     stages = {s.id: s.name_ar for s in Stage.query.all()}
@@ -1296,7 +1543,7 @@ def api_students():
     section_id = request.args.get('sectionId', type=int)
     grade_id = request.args.get('gradeId', type=int)
     stage_id = request.args.get('stageId', type=int)
-    q = Student.query
+    q = scope_query(Student.query, Student.stage_id)
     if section_id:
         q = q.filter_by(section_id=section_id)
     elif grade_id:
@@ -1565,9 +1812,10 @@ def api_checkout_report():
     checkouts = BookingCheckout.query.all()
     lines_out = []
     covered_booking_ids = set()
+    scope = allowed_stage_ids()
     for co in checkouts:
         b = Booking.query.get(co.booking_id)
-        if not b:
+        if not b or (scope is not None and b.stage_id not in scope):
             continue
         covered_booking_ids.add(b.id)
         for line in co.lines:
@@ -1580,7 +1828,7 @@ def api_checkout_report():
                 'notes': co.notes or '',
             })
 
-    q = Booking.query.filter(Booking.status.in_(['approved', 'completed']))
+    q = scope_query(Booking.query, Booking.stage_id).filter(Booking.status.in_(['approved', 'completed']))
     if covered_booking_ids:
         q = q.filter(~Booking.id.in_(covered_booking_ids))
     missing = q.order_by(Booking.booking_date.desc()).all()
@@ -1661,7 +1909,7 @@ def api_archive_preview():
     if not before_date:
         return jsonify({'error': 'التاريخ مطلوب'}), 400
 
-    bookings = Booking.query.filter(Booking.booking_date < before_date).all()
+    bookings = scope_query(Booking.query, Booking.stage_id).filter(Booking.booking_date < before_date).all()
     by_status = {}
     for b in bookings:
         by_status[b.status] = by_status.get(b.status, 0) + 1
@@ -1684,7 +1932,8 @@ def api_archive_export():
     if not before_date:
         return jsonify({'error': 'التاريخ مطلوب'}), 400
 
-    bookings = Booking.query.filter(Booking.booking_date < before_date).order_by(Booking.booking_date).all()
+    bookings = (scope_query(Booking.query, Booking.stage_id)
+                .filter(Booking.booking_date < before_date).order_by(Booking.booking_date).all())
     booking_ids = [b.id for b in bookings]
     booking_map = {b.id: b for b in bookings}
 

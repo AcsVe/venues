@@ -124,24 +124,35 @@
     <button class="nav-item active" data-tab="home" onclick="showTab('home')"><i class="fas fa-house"></i> <span>الرئيسية</span></button>
     <div class="nav-group">
       <div class="nav-group-title">العمل اليومي</div>
-      <button class="nav-item" data-tab="bookings" onclick="showTab('bookings')"><i class="fas fa-calendar-check"></i> <span>طلبات الحجز</span> <span class="nav-badge" id="nbPending">0</span></button>
-      <button class="nav-item" data-tab="calview" onclick="showTab('calview')"><i class="fas fa-calendar-days"></i> <span>التقويم</span></button>
-      <button class="nav-item" data-tab="blocked" onclick="showTab('blocked')"><i class="fas fa-ban"></i> <span>غير متاح</span></button>
+      {% if can('bookings.view') %}      <button class="nav-item" data-tab="bookings" onclick="showTab('bookings')"><i class="fas fa-calendar-check"></i> <span>طلبات الحجز</span> <span class="nav-badge" id="nbPending">0</span></button>
+      {% endif %}
+      {% if can('calendar') %}      <button class="nav-item" data-tab="calview" onclick="showTab('calview')"><i class="fas fa-calendar-days"></i> <span>التقويم</span></button>
+      {% endif %}
+      {% if can('blocked') %}      <button class="nav-item" data-tab="blocked" onclick="showTab('blocked')"><i class="fas fa-ban"></i> <span>غير متاح</span></button>
+      {% endif %}
       <a class="nav-item" href="/calendar" target="_blank" rel="noopener"><i class="fas fa-globe"></i> <span>الروزنامة العامة</span> <i class="fas fa-arrow-up-right-from-square ext"></i></a>
     </div>
     <div class="nav-group">
       <div class="nav-group-title">القوائم والتقارير</div>
-      <button class="nav-item" data-tab="teachers" onclick="showTab('teachers')"><i class="fas fa-chalkboard-user"></i> <span>المعلمون</span></button>
-      <button class="nav-item" data-tab="students" onclick="showTab('students')"><i class="fas fa-user-graduate"></i> <span>الطلاب</span></button>
-      <button class="nav-item" data-tab="reports" onclick="showTab('reports')"><i class="fas fa-chart-column"></i> <span>التقارير</span></button>
-      <button class="nav-item" data-tab="archive" onclick="showTab('archive')"><i class="fas fa-box-archive"></i> <span>الأرشفة</span></button>
+      {% if can('teachers') %}      <button class="nav-item" data-tab="teachers" onclick="showTab('teachers')"><i class="fas fa-chalkboard-user"></i> <span>المعلمون</span></button>
+      {% endif %}
+      {% if can('students') %}      <button class="nav-item" data-tab="students" onclick="showTab('students')"><i class="fas fa-user-graduate"></i> <span>الطلاب</span></button>
+      {% endif %}
+      {% if can('reports') %}      <button class="nav-item" data-tab="reports" onclick="showTab('reports')"><i class="fas fa-chart-column"></i> <span>التقارير</span></button>
+      {% endif %}
+      {% if can('archive') %}      <button class="nav-item" data-tab="archive" onclick="showTab('archive')"><i class="fas fa-box-archive"></i> <span>الأرشفة</span></button>
+      {% endif %}
     </div>
     <div class="nav-group">
       <div class="nav-group-title">الإدارة</div>
-      <button class="nav-item" data-tab="halls" onclick="showTab('halls')"><i class="fas fa-sitemap"></i> <span>المراحل والعربات</span></button>
-      <button class="nav-item" data-tab="contacts" onclick="showTab('contacts')"><i class="fas fa-address-book"></i> <span>جهات الاتصال</span></button>
-      <button class="nav-item" data-tab="ticker" onclick="showTab('ticker')"><i class="fas fa-bullhorn"></i> <span>الشريط الإعلاني</span></button>
-      <button class="nav-item" data-tab="settings" onclick="showTab('settings')"><i class="fas fa-gear"></i> <span>الإعدادات</span></button>
+      {% if can('structure') %}      <button class="nav-item" data-tab="halls" onclick="showTab('halls')"><i class="fas fa-sitemap"></i> <span>المراحل والعربات</span></button>
+      {% endif %}
+      {% if can('contacts') %}      <button class="nav-item" data-tab="contacts" onclick="showTab('contacts')"><i class="fas fa-address-book"></i> <span>جهات الاتصال</span></button>
+      {% endif %}
+      {% if can('ticker') %}      <button class="nav-item" data-tab="ticker" onclick="showTab('ticker')"><i class="fas fa-bullhorn"></i> <span>الشريط الإعلاني</span></button>
+      {% endif %}
+      {% if can(('settings.identity','settings.approval','settings.rules','settings.printing','settings.handover','settings.reminders')) %}<button class="nav-item" data-tab="settings" onclick="showTab('settings')"><i class="fas fa-gear"></i> <span>الإعدادات</span></button>{% endif %}
+      {% if me.is_sysadmin %}<button class="nav-item" data-tab="users" onclick="showTab('users')"><i class="fas fa-users-gear"></i> <span>المستخدمون والصلاحيات</span></button>{% endif %}
     </div>
   </nav>
 </aside>
@@ -156,9 +167,10 @@
       <button class="icon-btn" type="button" onclick="refreshAll()" title="تحديث" aria-label="تحديث"><i class="fas fa-rotate"></i></button>
       <button class="lang-switch lang-btn" type="button" onclick="toggleLang()" data-notr>English</button>
       <details class="user-menu">
-        <summary><span class="avatar" aria-hidden="true" data-notr>{{ config.ADMIN_USER[:1] }}</span><span class="uname" data-notr>{{ config.ADMIN_USER }}</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
+        <summary><span class="avatar" aria-hidden="true" data-notr>{{ me.full_name[:1] }}</span><span class="uname" data-notr>{{ me.full_name }}</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
         <div class="menu">
-          <div class="menu-head"><b>مدير النظام</b><small data-notr>{{ config.ADMIN_USER }}</small></div>
+          <div class="menu-head"><b>{% if me.is_sysadmin %}مدير النظام{% else %}مستخدم{% endif %}</b><small data-notr>{{ me.username }}</small></div>
+          <a href="#" onclick="openPwModal();return false;"><i class="fas fa-key"></i> تغيير كلمة المرور</a>
           <a href="/calendar" target="_blank" rel="noopener"><i class="fas fa-globe"></i> الروزنامة العامة</a>
           <a href="#" id="notifyBellBtn" onclick="requestNotifyPermission();return false;"><i class="fas fa-bell"></i> تفعيل إشعارات الحجوزات الجديدة</a>
           <a href="#" id="installAppBtn" onclick="handleInstallClick(event)" style="display:none"><i class="fas fa-download"></i> تثبيت التطبيق</a>
@@ -173,6 +185,7 @@
     <div class="tab-panel active" id="tab-home">
       <div class="home-hello">لوحة التحكم</div>
       <div class="home-sub">كل رقم يفتح قائمة الطلبات مصفّاة بحالته.</div>
+      {% if can(('bookings.view','calendar','reports')) %}
       <div class="section-h">طلبات الحجز</div>
       <div class="kpis">
         <div class="kpi" onclick="filterByStat('all')" title="عرض كل الطلبات"><div class="n" id="stTotal">-</div><div class="l">إجمالي الطلبات</div></div>
@@ -184,16 +197,26 @@
         <div class="kpi" onclick="showTodayBookings()" title="حجوزات اليوم"><div class="n" id="stToday">-</div><div class="l">حجوزات اليوم</div></div>
         <div class="kpi" onclick="showTab('halls')" title="المراحل والعربات"><div class="n" id="stHalls">-</div><div class="l">المراحل الفعالة</div></div>
       </div>
+      {% endif %}
       <div class="section-h">الوصول السريع</div>
       <div class="tiles">
-        <button class="tile" type="button" onclick="showTab('bookings')"><span class="ic"><i class="fas fa-calendar-check"></i></span><b>طلبات الحجز</b><small>الاعتماد والرفض والتعديل والطباعة</small></button>
-        <button class="tile" type="button" onclick="showTab('calview')"><span class="ic"><i class="fas fa-calendar-days"></i></span><b>التقويم</b><small>الحجوزات على تقويم شهري وأسبوعي</small></button>
-        <button class="tile" type="button" onclick="showTab('blocked')"><span class="ic"><i class="fas fa-ban"></i></span><b>غير متاح</b><small>تعطيل يوم أو حصة لمرحلة</small></button>
-        <button class="tile" type="button" onclick="showTab('teachers')"><span class="ic"><i class="fas fa-chalkboard-user"></i></span><b>المعلمون</b><small>الإضافة والاستيراد والنقل والحظر</small></button>
-        <button class="tile" type="button" onclick="showTab('students')"><span class="ic"><i class="fas fa-user-graduate"></i></span><b>الطلاب</b><small>قوائم الشعب لنموذج التسليم</small></button>
-        <button class="tile" type="button" onclick="showTab('reports')"><span class="ic"><i class="fas fa-chart-column"></i></span><b>التقارير</b><small>الإحصاءات وتقرير التسليم</small></button>
-        <button class="tile" type="button" onclick="showTab('halls')"><span class="ic"><i class="fas fa-sitemap"></i></span><b>المراحل والعربات</b><small>المراحل والصفوف والشعب والحصص</small></button>
-        <button class="tile" type="button" onclick="showTab('settings')"><span class="ic"><i class="fas fa-gear"></i></span><b>الإعدادات</b><small>الهوية والبريد وقواعد الحجز</small></button>
+        {% if can('bookings.view') %}<button class="tile" type="button" onclick="showTab('bookings')"><span class="ic"><i class="fas fa-calendar-check"></i></span><b>طلبات الحجز</b><small>الاعتماد والرفض والتعديل والطباعة</small></button>
+        {% endif %}
+        {% if can('calendar') %}<button class="tile" type="button" onclick="showTab('calview')"><span class="ic"><i class="fas fa-calendar-days"></i></span><b>التقويم</b><small>الحجوزات على تقويم شهري وأسبوعي</small></button>
+        {% endif %}
+        {% if can('blocked') %}<button class="tile" type="button" onclick="showTab('blocked')"><span class="ic"><i class="fas fa-ban"></i></span><b>غير متاح</b><small>تعطيل يوم أو حصة لمرحلة</small></button>
+        {% endif %}
+        {% if can('teachers') %}<button class="tile" type="button" onclick="showTab('teachers')"><span class="ic"><i class="fas fa-chalkboard-user"></i></span><b>المعلمون</b><small>الإضافة والاستيراد والنقل والحظر</small></button>
+        {% endif %}
+        {% if can('students') %}<button class="tile" type="button" onclick="showTab('students')"><span class="ic"><i class="fas fa-user-graduate"></i></span><b>الطلاب</b><small>قوائم الشعب لنموذج التسليم</small></button>
+        {% endif %}
+        {% if can('reports') %}<button class="tile" type="button" onclick="showTab('reports')"><span class="ic"><i class="fas fa-chart-column"></i></span><b>التقارير</b><small>الإحصاءات وتقرير التسليم</small></button>
+        {% endif %}
+        {% if can('structure') %}<button class="tile" type="button" onclick="showTab('halls')"><span class="ic"><i class="fas fa-sitemap"></i></span><b>المراحل والعربات</b><small>المراحل والصفوف والشعب والحصص</small></button>
+        {% endif %}
+        {% if me.is_sysadmin %}<button class="tile" type="button" onclick="showTab('users')"><span class="ic"><i class="fas fa-users-gear"></i></span><b>المستخدمون والصلاحيات</b><small>الحسابات والمراحل والصفحات المسموحة</small></button>{% endif %}
+        {% if can(('settings.identity','settings.approval','settings.rules','settings.printing','settings.handover','settings.reminders')) %}<button class="tile" type="button" onclick="showTab('settings')"><span class="ic"><i class="fas fa-gear"></i></span><b>الإعدادات</b><small>الهوية والبريد وقواعد الحجز</small></button>
+        {% endif %}
       </div>
     </div>
 
@@ -762,6 +785,7 @@
     <div class="tab-panel" id="tab-settings">
       {% if brand_msg == 'saved' %}<div class="alert alert-success"><i class="fas fa-circle-check"></i> تم حفظ الهوية.</div>
       {% elif brand_msg == 'badlogo' %}<div class="alert alert-error"><i class="fas fa-circle-exclamation"></i> صيغة الشعار غير مدعومة (PNG أو JPG أو WEBP أو SVG).</div>{% endif %}
+      {% if can('settings.identity') %}
       <form class="card" method="post" action="/admin/brand" enctype="multipart/form-data">
         <div class="card-title"><i class="fas fa-building"></i> الهوية</div>
         <div class="form-grid">
@@ -792,6 +816,7 @@
           <p class="hint">تُضبط هذه القيم في ملف الإعدادات <span class="mono" data-notr>.env</span> عند التثبيت (<span class="mono" data-notr>1_setup.bat</span>) ولا تُعرض هنا.</p>
         </div>
       </div>
+      {% endif %}
       <div id="settingsContent"></div>
     </div>
 
@@ -871,9 +896,115 @@
       </div>
     </div>
 
+    {% if me.is_sysadmin %}
+    <!-- ── USERS TAB — accounts, roles, stages and pages (system administrator only) ── -->
+    <div class="tab-panel" id="tab-users">
+      <div class="card">
+        <div class="users-head">
+          <div class="card-title" style="margin:0"><i class="fas fa-users-gear"></i> المستخدمون والصلاحيات</div>
+          <button class="btn btn-primary" type="button" onclick="openUserModal()"><i class="fas fa-user-plus"></i> مستخدم جديد</button>
+        </div>
+        <p class="hint" style="margin:8px 0 12px">مدير النظام يملك كل الصلاحيات. المستخدم يرى الصفحات والإعدادات المحددة له فقط، وحجوزات المراحل المحددة له وقوائمها.</p>
+        <div class="users-bulk">
+          <label class="check-line"><input type="checkbox" id="usrAll" onchange="usersSelectAll(this.checked)"> <span>تحديد الكل</span></label>
+          <span class="muted" id="usrCount" data-notr></span>
+          <button class="btn btn-outline btn-sm" type="button" onclick="usersBulk('activate')"><i class="fas fa-circle-check"></i> تفعيل</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="usersBulk('deactivate')"><i class="fas fa-ban"></i> إيقاف</button>
+          <button class="btn btn-red btn-sm" type="button" onclick="usersBulk('delete')"><i class="fas fa-trash"></i> حذف</button>
+        </div>
+        <div class="table-wrap users-wrap">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th style="width:36px"></th>
+                <th data-sort="fullName">الاسم الكامل</th>
+                <th data-sort="username">اسم المستخدم</th>
+                <th data-sort="email">البريد الإلكتروني</th>
+                <th data-sort="role">الدور</th>
+                <th data-sort="_stages">المراحل</th>
+                <th data-sort="_perms">الصلاحيات</th>
+                <th data-sort="active">الحالة</th>
+                <th data-sort="lastLogin">آخر دخول</th>
+                <th style="width:60px">تعديل</th>
+              </tr>
+              <tr class="filters">
+                <th></th>
+                <th><input type="search" data-f="fullName" placeholder="تصفية…"></th>
+                <th><input type="search" data-f="username" placeholder="تصفية…" dir="ltr"></th>
+                <th><input type="search" data-f="email" placeholder="تصفية…" dir="ltr"></th>
+                <th><select data-f="role"><option value="">الكل</option><option value="sysadmin">مدير النظام</option><option value="user">مستخدم</option></select></th>
+                <th><input type="search" data-f="_stages" placeholder="تصفية…"></th>
+                <th><input type="search" data-f="_perms" placeholder="تصفية…"></th>
+                <th><select data-f="active"><option value="">الكل</option><option value="1">فعّال</option><option value="0">موقوف</option></select></th>
+                <th><input type="search" data-f="lastLogin" placeholder="تصفية…" dir="ltr"></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
   </div><!-- /content -->
 </div><!-- /main -->
 
+<!-- ── USER MODAL (add / edit an account) ── -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal user-modal">
+    <div class="modal-title" id="userModalTitle"></div>
+    <div id="userModalAlert"></div>
+    <input type="hidden" id="uId">
+    <div class="form-grid">
+      <div class="form-group"><label for="uFullName">الاسم الكامل *</label><input type="text" id="uFullName" autocomplete="off"></div>
+      <div class="form-group"><label for="uUsername">اسم المستخدم *</label><input type="text" id="uUsername" dir="ltr" autocomplete="off" autocapitalize="none"></div>
+      <div class="form-group"><label for="uEmail">البريد الإلكتروني (لاستعادة كلمة المرور)</label><input type="email" id="uEmail" dir="ltr" autocomplete="off"></div>
+      <div class="form-group"><label for="uPassword" id="uPasswordLabel">كلمة المرور *</label>
+        <div class="input-group"><i class="fas fa-lock" aria-hidden="true"></i><input type="password" id="uPassword" dir="ltr" autocomplete="new-password" class="has-eye">
+        <button type="button" class="eye" data-eye="uPassword" aria-pressed="false" aria-label="إظهار كلمة المرور"><i class="fas fa-eye" aria-hidden="true"></i></button></div>
+        <div class="hint" id="uPasswordHint">8 أحرف على الأقل.</div></div>
+      <div class="form-group"><label for="uRole">الدور</label>
+        <select id="uRole" onchange="userRoleChanged()"><option value="user">مستخدم (صلاحيات محددة)</option><option value="sysadmin">مدير النظام (كل الصلاحيات)</option></select></div>
+      <div class="form-group"><label>&nbsp;</label><label class="check-line"><input type="checkbox" id="uActive" checked> <span>الحساب فعّال</span></label></div>
+    </div>
+    <div id="uScope">
+      <fieldset class="perm-box">
+        <legend>المراحل المتاحة</legend>
+        <label class="check-line strong"><input type="checkbox" id="uAllStages" onchange="userAllStagesChanged()"> <span>كل المراحل</span></label>
+        <div class="perm-grid" id="uStages"></div>
+      </fieldset>
+      <fieldset class="perm-box">
+        <legend>الصفحات</legend>
+        <label class="check-line strong"><input type="checkbox" data-all="pages" onchange="userCheckGroup('pages', this.checked)"> <span>تحديد الكل</span></label>
+        <div class="perm-grid" id="uPermPages"></div>
+      </fieldset>
+      <fieldset class="perm-box">
+        <legend>خيارات الإعدادات</legend>
+        <label class="check-line strong"><input type="checkbox" data-all="settings" onchange="userCheckGroup('settings', this.checked)"> <span>تحديد الكل</span></label>
+        <div class="perm-grid" id="uPermSettings"></div>
+      </fieldset>
+    </div>
+    <div class="hint" id="uSysNote" style="display:none"><i class="fas fa-shield-halved"></i> مدير النظام يرى كل الصفحات والإعدادات وكل المراحل، ويدير المستخدمين.</div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" type="button" onclick="saveUser()"><i class="fas fa-floppy-disk"></i> حفظ</button>
+      <button class="btn btn-outline" type="button" onclick="closeModal('userModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+<!-- ── CHANGE PASSWORD MODAL ── -->
+<div class="modal-overlay" id="pwModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title"><i class="fas fa-key"></i> تغيير كلمة المرور</div>
+    <div id="pwAlert"></div>
+    <div class="form-group"><label for="pwCurrent">كلمة المرور الحالية</label><input type="password" id="pwCurrent" dir="ltr" autocomplete="current-password"></div>
+    <div class="form-group"><label for="pwNew">كلمة المرور الجديدة (8 أحرف على الأقل)</label><input type="password" id="pwNew" dir="ltr" autocomplete="new-password"></div>
+    <div class="form-group"><label for="pwNew2">تأكيد كلمة المرور الجديدة</label><input type="password" id="pwNew2" dir="ltr" autocomplete="new-password"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" type="button" onclick="savePassword()"><i class="fas fa-floppy-disk"></i> حفظ</button>
+      <button class="btn btn-outline" type="button" onclick="closeModal('pwModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
 <!-- ── BOOKING DETAIL MODAL ── -->
 <div class="modal-overlay" id="bkModal">
   <div class="modal">
@@ -978,7 +1109,49 @@ let STRUCTURE = [];   // stages → grades → sections
 let PERIODS = [];
 
 // ── i18n (bilingual admin panel; layout stays RTL, only text swaps) ──
+// The signed-in account (utils/auth.me_json): which pages, settings and stages it may use.
+const ME = {{ me_json|tojson }};
+function canDo(p) { return !!(ME.sysadmin || (Array.isArray(p) ? p.some(x => ME.perms.includes(x)) : ME.perms.includes(p))); }
+const TAB_PERMS = { bookings: 'bookings.view', calview: 'calendar', blocked: 'blocked', teachers: 'teachers',
+  students: 'students', reports: 'reports', archive: 'archive', halls: 'structure', contacts: 'contacts', ticker: 'ticker',
+  settings: ['settings.identity','settings.approval','settings.rules','settings.printing','settings.handover','settings.reminders'],
+  users: '__sysadmin' };
+const MANAGE = canDo('bookings.manage');
+function canTab(name) { const p = TAB_PERMS[name]; if (!p) return true; if (p === '__sysadmin') return !!ME.sysadmin; return canDo(p); }
+
 const I18N_EN = {
+  "المستخدمون والصلاحيات": "Users and permissions",
+  "مستخدم جديد": "New user",
+  "مدير النظام يملك كل الصلاحيات. المستخدم يرى الصفحات والإعدادات المحددة له فقط، وحجوزات المراحل المحددة له وقوائمها.": "The system administrator can do everything. A user sees only the pages and settings ticked for them, and the bookings and lists of their stages.",
+  "تحديد الكل": "Select all",
+  "تفعيل": "Activate",
+  "إيقاف": "Disable",
+  "الاسم الكامل": "Full name",
+  "اسم المستخدم": "Username",
+  "الدور": "Role",
+  "الصلاحيات": "Permissions",
+  "آخر دخول": "Last sign-in",
+  "تصفية…": "Filter…",
+  "مستخدم": "User",
+  "فعّال": "Active",
+  "موقوف": "Disabled",
+  "الاسم الكامل *": "Full name *",
+  "اسم المستخدم *": "Username *",
+  "البريد الإلكتروني (لاستعادة كلمة المرور)": "Email (for password recovery)",
+  "كلمة المرور *": "Password *",
+  "8 أحرف على الأقل.": "At least 8 characters.",
+  "مستخدم (صلاحيات محددة)": "User (chosen permissions)",
+  "مدير النظام (كل الصلاحيات)": "System administrator (everything)",
+  "الحساب فعّال": "Account active",
+  "المراحل المتاحة": "Available stages",
+  "الصفحات": "Pages",
+  "خيارات الإعدادات": "Settings options",
+  "مدير النظام يرى كل الصفحات والإعدادات وكل المراحل، ويدير المستخدمين.": "The system administrator sees every page, setting and stage, and manages the users.",
+  "تغيير كلمة المرور": "Change password",
+  "كلمة المرور الحالية": "Current password",
+  "كلمة المرور الجديدة (8 أحرف على الأقل)": "New password (at least 8 characters)",
+  "تأكيد كلمة المرور الجديدة": "Confirm the new password",
+  "الحسابات والمراحل والصفحات المسموحة": "Accounts, stages and allowed pages",
   // interface (sidebar, home, identity and mail cards)
   "الرئيسية": "Home",
   "العمل اليومي": "Daily work",
@@ -1407,6 +1580,7 @@ function toggleLang() {
   localStorage.setItem('adminLang', AR ? 'ar' : 'en');
   applyStaticLang();
   if (window.reloadTicker) window.reloadTicker();   // the ticker follows the language (text and direction)
+  if (USERS.length) renderUsers();
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -1423,6 +1597,7 @@ async function loadPeriods() {
 
 // ── Tab navigation ──
 function showTab(name) {
+  if (!canTab(name)) name = 'home';
   closeSidebar();
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -1430,7 +1605,7 @@ function showTab(name) {
   if (panel) panel.classList.add('active');
   document.querySelectorAll('.nav-item[data-tab="' + name + '"]').forEach(n => n.classList.add('active'));
   history.replaceState(null, '', '#' + name);
-  const titles = {home:t('الرئيسية'), bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), archive:t('الأرشفة'), settings:t('الإعدادات'), calview:t('التقويم المرئي'), ticker:t('الشريط الإعلاني')};
+  const titles = {home:t('الرئيسية'), bookings:t('طلبات الحجز'), halls:t('المراحل والعربات'), blocked:t('الفترات غير المتاحة'), contacts:t('جهات الاتصال'), teachers:t('المعلمون'), students:t('الطلاب'), reports:t('التقارير'), archive:t('الأرشفة'), settings:t('الإعدادات'), calview:t('التقويم المرئي'), ticker:t('الشريط الإعلاني'), users:t('المستخدمون والصلاحيات')};
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'home')     loadStats();
   if (name === 'halls')    { loadHalls(); renderPeriodsTable(); }
@@ -1442,6 +1617,7 @@ function showTab(name) {
   if (name === 'reports')  { loadReportStats(); loadCheckoutReport(); }
   if (name === 'settings') renderSettingsTab();
   if (name === 'ticker') loadTickerSettings();
+  if (name === 'users') loadUsers();
 }
 
 // ── Clock ──
@@ -1614,6 +1790,7 @@ async function api(url, body) {
 // ── Bookings ──────────────────────────────────────────────────
 let bookingsReqSeq = 0;
 async function loadBookings() {
+  if (!canDo(['bookings.view','calendar','reports'])) return;
   const mySeq = ++bookingsReqSeq;
   try {
     const res = await fetch('/admin/api/bookings?filter=' + curFilter);
@@ -1840,19 +2017,19 @@ function renderTable() {
       <td>
         <div class="action-btns">
           <button class="btn btn-blue btn-sm" onclick="openDetail('${b.reqId}')" title="${t('عرض التفاصيل')}"><i class="fas fa-eye"></i></button>
-          ${b.status==='pending'?`<button class="btn btn-green btn-sm" onclick="openApprove('${b.reqId}')" title="${t('موافقة')}"><i class="fas fa-check"></i></button>`:''}
-          ${b.status==='pending'?`<button class="btn btn-red btn-sm" onclick="openReject('${b.reqId}')" title="${t('رفض')}"><i class="fas fa-times"></i></button>`:''}
-          ${b.status==='approved'?`<button class="btn btn-blue btn-sm" onclick="quickComplete('${b.reqId}')" title="${t('اكتمل الحجز')}"><i class="fas fa-flag-checkered"></i></button>`:''}
-          ${b.status!=='cancelled'&&b.status!=='rejected'&&b.status!=='completed'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')" title="${t('إلغاء')}"><i class="fas fa-ban"></i></button>`:''}
+          ${MANAGE&&b.status==='pending'?`<button class="btn btn-green btn-sm" onclick="openApprove('${b.reqId}')" title="${t('موافقة')}"><i class="fas fa-check"></i></button>`:''}
+          ${MANAGE&&b.status==='pending'?`<button class="btn btn-red btn-sm" onclick="openReject('${b.reqId}')" title="${t('رفض')}"><i class="fas fa-times"></i></button>`:''}
+          ${MANAGE&&b.status==='approved'?`<button class="btn btn-blue btn-sm" onclick="quickComplete('${b.reqId}')" title="${t('اكتمل الحجز')}"><i class="fas fa-flag-checkered"></i></button>`:''}
+          ${MANAGE&&b.status!=='cancelled'&&b.status!=='rejected'&&b.status!=='completed'?`<button class="btn btn-orange btn-sm" onclick="quickCancel('${b.reqId}')" title="${t('إلغاء')}"><i class="fas fa-ban"></i></button>`:''}
         </div>
       </td>
     </tr>`).join('') || `<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:20px">${t('لا توجد نتائج')}</td></tr>`;
-  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
+  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 && canDo('bookings.delete') ? 'inline-flex' : 'none';
 }
 
 function toggleSel(id, cb) {
   if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
-  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
+  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 && canDo('bookings.delete') ? 'inline-flex' : 'none';
 }
 function toggleAll(cb) {
   document.querySelectorAll('#bkTable input[type=checkbox]').forEach(c => {
@@ -1860,7 +2037,7 @@ function toggleAll(cb) {
     const id = c.closest('tr').querySelector('strong')?.textContent;
     if (id) { if (cb.checked) selectedIds.add(id); else selectedIds.delete(id); }
   });
-  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 ? 'inline-flex' : 'none';
+  document.getElementById('bulkBtn').style.display = selectedIds.size > 0 && canDo('bookings.delete') ? 'inline-flex' : 'none';
 }
 
 async function bulkDelete() {
@@ -1879,7 +2056,7 @@ async function deleteBookingSingle(reqId) {
 
 function openApprove(reqId) {
   document.getElementById('approveReqId').value = reqId;
-  document.getElementById('approveByName').value = localStorage.getItem('lastApproverName') || '';
+  document.getElementById('approveByName').value = localStorage.getItem('lastApproverName') || ME.fullName || '';
   openModal('approveModal');
 }
 async function confirmApprove() {
@@ -1988,7 +2165,7 @@ async function loadCommentsPanel(reqId) {
 
 function renderCommentsPanel(reqId, comments) {
   const panel = document.getElementById('bkCommentsPanel');
-  const lastAuthor = localStorage.getItem('lastCommentAuthor') || '';
+  const lastAuthor = localStorage.getItem('lastCommentAuthor') || ME.fullName || '';
   const list = (comments || []).map(c => `
     <div style="background:#e3f1f3;border:1px solid #c5e1e5;border-inline-start:5px solid #247680;border-radius:8px;padding:10px 14px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;gap:10px;font-size:.8rem;color:#45666b;margin-bottom:5px">
@@ -2002,9 +2179,11 @@ function renderCommentsPanel(reqId, comments) {
     <div style="margin-top:14px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px">
       <div style="font-weight:700;color:var(--primary);margin-bottom:8px">💬 ${AR?'التعليقات':'Comments'}</div>
       <div style="max-height:220px;overflow-y:auto;margin-bottom:10px">${list}</div>
+      ${MANAGE ? `
       <div class="form-group"><label>${AR?'اسمك':'Your name'}</label><input type="text" id="cmtAuthor" value="${esc(lastAuthor)}" placeholder="${AR?'مثال: سامر - الإدارة':'e.g. Admin'}"></div>
       <div class="form-group"><label>${AR?'تعليق جديد':'New comment'}</label><textarea id="cmtBody" rows="2" placeholder="${AR?'اكتب تعليقك هنا...':'Write your comment...'}"></textarea></div>
       <button class="btn btn-primary btn-sm" onclick="addComment('${reqId}')"><i class="fas fa-paper-plane"></i> ${AR?'إرسال التعليق':'Post Comment'}</button>
+      ` : ''}
     </div>`;
 }
 
@@ -2109,22 +2288,23 @@ function openDetail(reqId) {
     footer += `<button style="background:#0C67EC;color:#fff;border:none;font-weight:700" class="btn" onclick="printDeliveryReceipt('${b.reqId}')" title="${t('إيصال تسليم')}"><i class="fas fa-receipt"></i> ${t('إيصال تسليم')}</button>`;
     footer += `<button class="btn btn-outline" onclick="printStudentForm('${b.reqId}')" title="${t('طباعة نموذج تسجيل الطلبة')}"><i class="fas fa-print"></i> ${t('طباعة نموذج تسجيل الطلبة')}</button>`;
   }
-  if (b.status === 'pending') {
+  if (!MANAGE) { /* view only: printing buttons above, no actions */ }
+  else if (b.status === 'pending') {
     footer += `<button class="btn btn-green" onclick="closeModal('bkModal');openApprove('${b.reqId}')"><i class="fas fa-check"></i> موافقة</button>`;
     footer += `<button class="btn btn-red" onclick="closeModal('bkModal');openReject('${b.reqId}')"><i class="fas fa-times"></i> رفض</button>`;
   }
-  if (b.status === 'approved') {
+  if (MANAGE && b.status === 'approved') {
     footer += `<button class="btn btn-blue" onclick="quickComplete('${b.reqId}');closeModal('bkModal')"><i class="fas fa-flag-checkered"></i> ${t('اكتمل الحجز')}</button>`;
   }
-  if (b.status !== 'cancelled' && b.status !== 'rejected' && b.status !== 'completed') {
+  if (MANAGE && b.status !== 'cancelled' && b.status !== 'rejected' && b.status !== 'completed') {
     footer += `<button class="btn btn-orange" onclick="closeModal('bkModal');quickCancel('${b.reqId}')"><i class="fas fa-ban"></i> إلغاء</button>`;
   }
-  if (b.status !== 'pending') {
+  if (MANAGE && b.status !== 'pending') {
     footer += `<button class="btn btn-blue" onclick="quickSetPending('${b.reqId}')"><i class="fas fa-undo"></i> إعادة لقيد المراجعة</button>`;
   }
-  footer += `<button class="btn btn-outline" onclick="openEdit('${b.reqId}');closeModal('bkModal')"><i class="fas fa-edit"></i> تعديل</button>`;
+  if (MANAGE) footer += `<button class="btn btn-outline" onclick="openEdit('${b.reqId}');closeModal('bkModal')"><i class="fas fa-edit"></i> تعديل</button>`;
   footer += `<button class="btn btn-outline" onclick="printBooking('${b.reqId}')" title="${t('طباعة')}"><i class="fas fa-print"></i> ${t('طباعة')}</button>`;
-  footer += `<button style="background:#c0392b;color:#fff;border:none" class="btn" onclick="deleteBookingSingle('${b.reqId}')" title="${t('حذف الحجز نهائياً')}"><i class="fas fa-trash"></i> ${t('حذف')}</button>`;
+  if (canDo('bookings.delete')) footer += `<button style="background:#c0392b;color:#fff;border:none" class="btn" onclick="deleteBookingSingle('${b.reqId}')" title="${t('حذف الحجز نهائياً')}"><i class="fas fa-trash"></i> ${t('حذف')}</button>`;
   footer += `<button class="btn btn-outline" onclick="closeModal('bkModal')">إغلاق</button>`;
   document.getElementById('bkModalFooter').innerHTML = footer;
   openModal('bkModal');
@@ -2318,21 +2498,21 @@ async function renderSettingsTab() {
   const isStation = localStorage.getItem('isPrintStation') === 'true';
   try {
   el.innerHTML = `
-    <div class="card">
+    <div class="card" data-perm="settings.approval">
       <div class="card-title"><i class="fas fa-check-double"></i> ${AR?'الموافقة التلقائية':'Auto-Approval'}</div>
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.92rem">
         <input type="checkbox" id="autoApproveToggle" ${settings.autoApproveBookings?'checked':''} onchange="toggleAutoApprove(this.checked)" style="width:20px;height:20px">
         ${AR?'الموافقة تلقائياً على كل حجز جديد فور تقديمه (إشعارات المعلم والإدمن تصل كالمعتاد)':'Automatically approve every new booking the instant it\'s submitted (teacher and admin notifications still fire as usual)'}
       </label>
     </div>
-    <div class="card">
+    <div class="card" data-perm="settings.rules">
       <div class="card-title"><i class="fas fa-mug-hot"></i> ${AR?'الحصص التي تسبق الاستراحة':'Periods Before Break'}</div>
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.92rem">
         <input type="checkbox" id="preBreakToggle" ${settings.preBreakPeriodsEnabled?'checked':''} onchange="togglePreBreakPeriods(this.checked)" style="width:20px;height:20px">
         ${AR?'السماح بالحجز في كل الحصة التي تنتهي قبل الاستراحة مباشرة (عند الإلغاء تظهر لهذه الحصص «غير متاحة» في نموذج الحجز؛ الحجوزات القائمة لا تتأثر)':'Allow booking every period that ends right before a break (when off, those periods show as unavailable on the booking form; existing bookings are not affected)'}
       </label>
     </div>
-    <div class="card">
+    <div class="card" data-perm="settings.rules">
       <div class="card-title"><i class="fas fa-ban"></i> ${AR?'قيود الحجز':'Booking Restrictions'}</div>
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.92rem;margin-bottom:12px">
         <input type="checkbox" id="blockConsecutiveToggle" ${settings.blockConsecutivePeriods?'checked':''} onchange="toggleBlockConsecutive(this.checked)" style="width:20px;height:20px">
@@ -2343,7 +2523,7 @@ async function renderSettingsTab() {
         ${AR?'منع حجز العربة للشعبة أكثر من حصة واحدة في اليوم نفسه':'Prevent booking the trolley for a section more than once per day'}
       </label>
     </div>
-    <div class="card">
+    <div class="card" data-perm="settings.printing">
       <div class="card-title"><i class="fas fa-print"></i> ${AR?'الطباعة التلقائية لإيصال التسليم':'Auto-Print Delivery Receipt'}</div>
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.92rem;margin-bottom:16px">
         <input type="checkbox" id="autoPrintToggle" ${settings.autoPrintReceipts?'checked':''} onchange="toggleAutoPrint(this.checked)" style="width:20px;height:20px">
@@ -2360,14 +2540,14 @@ async function renderSettingsTab() {
         ${isStation ? `<div style="margin-top:10px;color:#27ae60;font-weight:700;font-size:.85rem"><i class="fas fa-check-circle"></i> ${AR?'هذا الجهاز مُعيَّن حالياً':'This device is currently the print station'}</div>` : ''}
       </div>
     </div>
-    <div class="card">
+    <div class="card" data-perm="settings.handover">
       <div class="card-title"><i class="fas fa-link-slash"></i> ${AR?'رابط نموذج تسليم الأجهزة بإشعار الاعتماد':'Handover Form Link in Approval Notice'}</div>
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.92rem">
         <input type="checkbox" id="disableCheckoutLinkToggle" ${settings.disableCheckoutFormLink?'checked':''} onchange="toggleDisableCheckoutLink(this.checked)" style="width:20px;height:20px">
         ${AR?'إيقاف إرسال رابط نموذج تسليم الأجهزة ضمن إشعار اعتماد الحجز (يدوياً أو تلقائياً)':'Stop including the device handover form link in the booking-approval notice (manual or automatic)'}
       </label>
     </div>
-    <div class="card" style="border:1.5px solid #8e44ad">
+    <div class="card" data-perm="settings.reminders" style="border:1.5px solid #8e44ad">
       <div class="card-title" style="color:#8e44ad"><i class="fas fa-truck"></i> ${AR?'تذكيرات الحجوزات لموظفي النظام':'Staff Booking Reminders'}</div>
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.92rem;margin-bottom:12px">
         <input type="checkbox" id="staffSummaryToggle" ${settings.staffDailySummaryEnabled?'checked':''} onchange="toggleStaffDailySummary(this.checked)" style="width:20px;height:20px">
@@ -2387,6 +2567,7 @@ async function renderSettingsTab() {
         ${AR?'المستلمون يُحددون من تبويب «جهات الاتصال» — بطاقة «مستلمو تذكيرات الحجوزات».':'Recipients are chosen from the Contacts tab — the "Booking Reminder Recipients" card.'}
       </p>
     </div>`;
+    el.querySelectorAll('[data-perm]').forEach(c => { if (!canDo(c.dataset.perm)) c.remove(); });
   } catch (e) {
     el.innerHTML = `<div class="card" style="border:1.5px solid #c0392b">
       <div class="card-title" style="color:#c0392b"><i class="fas fa-triangle-exclamation"></i> ${AR?'حدث خطأ أثناء عرض الإعدادات':'An error occurred while displaying settings'}</div>
@@ -2413,7 +2594,7 @@ async function saveStaffLeadMinutes(value) {
   else showToast(t('خطأ'), '#c0392b');
 }
 
-setInterval(checkPrintQueue, 8000); // fallback poll, in case the instant push trigger below is missed
+if (canDo('settings.printing')) setInterval(checkPrintQueue, 8000); // fallback poll, in case the instant push trigger below is missed
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
@@ -3846,7 +4027,7 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 
 // ── Helpers ───────────────────────────────────────────────────
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function refreshAll() { loadBookings(); loadStats(); showToast(t('تم التحديث')); }
+function refreshAll() { loadBookings(); loadStats(); if (document.getElementById('tab-users') && document.getElementById('tab-users').classList.contains('active')) loadUsers(); showToast(t('تم التحديث')); }
 
 // ── Sidebar toggle: toggleSidebar() / closeSidebar() come from static/js/app.js ──
 
@@ -4505,14 +4686,188 @@ function exportPrint() {
   win.document.close();
 }
 
+// ── Users and permissions (system administrator) ─────────────
+let USERS = [], USER_STAGES = [], USER_CAT = {pages: [], settings: []}, USERS_ME = null;
+const usersSel = new Set();
+let usersSort = {key: 'fullName', dir: 'asc'};
+
+async function loadUsers() {
+  if (!ME.sysadmin) return;
+  const res = await fetch('/admin/api/users?lang=' + (AR ? 'ar' : 'en'));
+  const data = await res.json();
+  if (!res.ok) { showToast((AR ? data.error : data.errorEn) || t('خطأ'), '#c0392b'); return; }
+  USERS = data.users; USER_STAGES = data.stages; USER_CAT = data.catalogue; USERS_ME = data.meId;
+  for (const id of [...usersSel]) if (!USERS.some(u => u.id === id)) usersSel.delete(id);
+  renderUsers();
+}
+
+function usersLabels() {
+  const stageName = id => { const st = USER_STAGES.find(x => x.id === id); return st ? (AR ? st.nameAr : st.nameEn) : ''; };
+  USERS.forEach(u => {
+    u._stages = (u.role === 'sysadmin' || u.allStages) ? (AR ? 'كل المراحل' : 'All stages') : u.stageIds.map(stageName).join('، ');
+    u._perms = u.role === 'sysadmin' ? (AR ? 'كل الصلاحيات' : 'Everything')
+      : (AR ? `${u.permissions.length} صلاحية` : `${u.permissions.length} permission(s)`);
+  });
+}
+
+function usersFiltered() {
+  const f = {};
+  document.querySelectorAll('#tab-users tr.filters [data-f]').forEach(el => { if (el.value.trim()) f[el.dataset.f] = el.value.trim().toLowerCase(); });
+  let rows = USERS.filter(u => Object.entries(f).every(([k, v]) => {
+    if (k === 'active') return String(u.active ? 1 : 0) === v;
+    if (k === 'role') return u.role === v;
+    return String(u[k] ?? '').toLowerCase().includes(v);
+  }));
+  const {key, dir} = usersSort;
+  rows.sort((a, b) => String(a[key] ?? '').localeCompare(String(b[key] ?? ''), AR ? 'ar' : 'en', {numeric: true}) * (dir === 'asc' ? 1 : -1));
+  return rows;
+}
+
+function renderUsers() {
+  usersLabels();
+  const rows = usersFiltered();
+  const roleLbl = r => r === 'sysadmin' ? (AR ? 'مدير النظام' : 'System admin') : (AR ? 'مستخدم' : 'User');
+  document.getElementById('usersBody').innerHTML = rows.map(u => `
+    <tr class="${u.active ? '' : 'off'}">
+      <td><input type="checkbox" ${usersSel.has(u.id) ? 'checked' : ''} onchange="usersToggle(${u.id}, this.checked)" aria-label="${esc(u.fullName)}"></td>
+      <td><b>${esc(u.fullName)}</b>${u.id === USERS_ME ? ` <span class="badge badge-approved">${AR ? 'أنت' : 'You'}</span>` : ''}</td>
+      <td dir="ltr" style="text-align:start">${esc(u.username)}</td>
+      <td dir="ltr" style="text-align:start">${esc(u.email || '—')}</td>
+      <td>${u.role === 'sysadmin' ? `<span class="badge badge-pending"><i class="fas fa-shield-halved"></i> ${roleLbl(u.role)}</span>` : roleLbl(u.role)}</td>
+      <td><div class="chips">${(u._stages || '').split('، ').filter(Boolean).map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div></td>
+      <td>${esc(u._perms)}</td>
+      <td>${u.active ? `<span class="badge badge-approved">${AR ? 'فعّال' : 'Active'}</span>` : `<span class="badge badge-cancelled">${AR ? 'موقوف' : 'Disabled'}</span>`}</td>
+      <td dir="ltr" style="text-align:start;white-space:nowrap">${esc(u.lastLogin || '—')}</td>
+      <td><button class="btn btn-outline btn-sm" type="button" onclick="openUserModal(${u.id})" title="${AR ? 'تعديل' : 'Edit'}" aria-label="${AR ? 'تعديل' : 'Edit'}"><i class="fas fa-pen"></i></button></td>
+    </tr>`).join('') || `<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:18px">${AR ? 'لا يوجد مستخدمون مطابقون' : 'No matching users'}</td></tr>`;
+  const all = document.getElementById('usrAll');
+  all.checked = rows.length > 0 && rows.every(u => usersSel.has(u.id));
+  document.getElementById('usrCount').textContent = AR
+    ? `الكل (${USERS.length}) · المعروض ${rows.length} · المحدد ${usersSel.size}`
+    : `All (${USERS.length}) · shown ${rows.length} · selected ${usersSel.size}`;
+  document.querySelectorAll('#tab-users th[data-sort]').forEach(th => {
+    let a = th.querySelector('.arr'); if (!a) { a = document.createElement('span'); a.className = 'arr'; th.appendChild(a); }
+    a.textContent = th.dataset.sort === usersSort.key ? (usersSort.dir === 'asc' ? '▲' : '▼') : '⇅';
+  });
+}
+
+function usersToggle(id, on) { on ? usersSel.add(id) : usersSel.delete(id); renderUsers(); }
+function usersSelectAll(on) { usersFiltered().forEach(u => on ? usersSel.add(u.id) : usersSel.delete(u.id)); renderUsers(); }
+
+async function usersBulk(action) {
+  if (!usersSel.size) { showToast(AR ? 'لم يُحدَّد أي مستخدم' : 'No user selected', '#c0392b'); return; }
+  const n = usersSel.size;
+  const q = {activate: AR ? `تفعيل ${n} من الحسابات؟` : `Activate ${n} account(s)?`,
+             deactivate: AR ? `إيقاف ${n} من الحسابات؟` : `Disable ${n} account(s)?`,
+             delete: AR ? `حذف ${n} من الحسابات نهائياً؟ لا يُحذف الحساب الحالي ولا آخر مدير نظام.` : `Delete ${n} account(s) for good? Your own account and the last system admin are kept.`}[action];
+  if (!confirm(q)) return;
+  const data = await api('/admin/api/users-bulk', {action, ids: [...usersSel]});
+  if (data.success) {
+    usersSel.clear();
+    let msg = AR ? `تم: ${data.count}` : `Done: ${data.count}`;
+    if (data.skipped && data.skipped.length) msg += AR ? ` — لم يُغيَّر: ${data.skipped.join('، ')}` : ` — kept: ${data.skipped.join(', ')}`;
+    showToast(msg);
+    loadUsers();
+  } else showToast((AR ? data.error : data.errorEn) || t('خطأ'), '#c0392b');
+}
+
+function userCheckGroup(group, on) {
+  document.querySelectorAll(`#${group === 'pages' ? 'uPermPages' : 'uPermSettings'} input`).forEach(c => c.checked = on);
+}
+function userAllStagesChanged() {
+  const on = document.getElementById('uAllStages').checked;
+  document.querySelectorAll('#uStages input').forEach(c => { c.disabled = on; if (on) c.checked = false; });
+}
+function userRoleChanged() {
+  const sys = document.getElementById('uRole').value === 'sysadmin';
+  document.getElementById('uScope').style.display = sys ? 'none' : '';
+  document.getElementById('uSysNote').style.display = sys ? '' : 'none';
+}
+
+function openUserModal(id) {
+  const u = id ? USERS.find(x => x.id === id) : null;
+  document.getElementById('userModalAlert').innerHTML = '';
+  document.getElementById('userModalTitle').innerHTML = `<i class="fas fa-user-${u ? 'pen' : 'plus'}"></i> ${u ? (AR ? 'تعديل مستخدم' : 'Edit user') : (AR ? 'مستخدم جديد' : 'New user')}`;
+  document.getElementById('uId').value = u ? u.id : '';
+  document.getElementById('uFullName').value = u ? u.fullName : '';
+  document.getElementById('uUsername').value = u ? u.username : '';
+  document.getElementById('uEmail').value = u ? u.email : '';
+  document.getElementById('uPassword').value = '';
+  document.getElementById('uPasswordLabel').textContent = u ? (AR ? 'كلمة مرور جديدة' : 'New password') : (AR ? 'كلمة المرور *' : 'Password *');
+  document.getElementById('uPasswordHint').textContent = u ? (AR ? 'اتركها فارغة لإبقاء كلمة المرور الحالية.' : 'Leave empty to keep the current password.') : (AR ? '8 أحرف على الأقل.' : 'At least 8 characters.');
+  document.getElementById('uRole').value = u ? u.role : 'user';
+  document.getElementById('uActive').checked = u ? u.active : true;
+  document.getElementById('uAllStages').checked = u ? u.allStages : false;
+  const box = (k, label, on) => `<label class="check-line"><input type="checkbox" value="${esc(String(k))}" ${on ? 'checked' : ''}> <span>${esc(label)}</span></label>`;
+  document.getElementById('uStages').innerHTML = USER_STAGES.map(st => box(st.id, AR ? st.nameAr : st.nameEn, u && u.stageIds.includes(st.id))).join('')
+    || `<span class="muted">${AR ? 'لا توجد مراحل بعد' : 'No stages yet'}</span>`;
+  document.getElementById('uPermPages').innerHTML = USER_CAT.pages.map(([k, l]) => box(k, l, u && u.permissions.includes(k))).join('');
+  document.getElementById('uPermSettings').innerHTML = USER_CAT.settings.map(([k, l]) => box(k, l, u && u.permissions.includes(k))).join('');
+  document.querySelectorAll('#userModal [data-all]').forEach(c => c.checked = false);
+  userAllStagesChanged();
+  userRoleChanged();
+  openModal('userModal');
+  setTimeout(() => document.getElementById('uFullName').focus(), 50);
+}
+
+async function saveUser() {
+  const ids = sel => [...document.querySelectorAll(sel + ' input:checked')].map(c => c.value);
+  const payload = {
+    id: document.getElementById('uId').value || null,
+    fullName: document.getElementById('uFullName').value.trim(),
+    username: document.getElementById('uUsername').value.trim(),
+    email: document.getElementById('uEmail').value.trim(),
+    password: document.getElementById('uPassword').value,
+    role: document.getElementById('uRole').value,
+    active: document.getElementById('uActive').checked,
+    allStages: document.getElementById('uAllStages').checked,
+    stageIds: ids('#uStages').map(Number),
+    permissions: ids('#uPermPages').concat(ids('#uPermSettings')),
+  };
+  const data = await api('/admin/api/save-user', payload);
+  if (data.success) {
+    closeModal('userModal');
+    showToast(AR ? 'تم حفظ المستخدم' : 'User saved');
+    loadUsers();
+  } else {
+    document.getElementById('userModalAlert').innerHTML = `<div class="alert alert-error"><i class="fas fa-circle-exclamation"></i> ${esc((AR ? data.error : data.errorEn) || data.error || t('خطأ'))}</div>`;
+  }
+}
+
+function openPwModal() {
+  ['pwCurrent', 'pwNew', 'pwNew2'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pwAlert').innerHTML = '';
+  document.querySelector('.user-menu') && document.querySelector('.user-menu').removeAttribute('open');
+  openModal('pwModal');
+}
+async function savePassword() {
+  const cur = document.getElementById('pwCurrent').value, n1 = document.getElementById('pwNew').value, n2 = document.getElementById('pwNew2').value;
+  const err = m => document.getElementById('pwAlert').innerHTML = `<div class="alert alert-error"><i class="fas fa-circle-exclamation"></i> ${esc(m)}</div>`;
+  if (n1.length < 8) return err(AR ? 'كلمة المرور 8 أحرف على الأقل' : 'At least 8 characters');
+  if (n1 !== n2) return err(AR ? 'كلمتا المرور غير متطابقتين' : 'The passwords do not match');
+  const data = await api('/admin/api/change-password', {current: cur, new: n1});
+  if (data.success) { closeModal('pwModal'); showToast(AR ? 'تم تغيير كلمة المرور' : 'Password changed'); }
+  else err((AR ? data.error : data.errorEn) || t('خطأ'));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // a navigation group with no page the account may open is not shown
+  document.querySelectorAll('.side-nav .nav-group').forEach(gr => { if (!gr.querySelector('.nav-item')) gr.style.display = 'none'; });
+  document.querySelectorAll('#tab-users tr.filters [data-f]').forEach(el => el.addEventListener('input', renderUsers));
+  document.querySelectorAll('#tab-users th[data-sort]').forEach(th => th.addEventListener('click', () => {
+    usersSort = {key: th.dataset.sort, dir: usersSort.key === th.dataset.sort && usersSort.dir === 'asc' ? 'desc' : 'asc'};
+    renderUsers();
+  }));
+});
+
 // ── Init ──────────────────────────────────────────────────────
-loadBookings();
+if (canDo(['bookings.view','calendar','reports'])) loadBookings();
 loadHalls();
 loadPeriods();
 
 // Restore whichever tab the URL hash points to (so refresh/reload/shared
 // links keep the same tab instead of always resetting to Bookings).
-const validTabs = ['home','bookings','halls','blocked','contacts','teachers','students','reports','archive','settings','calview','ticker'];
+const validTabs = ['home','bookings','halls','blocked','contacts','teachers','students','reports','archive','settings','calview','ticker','users'];
 const initialTab = location.hash.replace('#', '');
 if (validTabs.includes(initialTab)) {
   showTab(initialTab);

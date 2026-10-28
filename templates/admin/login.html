@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {% include '_head_assets.html' %}
-  <title>{{ 'تسجيل الدخول' if AR else 'Sign in' }} — {{ brand.org_ar if AR else brand.org_en }}</title>
+  <title>{% if mode == 'login' %}{{ 'تسجيل الدخول' if AR else 'Sign in' }}{% else %}{{ 'كلمة المرور' if AR else 'Password' }}{% endif %} — {{ brand.org_ar if AR else brand.org_en }}</title>
 </head>
 <body class="auth">
 {% include "_ticker.html" %}
@@ -17,22 +17,69 @@
   <div class="logo-circle">{% include '_brand_logo.html' %}</div>
   <div class="brand-title">{{ brand.org_ar if AR else brand.org_en }}</div>
   <div class="brand-sub">{{ brand.sys_ar if AR else brand.sys_en }}</div>
+
+  {% if mode == 'login' %}
   <h1>{{ 'تسجيل الدخول إلى لوحة التحكم' if AR else 'Sign in to the admin panel' }}</h1>
+  {% if info == 'reset' %}<div class="alert alert-success"><i class="fas fa-circle-check"></i> {{ 'تم تغيير كلمة المرور — سجّل الدخول بها الآن.' if AR else 'Your password was changed — sign in with it now.' }}</div>{% endif %}
+  {% if error %}<div class="alert alert-error"><i class="fas fa-circle-exclamation"></i> {{ error }}</div>{% endif %}
+  <form method="POST" action="{{ url_for('admin.login') }}">
+    <input type="hidden" name="lang" value="{{ 'ar' if AR else 'en' }}">
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="field"><label for="username">{{ 'اسم المستخدم أو البريد الإلكتروني' if AR else 'Username or email' }}</label>
+      <div class="input-group"><i class="fas fa-user" aria-hidden="true"></i>
+        <input type="text" id="username" name="username" value="{{ username }}" required autocomplete="username" dir="ltr" autocapitalize="none" spellcheck="false" autofocus
+               placeholder="{{ 'أدخل اسم المستخدم' if AR else 'Enter your username' }}"></div></div>
+    <div class="field"><label for="password">{{ 'كلمة المرور' if AR else 'Password' }}</label>
+      <div class="input-group"><i class="fas fa-lock" aria-hidden="true"></i>
+        <input type="password" id="password" name="password" required autocomplete="current-password" dir="ltr" class="has-eye"
+               placeholder="{{ 'أدخل كلمة المرور' if AR else 'Enter your password' }}">
+        <button type="button" class="eye" data-eye="password" aria-pressed="false" aria-label="{{ 'إظهار كلمة المرور' if AR else 'Show password' }}"><i class="fas fa-eye" aria-hidden="true"></i></button></div></div>
+    <div class="row-opts">
+      <label><input type="checkbox" name="remember" value="1" checked> {{ 'تذكرني على هذا الجهاز' if AR else 'Remember me on this device' }}</label>
+      <a href="{{ url_for('admin.forgot_password', lang='ar' if AR else 'en') }}">{{ 'نسيت كلمة المرور؟' if AR else 'Forgot password?' }}</a>
+    </div>
+    <button type="submit" class="btn"><i class="fas fa-right-to-bracket" aria-hidden="true"></i> {{ 'تسجيل الدخول' if AR else 'Sign in' }}</button>
+  </form>
+  <div class="links"><a href="/calendar?lang={{ 'ar' if AR else 'en' }}"><i class="fas fa-calendar-days"></i> {{ 'الروزنامة العامة' if AR else 'Public calendar' }}</a></div>
+
+  {% elif mode == 'forgot' %}
+  <h1>{{ 'نسيت كلمة المرور' if AR else 'Forgot password' }}</h1>
+  {% if sent %}
+  <div class="alert alert-success"><i class="fas fa-envelope-circle-check"></i> {{ 'إن كان الحساب مسجّلاً ببريد إلكتروني فقد أُرسل إليه رابط لتعيين كلمة مرور جديدة، صالح لمدة ساعة.' if AR else 'If the account has an email address, a link to choose a new password was sent to it; it works for one hour.' }}</div>
+  {% else %}
+  <p class="lead">{{ 'أدخل اسم المستخدم أو البريد الإلكتروني المسجّل لحسابك، وسيصلك رابط لتعيين كلمة مرور جديدة.' if AR else 'Enter your username or the email of your account; a link to choose a new password will be sent to you.' }}</p>
+  <form method="POST" action="{{ url_for('admin.forgot_password') }}">
+    <input type="hidden" name="lang" value="{{ 'ar' if AR else 'en' }}">
+    <div class="field"><label for="username">{{ 'اسم المستخدم أو البريد الإلكتروني' if AR else 'Username or email' }}</label>
+      <div class="input-group"><i class="fas fa-envelope" aria-hidden="true"></i>
+        <input type="text" id="username" name="username" required dir="ltr" autocapitalize="none" autofocus></div></div>
+    <button type="submit" class="btn"><i class="fas fa-paper-plane" aria-hidden="true"></i> {{ 'إرسال الرابط' if AR else 'Send the link' }}</button>
+  </form>
+  {% endif %}
+  <div class="links"><a href="{{ url_for('admin.login', lang='ar' if AR else 'en') }}"><i class="fas fa-arrow-{{ 'right' if AR else 'left' }}"></i> {{ 'العودة إلى تسجيل الدخول' if AR else 'Back to sign in' }}</a></div>
+
+  {% elif mode == 'reset' %}
+  <h1>{{ 'تعيين كلمة مرور جديدة' if AR else 'Choose a new password' }}</h1>
   {% if error %}<div class="alert alert-error"><i class="fas fa-circle-exclamation"></i> {{ error }}</div>{% endif %}
   <form method="POST">
     <input type="hidden" name="lang" value="{{ 'ar' if AR else 'en' }}">
-    <div class="field"><label for="username">{{ 'اسم المستخدم' if AR else 'Username' }}</label>
-      <div class="input-group"><i class="fas fa-user" aria-hidden="true"></i>
-        <input type="text" id="username" name="username" required autocomplete="username" dir="ltr" autofocus></div></div>
-    <div class="field"><label for="password">{{ 'كلمة المرور' if AR else 'Password' }}</label>
+    <div class="field"><label for="password">{{ 'كلمة المرور الجديدة (8 أحرف على الأقل)' if AR else 'New password (at least 8 characters)' }}</label>
       <div class="input-group"><i class="fas fa-lock" aria-hidden="true"></i>
-        <input type="password" id="password" name="password" required autocomplete="current-password" dir="ltr" class="has-eye">
+        <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password" dir="ltr" class="has-eye" autofocus>
         <button type="button" class="eye" data-eye="password" aria-pressed="false" aria-label="{{ 'إظهار كلمة المرور' if AR else 'Show password' }}"><i class="fas fa-eye" aria-hidden="true"></i></button></div></div>
-    <button type="submit" class="btn"><i class="fas fa-right-to-bracket" aria-hidden="true"></i> {{ 'دخول' if AR else 'Sign in' }}</button>
+    <div class="field"><label for="password2">{{ 'تأكيد كلمة المرور' if AR else 'Confirm the password' }}</label>
+      <div class="input-group"><i class="fas fa-lock" aria-hidden="true"></i>
+        <input type="password" id="password2" name="password2" required minlength="8" autocomplete="new-password" dir="ltr"></div></div>
+    <button type="submit" class="btn"><i class="fas fa-floppy-disk" aria-hidden="true"></i> {{ 'حفظ كلمة المرور' if AR else 'Save the password' }}</button>
   </form>
-  <div class="links"><a href="/calendar?lang={{ 'ar' if AR else 'en' }}"><i class="fas fa-calendar-days"></i> {{ 'الروزنامة العامة' if AR else 'Public calendar' }}</a></div>
+
+  {% else %}
+  <h1>{{ 'الرابط غير صالح' if AR else 'The link is not valid' }}</h1>
+  <div class="alert alert-error"><i class="fas fa-circle-exclamation"></i> {{ 'انتهت صلاحية الرابط أو استُخدم من قبل. اطلب رابطاً جديداً.' if AR else 'The link has expired or was already used. Ask for a new one.' }}</div>
+  <div class="links"><a href="{{ url_for('admin.forgot_password', lang='ar' if AR else 'en') }}">{{ 'طلب رابط جديد' if AR else 'Ask for a new link' }}</a></div>
+  {% endif %}
 </div></div>
-<footer class="auth-foot">© {{ now_year }} <b>{{ brand.org_ar if AR else brand.org_en }}</b></footer>
+<footer class="auth-foot">© {{ now_year }} <b>{{ brand.org_ar if AR else brand.org_en }}</b> · {{ brand.sys_ar if AR else brand.sys_en }}</footer>
 <script src="{{ asset('js/app.js') }}"></script>
 </body>
 </html>

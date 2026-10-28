@@ -311,3 +311,29 @@ html[dir=rtl] .input-group input[dir=ltr]{text-align:right}
   body{background:#fff}.main{margin:0}.content{max-width:none;padding:0}.card{box-shadow:none;border:1px solid #ccc}
   .table-wrap{max-height:none;overflow:visible}
 }
+
+/* sign-in details (appace): remember me + forgot password row, info line */
+.auth-card .row-opts{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 12px;font-size:.82rem}
+.auth-card .row-opts label{display:inline-flex;align-items:center;gap:6px;margin:0;font-weight:600;color:#475569;cursor:pointer}
+.auth-card .row-opts input{width:16px;height:16px;accent-color:var(--primary)}
+.auth-card .row-opts a{color:var(--primary);font-weight:700;text-decoration:none}
+.auth-card .lead{font-size:.84rem;color:#64748b;margin:0 0 12px;text-align:start;line-height:1.6}
+
+/* users and permissions (admin_users) */
+.users-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.users-bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.users-bulk .check-line{margin:0}
+.users-table th[data-sort]{cursor:pointer;white-space:nowrap}
+.users-table th[data-sort] .arr{opacity:.55;margin-inline-start:4px;font-size:.7rem}
+.users-table thead tr.filters th{top:41px;background:#f6f9fd;padding:5px 6px}
+.users-table thead tr.filters input,.users-table thead tr.filters select{width:100%;min-width:80px;padding:5px 8px;font-size:.8rem;border:1px solid #d5deea;border-radius:7px;font-family:inherit;background:#fff}
+.users-table td .chips{display:flex;flex-wrap:wrap;gap:4px}
+.users-table td .chip{background:#eef4fd;color:#0a3a8a;border-radius:999px;padding:1px 8px;font-size:.72rem;font-weight:700;white-space:nowrap}
+.users-table tr.off td{color:#94a3b8}
+.user-modal{max-width:760px}
+.perm-box{border:1px solid #e3e9f2;border-radius:12px;padding:10px 14px 12px;margin:12px 0;background:#fbfcfe}
+.perm-box legend{font-weight:800;color:var(--primary-dark,#0847B0);padding:0 6px;font-size:.9rem}
+.perm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 14px}
+.perm-grid .check-line{margin-top:6px;font-weight:600}
+.check-line.strong{font-weight:800;color:var(--navy)}
+.perm-box.disabled{opacity:.5;pointer-events:none}
