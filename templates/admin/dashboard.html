@@ -14,11 +14,11 @@
   {% include '_head_assets.html' %}
   <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
   <style>
-    /* The ticker (templates/_ticker.html) sits under the sticky topbar, next to the sidebar, and keeps its
-       fixed 38px height; the content moves down by that height while it shows. */
-    body #globalTicker { top: var(--top-h); inset-inline-start: var(--side-w); z-index: 150; }
-    body.has-ticker .content { padding-top: 62px; }
-    @media (max-width: 991px) { body.has-ticker .content { padding-top: 54px; } }
+    /* The ticker (templates/_ticker.html) is a strip in the page flow right under the topbar — never on top
+       of the content. Without a background colour of its own (Settings → ticker) it gets a white strip. */
+    .main > #globalTicker { position: relative; top: auto; left: auto; right: auto; inset: auto; width: 100%;
+      z-index: 1; background: #fff; border-bottom: 1px solid #e3e9f2; }
+    .main > #globalTicker[data-tone="light"] { background: linear-gradient(90deg, #0a3a8a, #0847B0); border-bottom: 0; }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
     .home-hello { font-size: 1.35rem; font-weight: 800; color: var(--navy); margin-bottom: 4px; }
@@ -111,7 +111,6 @@
   <script src="{{ asset('js/app.js') }}"></script>
 </head>
 <body>
-{% include "_ticker.html" %}
 <!-- Sidebar: grouped navigation (daily work → lists and reports → administration) -->
 <div class="sidebar-overlay" id="sidebarOverlay" data-nav-close></div>
 <aside class="sidebar" id="sidebar" aria-label="القائمة الرئيسية">
@@ -179,6 +178,7 @@
       </details>
     </div>
   </header>
+  {% include "_ticker.html" %}
   <div class="content">
 
     <!-- ── HOME: clickable numbers and quick access ── -->

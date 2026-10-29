@@ -62,7 +62,9 @@
      the logo (away from the text) and the two look glued together. The
      logical property instead always lands the gap between the logo and
      the text, whichever way that item itself resolves. */
-  #globalTicker .ticker-item img.ticker-logo { height: 22px; vertical-align: middle; margin-inline-end: 10px; }
+  #globalTicker .ticker-sep { display: inline-flex; align-items: center; flex: none; padding: 0 24px; }
+  #globalTicker .ticker-sep + .ticker-item { padding-right: 0; }
+  #globalTicker .ticker-sep img.ticker-logo { height: 22px; width: auto; display: block; }
   /* ticker-scroll-ltr moves leftward (content exits on the left) — the
      conventional news-ticker motion for LTR/English pages. ticker-scroll-rtl
      moves rightward (content exits on the right) — its mirror, for
@@ -174,9 +176,10 @@
       const sep = (data.logoBetween && ORG_LOGO) ? `<img class="ticker-logo" src="${ORG_LOGO}" alt="">` : '';
       const segments = [...manualSegments, ...rssSegments];
       if (!segments.length) return;
-      // The logo (if enabled) goes inside each item, right before its text.
+      // The logo (if enabled) is a separator between the items, outside their text: each item resolves its own
+      // direction (dir="auto"), so a logo inside it landed against the neighbouring item's text in Arabic.
       const itemsHtml = segments
-        .map(s => sep ? s.replace('>', `>${sep}`) : s)
+        .map(s => sep ? `<span class="ticker-sep" aria-hidden="true">${sep}</span>${s}` : s)
         .join('');
 
       const isRtl = document.documentElement.dir === 'rtl';
@@ -195,6 +198,10 @@
         bar.style.background = `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${alpha})`;
       }
       if (/^#[0-9a-fA-F]{6}$/.test(data.textColor || '')) bar.style.setProperty('--ticker-text', data.textColor);
+      // light or dark text — the admin strip (no background colour of its own) picks the contrasting background
+      const tc = /^#[0-9a-fA-F]{6}$/.test(data.textColor || '') ? parseInt(data.textColor.slice(1), 16) : 0xffffff;
+      const lum = (0.299 * (tc >> 16) + 0.587 * ((tc >> 8) & 255) + 0.114 * (tc & 255)) / 255;
+      bar.dataset.tone = lum > 0.6 ? 'light' : 'dark';
 
       // Reveal (still 0-width content isn't measurable while display:none)
       // before computing the animation duration below.
