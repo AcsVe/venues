@@ -277,7 +277,10 @@ html[dir=rtl] .input-group input[dir=ltr]{text-align:right}
 
 /* ── public pages (calendar, booking, lookup, handover): blue header ───── */
 #siteHeader{position:sticky;top:0;z-index:100}
-#siteHeader #globalTicker{position:static;z-index:auto}
+#siteHeader #globalTicker{position:static;z-index:auto;background:#fff;border-bottom:1px solid #e3e9f2}
+/* the ticker strip of the public pages is opaque, so the page never shows through it while scrolling; light text
+   (set in the ticker settings) gets the dark strip — a background colour chosen in the settings still wins */
+#siteHeader #globalTicker[data-tone="light"]{background:linear-gradient(90deg,var(--primary-deep),var(--primary-dark));border-bottom:0}
 .pub-bar{background:linear-gradient(135deg,var(--primary-deep) 0%,var(--primary-dark) 55%,var(--primary) 100%);color:#fff;
   display:flex;align-items:center;gap:14px;padding:8px 20px;min-height:66px;box-shadow:0 3px 16px rgba(10,58,138,.25)}
 .pub-brand{display:flex;align-items:center;gap:12px;min-width:0;flex:1;color:#fff;text-decoration:none}
