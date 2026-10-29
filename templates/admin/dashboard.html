@@ -76,16 +76,24 @@
     #adminCal .fc-day-today .fc-daygrid-day-number { background: var(--primary); color: #fff; border-radius: 50%; width: 26px; height: 26px;
       display: inline-flex; align-items: center; justify-content: center; padding: 0; margin: 5px; }
     #adminCal .fc-daygrid-day:hover { background: #f7faff; }
-    #adminCal .fc-event.ev { border: 0 !important; border-inline-start: 4px solid var(--c) !important; background: var(--bg) !important;
-      border-radius: 6px; margin: 1px 4px 3px; padding: 2px 6px; box-shadow: 0 1px 2px rgba(15,23,42,.08); cursor: pointer;
-      transition: transform .12s, box-shadow .12s; }
-    #adminCal .fc-event.ev:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(15,23,42,.14); }
-    #adminCal .fc-event.ev .fc-event-main, #adminCal .fc-event.ev .fc-event-title, #adminCal .fc-event.ev .fc-event-time { color: var(--fg) !important; font-weight: 700; font-size: .74rem; }
-    #adminCal .fc-daygrid-event.ev { white-space: normal; }
-    #adminCal .fc-daygrid-event.ev .fc-event-title { white-space: normal; overflow: visible; line-height: 1.35; }
+    /* a booking in the month / week grid: a round period badge in the status colour, the class on the first line and
+       the teacher on the second, each cut with «…» (never wrapped), so every booking has the same small height */
+    #adminCal .fc-event.ev { border: 1px solid #e3e9f2 !important; background: #fff !important; border-radius: 8px;
+      margin: 0 4px 4px; padding: 3px 5px; box-shadow: none; cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+    #adminCal .fc-event.ev:hover { border-color: var(--c) !important; box-shadow: 0 2px 8px rgba(15,23,42,.10); }
+    #adminCal .fc-event.ev .fc-event-main { color: var(--navy, #0f2a52) !important; }
+    #adminCal .ev-c { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    #adminCal .ev-p { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--c); color: #fff;
+      font-size: .72rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+    #adminCal .ev-t { min-width: 0; flex: 1; line-height: 1.25; }
+    #adminCal .ev-t b, #adminCal .ev-t small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
+    #adminCal .ev-t b { font-size: .76rem; font-weight: 800; }
+    #adminCal .ev-t small { font-size: .7rem; color: #64748b; font-weight: 600; }
+    #adminCal .fc-event.ev-pending { background: #fffbf0 !important; }
+    #adminCal .fc-event.ev-rejected .ev-t { text-decoration: line-through; color: #94a3b8; }
+    #adminCal .fc-event.ev-rejected .ev-p { opacity: .55; }
     #adminCal .fc-daygrid-more-link { font-weight: 700; color: var(--primary); font-size: .74rem; padding: 0 6px; }
-    #adminCal .fc-event.ev-rejected { opacity: .7; }
-    #adminCal .fc-event.ev-rejected .fc-event-title { text-decoration: line-through; }
+    #adminCal .fc-event.ev-rejected { opacity: .8; }
     #adminCal .fc-list-event.ev { border: 0 !important; background: transparent !important; box-shadow: none; }
     #adminCal .fc-list-event-dot { border-color: var(--c) !important; }
     #adminCal .fc-list-day-cushion { background: #eef4fd; }
@@ -4208,6 +4216,16 @@ function renderCal() {
     eventClick: function(info) {
       const b = info.event.extendedProps;
       openEdit(b.reqId);
+    },
+    eventContent: function(arg) {
+      if (arg.view.type.startsWith('list')) return true;          // the list view keeps its own row
+      const b = arg.event.extendedProps;
+      // «الصف السادس» → «السادس»: the short form keeps the class readable in a narrow day
+      const g = String(gradeDisplayName(b.grade) || b.grade || '').replace(/^الصف\s+/, '');
+      const cls = [g, b.section].filter(Boolean).join(' ');
+      const p = b.periodNumber ? String(b.periodNumber) : '•';
+      return { html: `<div class="ev-c"><span class="ev-p">${esc(p)}</span><div class="ev-t">`
+        + `<b dir="auto">${esc(cls || (b.title || ''))}</b><small dir="auto">${esc(b.name || '')}</small></div></div>` };
     },
     eventDidMount: function(info) {
       const b = info.event.extendedProps;
