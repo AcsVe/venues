@@ -107,7 +107,7 @@
         <select id="periodSel">
           <option value="">{{ '-- اختر الحصة --' if lang == 'ar' else '-- Select Period --' }}</option>
           {% for p in periods %}
-          <option value="{{ p.id }}">{{ p.label_ar or ('الحصة ' ~ p.number) }}{% if p.start_time %} ({{ p.start_time }} - {{ p.end_time }}){% endif %}</option>
+          <option value="{{ p.id }}">{% if lang == 'ar' %}{{ p.label_ar or ('الحصة ' ~ p.number) }}{% else %}Period {{ p.number }}{% endif %}{% if p.start_time %} ({{ p.start_time }} - {{ p.end_time }}){% endif %}</option>
           {% endfor %}
         </select>
       </div>
@@ -331,7 +331,7 @@ async function refreshPeriodAvailability() {
         const takenLabel = p.available ? '' : (p.ended ? (AR ? ' — مضى وقتها' : ' — Time passed')
           : p.preBreakDisabled ? (AR ? ' — غير متاحة (قبل الاستراحة)' : ' — Unavailable (before break)')
           : (AR ? ' — محجوزة' : ' — Booked'));
-        return `<option value="${p.id}" ${p.available ? '' : 'disabled'}>${p.label}${timeStr}${takenLabel}</option>`;
+        return `<option value="${p.id}" ${p.available ? '' : 'disabled'}>${LANG === 'ar' ? p.label : 'Period ' + p.number}${timeStr}${takenLabel}</option>`;
       }).join('');
 
     if ([...periodSel.options].some(o => o.value === prevValue && !o.disabled)) {

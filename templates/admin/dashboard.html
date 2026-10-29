@@ -266,7 +266,7 @@
         <div class="form-grid">
           <div class="form-group"><label>اسم المرحلة (عربي) <span style="color:#c0392b">*</span></label><input type="text" id="hNameAr" placeholder="مثال: المرحلة الأساسية"></div>
           <div class="form-group"><label>الاسم (إنجليزي)</label><input type="text" id="hNameEn" dir="ltr"></div>
-          <div class="form-group"><label>معرّف العربة (Trolley) <span style="color:#c0392b">*</span></label><input type="text" id="hTrolleyCode" dir="ltr" placeholder="مثال: TROLLEY-A"></div>
+          <div class="form-group"><label>رمز العربة <span style="color:#c0392b">*</span></label><input type="text" id="hTrolleyCode" dir="ltr" placeholder="مثال: TROLLEY-A"></div>
         </div>
         <div style="display:flex;gap:16px;align-items:center;margin-bottom:12px">
           <label style="display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" id="hActive" checked> مرحلة فعالة</label>
@@ -542,7 +542,7 @@
       <div class="card">
         <div class="card-title"><i class="fas fa-upload"></i> رفع قائمة (CSV/TXT)</div>
         <p style="font-size:.85rem;color:var(--muted);margin-bottom:10px">
-          طريقتان: حدّد المرحلة/الصف/الشعبة أدناه وارفع ملف باسم طالب واحد بكل سطر (لشعبة وحدة)، أو ارفع ملف صفوفه name,stage,grade,section بكل سطر (يقدر يخلط عدة شعب بنفس الملف).
+          طريقتان: حدّد المرحلة والصف والشعبة أدناه وارفع ملفاً فيه اسم طالب واحد في كل سطر (لشعبة واحدة)، أو ارفع ملفاً كل سطر فيه name,stage,grade,section (ويمكن أن يضم عدة شعب في الملف نفسه).
         </p>
         <div class="form-grid quad" style="margin-bottom:10px">
           <select id="stuUpStage" onchange="onStuUpStageChange()"><option value="">المرحلة</option></select>
@@ -633,7 +633,7 @@
       <select id="calHallFilter" class="form-select" style="max-width:200px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.88rem" onchange="renderCal()">
         <option value="">كل المراحل</option>
       </select>
-      <div id="calLegend" class="cal-legend" role="group" aria-label="حالات الحجز"></div>
+      <div id="calLegend" class="cal-legend" role="group" aria-label="حالات الحجز" data-tr-attr></div>
     </div>
     <div id="adminCal"></div>
   </div>
@@ -719,7 +719,7 @@
           <button class="btn btn-outline btn-sm" onclick="loadCheckoutReport()"><i class="fas fa-sync"></i> تحديث</button>
           <button class="btn btn-outline btn-sm" onclick="exportCheckoutCSV()"><i class="fas fa-file-csv"></i> تصدير CSV</button>
           <button class="btn btn-outline btn-sm" onclick="printCheckoutReport()"><i class="fas fa-print"></i> طباعة</button>
-          <button class="btn btn-outline btn-sm" onclick="toggleCheckoutEmailBox()"><i class="fas fa-envelope"></i> إرسال بالإيميل</button>
+          <button class="btn btn-outline btn-sm" onclick="toggleCheckoutEmailBox()"><i class="fas fa-envelope"></i> إرسال بالبريد الإلكتروني</button>
         </div>
         <div id="checkoutEmailBox" style="display:none;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;gap:10px;flex-wrap:wrap;align-items:center">
           <input type="email" id="checkoutEmailInput" placeholder="بريد إلكتروني واحد أو أكثر مفصولين بفاصلة" style="flex:1;min-width:220px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit" dir="ltr">
@@ -769,7 +769,7 @@
       <div class="card" style="border:2px solid #e67e22">
         <div class="card-title" style="color:#e67e22"><i class="fas fa-archive"></i> أرشفة البيانات القديمة</div>
         <p style="color:var(--muted);font-size:.9rem;margin-bottom:16px;line-height:1.7">
-          لتوفير مساحة قاعدة البيانات، تقدر تصدّر الحجوزات القديمة كنسخة احتياطية كاملة ثم تحذفها من النظام.
+          لتخفيف حجم البيانات، يمكنك تحميل الحجوزات القديمة نسخةً احتياطية كاملة ثم حذفها من النظام.
           <strong style="color:#c0392b">لا يمكن التراجع عن الحذف — تأكد من نجاح تحميل الملف قبل المتابعة.</strong>
         </p>
         <div class="form-group">
@@ -807,13 +807,10 @@
       <div class="card">
         <div class="card-title"><i class="fas fa-envelope"></i> البريد</div>
         <div class="graph-status">
-          <b><i class="fab fa-microsoft"></i> Microsoft Graph</b>
-          {% if graph.ready %}<span class="badge ok">مضبوط</span>{% else %}<span class="badge bad">غير مضبوط</span>{% endif %}
-          <span class="badge {{ 'ok' if graph.tenant else 'bad' }}" data-notr>Tenant ID</span>
-          <span class="badge {{ 'ok' if graph.client else 'bad' }}" data-notr>Client ID</span>
-          <span class="badge {{ 'ok' if graph.secret else 'bad' }}" data-notr>Client Secret</span>
+          <b><i class="fas fa-paper-plane"></i> إرسال البريد الإلكتروني</b>
+          {% if graph.ready %}<span class="badge ok">جاهز</span>{% else %}<span class="badge bad">غير جاهز</span>{% endif %}
           <span class="muted">المرسل:</span> <span class="mono" data-notr>{{ graph.sender or '—' }}</span>
-          <p class="hint">تُضبط هذه القيم في ملف الإعدادات <span class="mono" data-notr>.env</span> عند التثبيت (<span class="mono" data-notr>1_setup.bat</span>) ولا تُعرض هنا.</p>
+          {% if not graph.ready %}<p class="hint">لا تُرسَل رسائل البريد حالياً. تواصل مع مسؤول تقنية المعلومات لربط حساب بريد المؤسسة.</p>{% endif %}
         </div>
       </div>
       {% endif %}
@@ -1120,6 +1117,31 @@ const MANAGE = canDo('bookings.manage');
 function canTab(name) { const p = TAB_PERMS[name]; if (!p) return true; if (p === '__sysadmin') return !!ME.sysadmin; return canDo(p); }
 
 const I18N_EN = {
+  "اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها بريد إلكتروني فور تقديم أي حجز جديد بانتظار المراجعة، بما في ذلك رابطا الاعتماد والرفض المباشرين من داخل البريد؛ مع الضغط باستمرار على مفتاح Ctrl (أو Cmd على أجهزة Mac) لتحديد أكثر من جهة اتصال. الجهات غير المحددة هنا لن تستلم رابطي الاعتماد والرفض أصلاً.": "Choose from the list below the contacts who should get an email as soon as any new booking is submitted for review, including the direct approve and reject links inside the email. Hold Ctrl (or Cmd on a Mac) to select more than one contact.",
+  "من جهات الاتصال المحددة أعلاه، اختر من تريد أن يصله إشعار الحجز الجديد للاطّلاع فقط، دون رابطي الاعتماد أو الرفض المباشرين.": "Of the contacts selected above, choose who should get the new-booking notice for information only, without the direct approve or reject links.",
+  "اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها بريد إلكتروني إعلامي (دون أي رابط اعتماد أو رفض) فور اعتماد أي حجز، سواء كان الاعتماد يدوياً أو تلقائياً؛ مع الضغط باستمرار على مفتاح Ctrl (أو Cmd على أجهزة Mac) لتحديد أكثر من جهة اتصال.": "Choose from the list below the contacts who should get an information email (with no approve or reject link) as soon as any booking is approved, manually or automatically. Hold Ctrl (or Cmd on a Mac) to select more than one contact.",
+  "اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها: (1) ملخص يومي بوجود حجوزات للعربة اليوم، و(2) تذكير قبل بدء كل حجز بالمدة المحددة في تبويب الإعدادات. مع الضغط باستمرار على مفتاح Ctrl (أو Cmd على أجهزة Mac) لتحديد أكثر من جهة اتصال.": "Choose from the list below the contacts who should receive: (1) a daily summary when the trolley has bookings today, and (2) a reminder before each booking starts, by the time set in the Settings tab. Hold Ctrl (or Cmd on a Mac) to select more than one contact.",
+  "اختر من القائمة أدناه جهات الاتصال التي تريد أن يصلها بريد إلكتروني فور إضافة تعليق على أي حجز (بالإضافة إلى المعلم/ة صاحب/ة الحجز، الذي يصله الإشعار دائماً). مع الضغط باستمرار على مفتاح Ctrl (أو Cmd على أجهزة Mac) لتحديد أكثر من جهة اتصال.": "Choose from the list below the contacts who should get an email as soon as a comment is added to any booking (in addition to the teacher who made the booking, who is always notified). Hold Ctrl (or Cmd on a Mac) to select more than one contact.",
+  "مستلمو إشعار الحجز الجديد فقط": "New-booking notice recipients only",
+  "استثناء روابط الاعتماد/الرفض": "Leave out the approve/reject links",
+  "حفظ الاستثناءات": "Save exceptions",
+  "مستلمو إشعار اعتماد الحجز فقط": "Booking-approved notice recipients only",
+  "مستلمو تذكيرات الحجوزات (يومي + قبل كل حصة)": "Booking reminder recipients (daily + before each period)",
+  "💬 مستلمو إشعار التعليقات": "💬 Comment notice recipients",
+  "حذف الحجز نهائياً": "Delete the booking permanently",
+  "تعطيل": "Disable",
+  "الأيام": "Days",
+  "القائمة الرئيسية": "Main menu",
+  "عرض كل الطلبات": "Show all requests",
+  "عرض قيد المراجعة": "Show pending",
+  "عرض المعتمدة": "Show approved",
+  "عرض المكتملة": "Show completed",
+  "عرض المرفوضة": "Show rejected",
+  "عرض الملغية": "Show cancelled",
+  "إرسال بالبريد الإلكتروني": "Send by email",
+  "إظهار كلمة المرور": "Show password",
+  "حالات الحجز": "Booking statuses",
+  "هل حمّلت النسخة الاحتياطية وفتحتها للتأكد منها؟ هذا الإجراء لا يمكن التراجع عنه.": "Did you download the backup and open it to check it? This cannot be undone.",
   "المستخدمون والصلاحيات": "Users and permissions",
   "مستخدم جديد": "New user",
   "مدير النظام يملك كل الصلاحيات. المستخدم يرى الصفحات والإعدادات المحددة له فقط، وحجوزات المراحل المحددة له وقوائمها.": "The system administrator can do everything. A user sees only the pages and settings ticked for them, and the bookings and lists of their stages.",
@@ -1186,12 +1208,11 @@ const I18N_EN = {
   "تم حفظ الهوية.": "The identity has been saved.",
   "صيغة الشعار غير مدعومة (PNG أو JPG أو WEBP أو SVG).": "Unsupported logo format (PNG, JPG, WEBP or SVG).",
   "البريد": "Mail",
-  "مضبوط": "Configured",
-  "غير مضبوط": "Not configured",
+  "جاهز": "Ready",
+  "غير جاهز": "Not ready",
+  "إرسال البريد الإلكتروني": "Sending email",
+  "لا تُرسَل رسائل البريد حالياً. تواصل مع مسؤول تقنية المعلومات لربط حساب بريد المؤسسة.": "Emails are not being sent at the moment. Contact the IT administrator to connect the school's mail account.",
   "المرسل:": "Sender:",
-  "تُضبط هذه القيم في ملف الإعدادات": "These values are set in the settings file",
-  "عند التثبيت (": "during installation (",
-  ") ولا تُعرض هنا.": ") and are never shown here.",
   "إجمالي الطلبات": "Total Bookings",
   "مكتمل": "Completed",
   "الروزنامة العامة": "Public Calendar",
@@ -1258,7 +1279,7 @@ const I18N_EN = {
   "إضافة مرحلة جديدة": "Add New Stage",
   "اسم المرحلة (عربي)": "Stage name (Arabic)",
   "الاسم (إنجليزي)": "Name (English)",
-  "معرّف العربة (Trolley)": "Trolley ID",
+  "رمز العربة": "Trolley ID",
   "مرحلة فعالة": "Active stage",
   "إضافة مرحلة": "Add Stage",
   "الحصص (مشتركة بين المرحلتين)": "Periods (shared by both stages)",
@@ -1375,7 +1396,7 @@ const I18N_EN = {
   "اسم الحصة:": "Period name:",
   "اسم المرحلة (عربي):": "Stage name (Arabic):",
   "الاسم (إنجليزي):": "Name (English):",
-  "معرّف العربة (Trolley):": "Trolley ID:",
+  "رمز العربة:": "Trolley ID:",
   "من الساعة (HH:MM أو فارغ):": "From time (HH:MM or blank):",
   "إلى الساعة (HH:MM أو فارغ):": "To time (HH:MM or blank):",
   "أدخل سبب الرفض": "Enter rejection reason",
@@ -1469,8 +1490,8 @@ const I18N_EN = {
   "إعادة إرسال نموذج تعبئة الاستخدام": "Resend Usage Form",
   "الأرشفة": "Archive",
   "أرشفة البيانات القديمة": "Archive Old Data",
-  "لتوفير مساحة قاعدة البيانات، تقدر تصدّر الحجوزات القديمة كنسخة احتياطية كاملة ثم تحذفها من النظام.":
-    "To save database space, you can export old bookings as a full backup and then delete them from the system.",
+  "لتخفيف حجم البيانات، يمكنك تحميل الحجوزات القديمة نسخةً احتياطية كاملة ثم حذفها من النظام.":
+    "To keep the data small, you can download old bookings as a full backup and then delete them from the system.",
   "لا يمكن التراجع عن الحذف — تأكد من نجاح تحميل الملف قبل المتابعة.":
     "This cannot be undone — make sure the file downloaded successfully before continuing.",
   "أرشفة كل الحجوزات الأقدم من هذا التاريخ": "Archive all bookings older than this date",
@@ -1487,7 +1508,7 @@ const I18N_EN = {
   "التعيين اختياري بكل المستويات — استخدمه لتعبئة نموذج الحجز تلقائياً عند كتابة اسم هذا المعلم.":
     "Assignment is optional at every level — use it to auto-fill the booking form when this teacher's name is entered.",
   "تعذّر": "Failed",
-  "طريقتان: حدّد المرحلة/الصف/الشعبة أدناه وارفع ملف باسم طالب واحد بكل سطر (لشعبة وحدة)، أو ارفع ملف صفوفه name,stage,grade,section بكل سطر (يقدر يخلط عدة شعب بنفس الملف).":
+  "طريقتان: حدّد المرحلة والصف والشعبة أدناه وارفع ملفاً فيه اسم طالب واحد في كل سطر (لشعبة واحدة)، أو ارفع ملفاً كل سطر فيه name,stage,grade,section (ويمكن أن يضم عدة شعب في الملف نفسه).":
     "Two ways: pick the stage/grade/section below and upload a file with one student name per line (for a single section), or upload a file with name,stage,grade,section per line (can mix several sections in one file).",
   "ملف CSV أو TXT — كل سطر بالترتيب: name,email,phone,stage,grade,section — كل الأعمدة بعد الاسم اختيارية.":
     "A CSV or TXT file — each line, in order: name,email,phone,stage,grade,section — every column after the name is optional.",
@@ -1529,6 +1550,44 @@ let AR = (localStorage.getItem('adminLang') || '{{ lang }}') !== 'en';
 
 function t(s) { return AR ? s : (I18N_EN[s] || s); }
 
+// Text the scripts add later (tables, dialogs, buttons built in JavaScript) is translated the same way as the
+// page itself: any text node or title / placeholder / aria-label whose Arabic text is in I18N_EN is shown in
+// English while the English interface is on, and put back when Arabic is chosen again.
+const TR_SKIP = 'script,style,#globalTicker,.ql-editor,.ql-toolbar,[data-notr]';
+const TR_ATTRS = ['title', 'placeholder', 'aria-label'];
+let DYN_DONE = [];
+function trKey(v) { const tr = (v || '').trim(); return I18N_EN[tr.replace(/\s+/g, ' ')] || I18N_EN[tr]; }
+function trElement(root) {
+  if (AR || !root) return;
+  if (root.nodeType === 3) {
+    const p = root.parentElement, v = root.nodeValue, en = trKey(v);
+    if (en && p && !p.closest(TR_SKIP)) { DYN_DONE.push({node: root, original: v}); root.nodeValue = v.replace(v.trim(), en); }
+    return;
+  }
+  if (root.nodeType !== 1 || root.closest(TR_SKIP)) return;
+  const els = [root, ...root.querySelectorAll('*')];
+  els.forEach(el => {
+    if (el.closest(TR_SKIP)) return;
+    TR_ATTRS.forEach(a => { const v = el.getAttribute(a); const en = v && trKey(v);
+      if (en) { DYN_DONE.push({node: el, attr: a, original: v}); el.setAttribute(a, en); } });
+  });
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let n; while ((n = w.nextNode())) trElement(n);
+}
+function untranslateDynamic() {
+  DYN_DONE.forEach(d => { if (!d.node.isConnected) return; if (d.attr) d.node.setAttribute(d.attr, d.original); else d.node.nodeValue = d.original; });
+  DYN_DONE = [];
+}
+const TR_OBSERVER = new MutationObserver(muts => {
+  if (AR) return;
+  TR_OBSERVER.disconnect();
+  muts.forEach(m => {
+    if (m.type === 'childList') m.addedNodes.forEach(trElement);
+    else if (m.type === 'attributes') trElement(m.target);
+  });
+  TR_OBSERVER.observe(document.body, {childList: true, subtree: true, attributes: true, attributeFilter: TR_ATTRS});
+});
+
 let ORIGINAL_TEXT_NODES = null;
 function captureStaticText() {
   ORIGINAL_TEXT_NODES = [];
@@ -1557,6 +1616,8 @@ function applyStaticLang() {
     const orig = el.dataset.origPlaceholder;
     el.setAttribute('placeholder', AR ? orig : (I18N_EN[orig] || orig));
   });
+  if (AR) untranslateDynamic(); else trElement(document.body);
+  TR_OBSERVER.observe(document.body, {childList: true, subtree: true, attributes: true, attributeFilter: TR_ATTRS});
   document.querySelectorAll('.lang-btn').forEach(b => { b.textContent = AR ? 'English' : 'العربية'; b.lang = AR ? 'en' : 'ar'; });
   const brandOrg = document.getElementById('brandOrg');
   if (brandOrg) brandOrg.textContent = AR ? brandOrg.dataset.ar : (brandOrg.dataset.en || brandOrg.dataset.ar);
@@ -1572,6 +1633,8 @@ function applyStaticLang() {
     if (id === 'students') loadStudentsTab();
     if (id === 'reports') { loadReportStats(); loadCheckoutReport(); }
     if (id === 'calview') renderCal();
+    if (id === 'settings') renderSettingsTab();
+    if (id === 'users' && typeof USERS !== 'undefined' && USERS.length) renderUsers();
   }
 }
 
@@ -2644,13 +2707,13 @@ function drow(label, val, forceLtr) {
 
 function editPopulateStages(selectedStageId) {
   const sel = document.getElementById('editStage');
-  sel.innerHTML = STRUCTURE.map(s => `<option value="${s.id}">${esc(s.nameAr)}</option>`).join('');
+  sel.innerHTML = STRUCTURE.map(s => `<option value="${s.id}">${esc(nm(s))}</option>`).join('');
   if (selectedStageId) sel.value = selectedStageId;
 }
 function onEditStageChange(selectedGradeId) {
   const stage = STRUCTURE.find(s => String(s.id) === document.getElementById('editStage').value);
   const gradeSel = document.getElementById('editGrade');
-  gradeSel.innerHTML = stage ? stage.grades.map(g => `<option value="${g.id}">${esc(g.nameAr)}</option>`).join('') : '';
+  gradeSel.innerHTML = stage ? stage.grades.map(g => `<option value="${g.id}">${esc(nm(g))}</option>`).join('') : '';
   if (selectedGradeId) gradeSel.value = selectedGradeId;
   onEditGradeChange();
 }
@@ -2658,12 +2721,12 @@ function onEditGradeChange(selectedSectionId) {
   const stage = STRUCTURE.find(s => String(s.id) === document.getElementById('editStage').value);
   const grade = stage ? stage.grades.find(g => String(g.id) === document.getElementById('editGrade').value) : null;
   const sectionSel = document.getElementById('editSection');
-  sectionSel.innerHTML = grade ? grade.sections.map(s => `<option value="${s.id}">${esc(s.nameAr)}</option>`).join('') : '';
+  sectionSel.innerHTML = grade ? grade.sections.map(s => `<option value="${s.id}">${esc(nm(s))}</option>`).join('') : '';
   if (selectedSectionId) sectionSel.value = selectedSectionId;
 }
 function editPopulatePeriods(selectedPeriodId) {
   const sel = document.getElementById('editPeriod');
-  sel.innerHTML = PERIODS.map(p => `<option value="${p.id}">${esc(p.label)}</option>`).join('');
+  sel.innerHTML = PERIODS.map(p => `<option value="${p.id}">${esc(periodName(p))}</option>`).join('');
   if (selectedPeriodId) sel.value = selectedPeriodId;
 }
 
@@ -2716,7 +2779,7 @@ async function loadHalls() {
   // Update blocked-period stage select too
   const blkSel = document.getElementById('blkHall');
   blkSel.innerHTML = `<option value="">-- ${t('كل المراحل')} --</option>` +
-    STRUCTURE.map(s => `<option value="${s.trolleyCode}">${esc(s.nameAr)}</option>`).join('');
+    STRUCTURE.map(s => `<option value="${s.trolleyCode}">${esc(nm(s))}</option>`).join('');
 
   renderStagesTree();
   populateGptGradeSelect();
@@ -2731,7 +2794,7 @@ function renderStagesTree() {
     <div style="border:1.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
         <div>
-          <strong style="font-size:1.02rem;color:var(--primary)"><i class="fas fa-laptop"></i> ${esc(s.nameAr)}</strong>
+          <strong style="font-size:1.02rem;color:var(--primary)"><i class="fas fa-laptop"></i> ${esc(nm(s))}</strong>
           <span style="color:var(--muted);font-size:.82rem"> — ${t("عربة")}: <span dir="ltr" style="font-weight:700">${esc(s.trolleyCode)}</span></span>
           <span class="badge ${s.active?'badge-approved':'badge-cancelled'}" style="margin-right:8px">${t(s.active?'فعالة':'معطلة')}</span>
         </div>
@@ -2746,7 +2809,7 @@ function renderStagesTree() {
         ${[...s.grades].sort((a,b) => (AR?a.nameAr:(a.nameEn||a.nameAr)).localeCompare(AR?b.nameAr:(b.nameEn||b.nameAr), AR?'ar':'en')).map(g => `
           <div style="background:#f7fbfb;border:1px solid var(--border);border-radius:8px;padding:10px;min-width:180px;flex:1">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <strong style="font-size:.88rem">${esc(g.nameAr)}</strong>
+              <strong style="font-size:.88rem">${esc(nm(g))}</strong>
               <span>
                 <button class="btn btn-sm btn-outline" style="padding:2px 6px" onclick="openEditGrade(${g.id}, '${esc(g.nameAr).replace(/'/g,"\\'")}', '${esc(g.nameEn||'').replace(/'/g,"\\'")}')" title="${t('تعديل')}"><i class="fas fa-edit" style="font-size:.7rem"></i></button>
                 <button class="btn btn-red btn-sm" style="padding:2px 6px" onclick="deleteGrade(${g.id})" title="${t('حذف')}"><i class="fas fa-trash" style="font-size:.7rem"></i></button>
@@ -2755,7 +2818,7 @@ function renderStagesTree() {
             <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
               ${[...g.sections].sort((a,b) => (AR?a.nameAr:(a.nameEn||a.nameAr)).localeCompare(AR?b.nameAr:(b.nameEn||b.nameAr), AR?'ar':'en')).map(sec => `
                 <span style="background:#e8f4f5;border-radius:12px;padding:2px 10px;font-size:.78rem;display:inline-flex;align-items:center;gap:5px">
-                  ${esc(sec.nameAr)}
+                  ${esc(nm(sec))}
                   <button onclick="openEditSection(${sec.id}, '${esc(sec.nameAr).replace(/'/g,"\\'")}', '${esc(sec.nameEn||'').replace(/'/g,"\\'")}')" title="${t('تعديل')}" style="background:none;border:none;cursor:pointer;color:#247680;font-size:.8rem"><i class="fas fa-edit"></i></button>
                   <button onclick="deleteSection(${sec.id})" title="${t('حذف')}" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:.8rem">✕</button>
                 </span>`).join('') || `<span style="color:var(--muted);font-size:.78rem">${t('لا توجد شعب')}</span>`}
@@ -2818,7 +2881,7 @@ async function openEditStage(id) {
   if (nameAr === null) return;
   const nameEn = prompt(t('الاسم (إنجليزي):'), s.nameEn || '');
   if (nameEn === null) return;
-  const trolleyCode = prompt(t('معرّف العربة (Trolley):'), s.trolleyCode);
+  const trolleyCode = prompt(t('رمز العربة:'), s.trolleyCode);
   if (trolleyCode === null) return;
   const data = await api('/admin/api/update-hall', {id, nameAr, nameEn, trolleyCode, active: s.active});
   if (data.success) { showToast(t('تم الحفظ ✓')); loadHalls(); }
@@ -2880,7 +2943,7 @@ async function renderPeriodsTable() {
   document.getElementById('periodsTable').innerHTML = PERIODS.map(p => `
     <tr>
       <td>${p.number}</td>
-      <td>${esc(p.label)}</td>
+      <td>${esc(periodName(p))}</td>
       <td dir="ltr">${p.startTime||'-'}</td>
       <td dir="ltr">${p.endTime||'-'}</td>
       <td><span class="badge ${p.active?'badge-approved':'badge-cancelled'}">${t(p.active?'فعالة':'معطلة')}</span></td>
@@ -3001,7 +3064,7 @@ function renderGptTable() {
     }
     return `
     <tr>
-      <td>${esc(p.label)}</td>
+      <td>${esc(periodName(p))}</td>
       <td><input type="time" class="gptStart" data-period="${p.number}" value="${start}" style="padding:6px 8px"></td>
       <td><input type="time" class="gptEnd" data-period="${p.number}" value="${end}" style="padding:6px 8px"></td>
     </tr>`;
@@ -3057,7 +3120,7 @@ function renderBlkPeriodSelect() {
   sel.innerHTML = `<option value="">-- ${t('اليوم كامل (تعطيل بدون تحديد فترة)')} --</option>` +
     (PERIODS || []).filter(p => p.active !== false).map(p =>
       `<option value="${p.number}" data-from="${p.startTime||''}" data-to="${p.endTime||''}">` +
-      `${esc(t('الحصة'))} ${p.number}${p.label ? ' - ' + esc(p.label) : ''}` +
+      `${esc(t('الحصة'))} ${p.number}${AR && p.label ? ' - ' + esc(p.label) : ''}` +
       `${p.startTime && p.endTime ? ` (${p.startTime} - ${p.endTime})` : ''}</option>`
     ).join('');
   if ((PERIODS || []).some(p => String(p.number) === prev)) sel.value = prev;
@@ -3081,7 +3144,7 @@ async function loadBlocked() {
     return `
     <tr>
       <td>${b.s}</td><td>${b.e}</td>
-      <td>${esc(b.hall ? (stage ? stage.nameAr : b.hall) : t('كل المراحل'))}</td>
+      <td>${esc(b.hall ? (stage ? nm(stage) : b.hall) : t('كل المراحل'))}</td>
       <td dir="ltr">${b.fromT||'-'}</td><td dir="ltr">${b.toT||'-'}</td>
       <td>${esc(b.r)}</td>
       <td><button class="btn btn-red btn-sm" onclick="deleteBlocked(${b.id})" title="${t('حذف')}"><i class="fas fa-trash"></i></button></td>
@@ -3157,6 +3220,10 @@ function stageLabelById(id) {
   const s = STRUCTURE.find(x => String(x.id) === String(id));
   return s ? (AR ? s.nameAr : (s.nameEn || s.nameAr)) : '';
 }
+
+// A stage / grade / section in the interface language, and a period's name («الحصة الأولى» / «Period 1»).
+function nm(o) { return o ? (AR ? o.nameAr : (o.nameEn || o.nameAr)) : ''; }
+function periodName(p) { return AR ? (p.label || `${t('الحصة')} ${p.number}`) : `Period ${p.number}`; }
 
 function stageDisplayName(arabicName) {
   if (!arabicName) return arabicName;
@@ -4047,7 +4114,7 @@ async function initAdminCal() {
     if (b.trolleyCode && !seen.has(b.trolleyCode)) {
       seen.add(b.trolleyCode);
       const o = document.createElement('option');
-      o.value = b.trolleyCode; o.textContent = b.stage || b.trolleyCode;
+      o.value = b.trolleyCode; o.textContent = stageDisplayName(b.stage) || b.trolleyCode;
       sel.appendChild(o);
     }
   });
@@ -4121,6 +4188,10 @@ function renderCal() {
     allDayContent: () => '',
     buttonText: AR ? { today: 'اليوم', month: 'شهر', week: 'أسبوع', list: 'قائمة' } : { today: 'Today', month: 'Month', week: 'Week', list: 'List' },
     moreLinkText: n => AR ? `+${n} أخرى` : `+${n} more`,
+    buttonHints: AR ? { prev: 'السابق', next: 'التالي', today: 'الانتقال إلى اليوم' } : {},
+    viewHint: AR ? 'عرض $0' : '$0 view',
+    moreLinkHint: n => AR ? `عرض ${n} من الحجوزات الأخرى` : `Show ${n} more`,
+    navLinkHint: AR ? 'الانتقال إلى $0' : 'Go to $0',
     headerToolbar: {
       right: 'prev,next today',
       center: 'title',
@@ -4144,7 +4215,7 @@ function renderCal() {
         `${t('رقم الطلب')}: ${b.reqId}`,
         `${t('الاسم')}: ${b.name}`,
         `${t('المرحلة')}: ${stageDisplayName(b.stage)||'-'}`,
-        `${t('الصف')}: ${b.grade||'-'}`,
+        `${t('الصف')}: ${gradeDisplayName(b.grade)||'-'}`,
         `${t('الشعبة')}: ${b.section||'-'}`,
         periodStr ? `${t('الحصة')}: ${periodStr.replace(t('الحصة')+' ','')}` : '',
         b.title ? `${t('سبب الحجز')}: ${b.title}` : '',
@@ -4437,7 +4508,7 @@ async function deleteArchive(d) {
     showToast(AR?'يرجى تصدير نسخة احتياطية أولاً':'Please export a backup first', '#c0392b');
     return;
   }
-  if (!confirm(AR?'هل نزّلت النسخة الاحتياطية فعلاً وفتحتها للتأكد؟ هذا الإجراء لا يمكن التراجع عنه.':
+  if (!confirm(AR?'هل حمّلت النسخة الاحتياطية وفتحتها للتأكد منها؟ هذا الإجراء لا يمكن التراجع عنه.':
                   'Have you actually downloaded and checked the backup file? This action cannot be undone.')) return;
   if (!confirmT('سيتم حذف هذه السجلات نهائياً. متابعة؟')) return;
 
