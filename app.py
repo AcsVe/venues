@@ -113,12 +113,21 @@ XEqPZq2IE3k9g455XAokrxI6N2LhLDhtu3SMlEulXPw9IcShiKeKf2xO
                 cur.execute('PRAGMA synchronous=NORMAL')
                 cur.execute('PRAGMA busy_timeout=30000')
                 cur.close()
-    with app.app_context():
-        init_db(app)
-        from utils.auth import ensure_first_admin
-        ensure_first_admin(app)    # أول تشغيل بعد التحديث: حساب .env يصبح أول مدير نظام
-        from utils.brand import ensure_brand
-        ensure_brand(app)          # يحتفظ التثبيت القائم بشعاره، ويبدأ التثبيت الجديد بأيقونة النظام
+    try:
+        with app.app_context():
+            init_db(app)
+            from utils.auth import ensure_first_admin
+            ensure_first_admin(app)    # أول تشغيل بعد التحديث: حساب .env يصبح أول مدير نظام
+            from utils.brand import ensure_brand
+            ensure_brand(app)          # يحتفظ التثبيت القائم بشعاره، ويبدأ التثبيت الجديد بأيقونة النظام
+    except Exception as e:
+        # the database is unreachable at start-up (e.g. a cloud database that is stopped or over its quota): the
+        # site still starts, so its pages explain the cause instead of the host showing a bare error
+        from utils.db_health import classify
+        print(f'[db] start-up steps skipped — database unavailable ({classify(e)}): {type(e).__name__}', flush=True)
+
+    from utils.db_health import install as _db_health
+    _db_health(app)
 
     # هوية المنظمة (الاسمان، اللون، الشعار) لكل القوالب — utils/brand.py
     _static_v = {}

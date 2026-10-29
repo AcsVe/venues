@@ -25,7 +25,17 @@ def _setting(key, default=''):
     try:
         return AppSetting.get_str(key, default)
     except Exception:
+        _rollback()
         return default
+
+
+def _rollback():
+    # PostgreSQL refuses every later query of the request after a failed one until the transaction is rolled back
+    try:
+        from models import db
+        db.session.rollback()
+    except Exception:
+        pass
 
 
 def _brand_dir():
@@ -63,6 +73,7 @@ def _restore(value, path):
             f.write(row.data)
         return True
     except Exception:
+        _rollback()
         return False
 
 
