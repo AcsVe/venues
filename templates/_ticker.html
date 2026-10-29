@@ -35,9 +35,12 @@
      order here too, breaking the loop — items land outside the masked
      strip and it looks like only one item ever shows. Each item's own
      text still reads correctly (Arabic or English) via dir="auto". */
-  #globalTicker .ticker-track { display: flex; width: max-content; will-change: transform; direction: ltr; }
+  #globalTicker .ticker-track { display: flex; flex: none; width: max-content; will-change: transform; direction: ltr; }
   #globalTicker:hover .ticker-track { animation-play-state: paused; }
-  #globalTicker .ticker-seg { display: flex; align-items: center; white-space: nowrap; direction: ltr; }
+  /* flex:none everywhere: as flex items the track and its halves were allowed to shrink to the bar's width, so
+     the second half started on top of the end of the first (overlapping text and logos) */
+  #globalTicker .ticker-seg { display: flex; flex: none; align-items: center; white-space: nowrap; direction: ltr; }
+  #globalTicker .ticker-seg > * { flex: none; }
   #globalTicker .ticker-item {
     color: var(--ticker-text, #fff); font-weight: 800; font-size: 1rem;
     padding-right: 46px; /* physical (not inline-end): the flex flow itself is pinned LTR above, so the gap

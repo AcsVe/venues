@@ -14,10 +14,12 @@
   {% include '_head_assets.html' %}
   <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
   <style>
-    /* The ticker (templates/_ticker.html) is a strip in the page flow right under the topbar — never on top
-       of the content. Without a background colour of its own (Settings → ticker) it gets a white strip. */
-    .main > #globalTicker { position: relative; top: auto; left: auto; right: auto; inset: auto; width: 100%;
-      z-index: 1; background: #fff; border-bottom: 1px solid #e3e9f2; }
+    /* The ticker (templates/_ticker.html) is the first strip of the page, above the topbar; both stay at the top
+       while the page scrolls (the ticker at 0, the topbar right under its 38px). It never covers the content.
+       Without a background colour of its own (Settings → ticker) it gets a white or dark strip. */
+    .main > #globalTicker { position: sticky; left: auto; right: auto; inset: auto; top: 0; width: 100%;
+      z-index: 160; background: #fff; border-bottom: 1px solid #e3e9f2; }
+    body.has-ticker .topbar { top: 38px; }
     .main > #globalTicker[data-tone="light"] { background: linear-gradient(90deg, #0a3a8a, #0847B0); border-bottom: 0; }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
@@ -158,6 +160,7 @@
 
 <!-- Main -->
 <div class="main">
+  {% include "_ticker.html" %}
   <header class="topbar">
     <button class="icon-btn nav-toggle" type="button" data-nav-toggle aria-controls="sidebar" aria-expanded="false" aria-label="القائمة"><i class="fas fa-bars"></i></button>
     <div class="page-title" id="pageTitle">الرئيسية</div>
@@ -178,7 +181,6 @@
       </details>
     </div>
   </header>
-  {% include "_ticker.html" %}
   <div class="content">
 
     <!-- ── HOME: clickable numbers and quick access ── -->
