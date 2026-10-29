@@ -174,7 +174,13 @@ XEqPZq2IE3k9g455XAokrxI6N2LhLDhtu3SMlEulXPw9IcShiKeKf2xO
     # NOTE: assumes a single worker process (WEB_CONCURRENCY=1) — running
     # multiple gunicorn workers would start one scheduler per worker and
     # could send duplicate reminders.
-    if os.environ.get('DISABLE_REMINDERS') != '1':
+    # The Render copy (acsv.onrender.com) is the old cloud copy: the school server (2.iajaward.org) sends the
+    # reminders. Its scheduler woke the cloud database (Neon) every 10-15 minutes from 6am to 11pm, which used up
+    # Neon's free monthly compute time — so on Render the reminders run only when RENDER_REMINDERS=1 is set.
+    on_render = bool(os.environ.get('RENDER')) and os.environ.get('RENDER_REMINDERS') != '1'
+    if on_render:
+        print('[reminders] off on the Render copy (set RENDER_REMINDERS=1 to turn them on)', flush=True)
+    if os.environ.get('DISABLE_REMINDERS') != '1' and not on_render:
         try:
             from zoneinfo import ZoneInfo
             from apscheduler.schedulers.background import BackgroundScheduler
