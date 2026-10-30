@@ -18,6 +18,6 @@ schtasks /run /tn "VENUES Website" >nul
 echo.
 echo   Done. VENUES starts with Windows (port 8002), backs up every hour,
 echo   and the watchdog checks every 5 minutes. Log: logs\server.log
-timeout /t 5 >nul
+"%SystemRoot%\System32\timeout.exe" /t 5 >nul
 start "" http://localhost:8002/
 pause
