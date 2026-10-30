@@ -37,5 +37,4 @@ cd ~ && curl -sL -H "Authorization: Bearer $(cat ~/.iaj_github_token)" \
   bash ~/venues/standby/phone.sh setup && bash ~/venues/standby/phone.sh configure
 ```
 
-رمز GitHub يجب أن يشمل مستودع VENUES. الأزرار: `VEN 1` تشغيل/إنهاء الطوارئ، `VEN 2` إرجاع للكمبيوتر،
-`VEN 3` الحالة، `VEN 4` تحديث الكود، `VEN 5` رفع بيانات الهاتف. القفل واللغة من أزرار `IAJ 0` و`IAJ 9`.
+رمز GitHub يجب أن يشمل مستودع VENUES. الأزرار في Termux:Widget: زر «VEN» يفتح قائمة النظام (حالته الآن، تشغيل الطوارئ وإنهاؤها، الإرجاع للكمبيوتر، تحديث الكود، النسخ إلى Drive)، و«★ لوحة الأنظمة» تعرض حالة كل المواقع، و«★ قفل أو فتح الأزرار» و«★ English - عربي» للقفل واللغة (`standby/widgets.sh` و`standby/panel.sh` في IAJ).
